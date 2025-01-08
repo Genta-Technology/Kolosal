@@ -1,16 +1,26 @@
 # Minimum CMake version and project definition
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.14)
 project(KolosalDesktop)
+
+include(${CMAKE_SOURCE_DIR}/cmake/ucm.cmake)
+
+# Static link the runtime libraries
+ucm_set_runtime(STATIC)
 
 # Global settings
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+ucm_print_flags()
 
 # Define source directories
 set(EXTERNAL_DIR ${CMAKE_SOURCE_DIR}/external)
 set(IMGUI_DIR ${EXTERNAL_DIR}/imgui)
 set(FONT_FOLDER_PATH ${EXTERNAL_DIR}/fonts)
+
+# Set the options
+option(DEBUG "Build with debugging information" OFF)
 
 # ==== External Dependencies ====
 
@@ -47,6 +57,16 @@ if(NOT CURL_FOUND)
     message(FATAL_ERROR "CURL not found")
 endif()
 message(STATUS "Found CURL: ${CURL_INCLUDE_DIR}")
+
+# genta personal engine library
+find_library(INFERENCE_ENGINE_LIB        NAMES InferenceEngineLib PATHS ${EXTERNAL_DIR}/genta-personal/lib)
+find_library(INFERENCE_ENGINE_LIB_VULKAN NAMES InferenceEngineLibVulkan PATHS ${EXTERNAL_DIR}/genta-personal/lib)
+if(NOT INFERENCE_ENGINE_LIB OR NOT INFERENCE_ENGINE_LIB_VULKAN)
+    message(FATAL_ERROR "Inference Engine library not found")
+endif()
+message(STATUS "Found InferenceEngine libraries:")
+message(STATUS "  - OpenBLAS: ${INFERENCE_ENGINE_LIB}")
+message(STATUS "  - Vulkan:   ${INFERENCE_ENGINE_LIB_VULKAN}")
 
 # ==== ImGui Configuration ====
 set(IMGUI_SOURCES
@@ -89,6 +109,7 @@ target_include_directories(kolosal_lib PUBLIC
     ${EXTERNAL_DIR}/icons
     ${EXTERNAL_DIR}/nlohmann
     ${EXTERNAL_DIR}/nativefiledialog-extended/src/include
+    ${EXTERNAL_DIR}/genta-personal/include
     ${EXTERNAL_DIR}/stb
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/assets
@@ -109,6 +130,8 @@ if(WIN32)
         gdi32
         shell32
         OpenSSL::SSL
+        ${INFERENCE_ENGINE_LIB}
+        ${INFERENCE_ENGINE_LIB_VULKAN}
         ${CURL_LIBRARIES}
     )
     
@@ -134,10 +157,17 @@ else()
 endif()
 
 # ==== Main Executable ====
-add_executable(KolosalDesktop WIN32 
-    source/main.cpp 
-    assets/resource.rc
-)
+if (DEBUG)
+    add_executable(KolosalDesktop
+        source/main.cpp 
+        assets/resource.rc
+    )
+else()
+    add_executable(KolosalDesktop WIN32
+        source/main.cpp 
+        assets/resource.rc
+    )
+endif()
 
 target_include_directories(KolosalDesktop PRIVATE
     ${IMGUI_DIR}
@@ -147,6 +177,7 @@ target_include_directories(KolosalDesktop PRIVATE
     ${EXTERNAL_DIR}/icons
     ${EXTERNAL_DIR}/nlohmann
     ${EXTERNAL_DIR}/nativefiledialog-extended/src/include
+    ${EXTERNAL_DIR}/genta-personal/include
     ${CMAKE_SOURCE_DIR}/include
 )
 
@@ -189,4 +220,14 @@ add_custom_command(
     TARGET KolosalDesktop POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${EXTERNAL_DIR}/curl/bin" "$<TARGET_FILE_DIR:KolosalDesktop>"
+)
+
+# Copy Inference Engine DLLs
+add_custom_command(
+    TARGET KolosalDesktop POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${EXTERNAL_DIR}/genta-personal/bin/InferenceEngineLib.dll"
+        "${EXTERNAL_DIR}/genta-personal/bin/InferenceEngineLibVulkan.dll"
+        "$<TARGET_FILE_DIR:KolosalDesktop>"
+    COMMENT "Copying Inference Engine DLLs to output directory"
 )

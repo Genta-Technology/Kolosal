@@ -64,6 +64,9 @@ namespace Model
                 CURL *curl = curl_easy_init();
                 if (curl)
                 {
+					// Make sure the variant path folder exists
+					std::filesystem::create_directories(std::filesystem::path(variant.path).parent_path());
+
                     std::ofstream file(variant.path,  std::ios::binary);
                     if (!file.is_open())
                     {

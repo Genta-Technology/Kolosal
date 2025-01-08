@@ -11,6 +11,7 @@
 #include <optional>
 #include <memory>
 #include <set>
+#include <unordered_set>
 
 namespace Chat
 {
@@ -140,6 +141,7 @@ namespace Chat
             std::unique_lock<std::shared_mutex> lock(m_mutex);
             if (!m_currentChatName || m_currentChatIndex >= m_chats.size()) 
             {
+				std::cerr << "[ChatManager] No current chat selected.\n";
                 return;
             }
 
@@ -154,6 +156,37 @@ namespace Chat
                 m_persistence->saveChat(chat);
             });
         }
+
+		void updateCurrentChat(const ChatHistory& chat)
+		{
+			std::unique_lock<std::shared_mutex> lock(m_mutex);
+			if (!m_currentChatName || m_currentChatIndex >= m_chats.size())
+			{
+				std::cerr << "[ChatManager] No current chat selected.\n";
+				return;
+			}
+			m_chats[m_currentChatIndex] = chat;
+			// Launch async save operation
+			std::async(std::launch::async, [this, chat]() {
+				m_persistence->saveChat(chat);
+				});
+		}
+
+		void updateChat(const std::string& chatName, const ChatHistory& chat)
+		{
+			std::unique_lock<std::shared_mutex> lock(m_mutex);
+			auto it = m_chatNameToIndex.find(chatName);
+			if (it == m_chatNameToIndex.end())
+			{
+				std::cerr << "[ChatManager] Chat not found: " << chatName << std::endl;
+				return;
+			}
+			m_chats[it->second] = chat;
+			// Launch async save operation
+			std::async(std::launch::async, [this, chat]() {
+				m_persistence->saveChat(chat);
+				});
+		}
 
         // Async operations
         std::future<bool> createNewChat(const std::string& name) 
@@ -246,16 +279,21 @@ namespace Chat
         }
 
         // Thread-safe getters
-        std::vector<ChatHistory> getChats() const 
+        std::vector<ChatHistory> getChats() const
         {
             std::shared_lock<std::shared_mutex> lock(m_mutex);
             std::vector<ChatHistory> sortedChats;
             sortedChats.reserve(m_chats.size());
 
+            std::unordered_set<size_t> seenIndices;
+
             // Use the sorted indices to return chats in order
-            for (const auto& idx : m_sortedIndices) 
+            for (const auto& idx : m_sortedIndices)
             {
-                sortedChats.push_back(m_chats[idx.index]);
+                if (seenIndices.insert(idx.index).second)
+                {
+                    sortedChats.push_back(m_chats[idx.index]);
+                }
             }
             return sortedChats;
         }
@@ -317,6 +355,45 @@ namespace Chat
             }
             return std::nullopt;
         }
+
+		bool setCurrentJobId(int jobId)
+		{
+			std::unique_lock<std::shared_mutex> lock(m_mutex);
+			// set the current chat index to the job id
+			m_chatInferenceJobIdMap[m_currentChatIndex] = jobId;
+			return true;
+		}
+
+		int getCurrentJobId()
+		{
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			// get the job id for the current chat index
+			return m_chatInferenceJobIdMap[m_currentChatIndex];
+		}
+        
+		int getJobId(const std::string& chatName)
+		{
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			auto it = m_chatNameToIndex.find(chatName);
+			if (it == m_chatNameToIndex.end())
+			{
+				return -1;
+			}
+			return m_chatInferenceJobIdMap[it->second];
+		}
+
+		std::string getChatNameByJobId(int jobId)
+		{
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			for (const auto& [chatIndex, chatJobId] : m_chatInferenceJobIdMap)
+			{
+				if (chatJobId == jobId)
+				{
+					return m_chats[chatIndex].name;
+				}
+			}
+			return "";
+		}
 
 		static const std::string getDefaultChatName() { return DEFAULT_CHAT_NAME; }
 
@@ -450,6 +527,7 @@ namespace Chat
         std::optional<std::string> m_currentChatName;
         size_t m_currentChatIndex;
         mutable std::shared_mutex m_mutex;
+		std::unordered_map<int, int> m_chatInferenceJobIdMap;
     };
 
     inline void initializeChatManager() {

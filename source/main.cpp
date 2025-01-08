@@ -155,7 +155,11 @@ void HandleException(const std::exception& e)
     ::MessageBoxA(nullptr, e.what(), "Unhandled Exception", MB_OK | MB_ICONERROR);
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+#ifdef DEBUG
+    int main()
+#else
+    int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+#endif
 {
     try 
     {
@@ -178,6 +182,35 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         Chat::initializeChatManager();
         Model::initializePresetManager();
         Model::initializeModelManager();
+
+		// TODO: encapsulate to have a cleaner code
+        Model::ModelManager::getInstance().setStreamingCallback(
+            [](const std::string& partialOutput, const int jobId) {
+                // Grab the current chat by the tracked jobId:
+                auto& chatManager = Chat::ChatManager::getInstance();
+				std::string chatName = chatManager.getChatNameByJobId(jobId);
+
+                // Append partial output to the *last assistant message*,
+                // or create a new one if the last role isn't "assistant."
+                Chat::ChatHistory chat = chatManager.getChat(chatName).value();
+                if (!chat.messages.empty() && chat.messages.back().role == "assistant")
+                {
+                    // Append to the existing assistant message
+                    chat.messages.back().content = partialOutput;
+					chatManager.updateChat(chatName, chat);
+                }
+                else
+                {
+                    // If, for some reason, we don't have an assistant message to update:
+                    // create a new message with role "assistant"
+                    Chat::Message assistantMsg;
+                    assistantMsg.id = static_cast<int>(chat.messages.size()) + 1;
+                    assistantMsg.role = "assistant";
+                    assistantMsg.content = partialOutput;
+					chatManager.addMessage(chatName, assistantMsg);
+                }
+            }
+        );
 
         // Initialize NFD (Native File Dialog)
         NFD_Init();

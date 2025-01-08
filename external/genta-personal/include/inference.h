@@ -81,9 +81,9 @@ struct CompletionResult
 class INFERENCE_API InferenceEngine
 {
 public:
-	static InferenceEngine& getInstance(const std::string& engineDir, const int mainGpuId = 0)
+	static InferenceEngine& getInstance()
 	{
-		static InferenceEngine instance(engineDir, mainGpuId);
+		static InferenceEngine instance;
 		return instance;
 	}
 
@@ -92,6 +92,8 @@ public:
 	InferenceEngine& operator=(const InferenceEngine&) = delete;
 	InferenceEngine(InferenceEngine&&) = delete;
 	InferenceEngine& operator=(InferenceEngine&&) = delete;
+
+	bool loadModel(const char* engineDir, const int mainGpuId = 0);
 
 	/**
 	 * @brief Submits a completion job and returns the job ID.
@@ -147,22 +149,12 @@ public:
 	 */
 	~InferenceEngine();
 
-	/**
-	 * @brief Resets the singleton instance with a new engine directory.
-	 * @param engineDir The new directory where the engine is located.
-	 */
-	static void resetInstance(const std::string& engineDir)
-	{
-		std::lock_guard<std::mutex> lock(instanceMutex);
-		instance.reset(new InferenceEngine(engineDir));
-	}
-
 private:
 	/**
 	 * @brief Constructs an InferenceEngine with the specified engine directory.
 	 * @param engineDir The directory where the engine is located.
 	 */
-	explicit InferenceEngine(const std::string& engineDir, const int mainGpuId = 0);
+	explicit InferenceEngine();
 
 	struct Impl;
 	std::unique_ptr<Impl> pimpl;
@@ -171,6 +163,6 @@ private:
 	static std::mutex instanceMutex;
 };
 
-extern "C" INFERENCE_API InferenceEngine& getInferenceEngine(const char* engineDir, const int mainGpuId = 0);
+extern "C" INFERENCE_API InferenceEngine& getInferenceEngine();
 
 #endif // INFERENCE_H

@@ -4,7 +4,11 @@
 #include "config.hpp"
 #include "ui/widgets.hpp"
 #include "chat/chat_manager.hpp"
+#include "model/preset_manager.hpp"
 #include "model/model_manager.hpp"
+
+#include <iostream>
+#include <inference.h>
 
 inline void pushIDAndColors(const Chat::Message msg, int index)
 {
@@ -475,7 +479,8 @@ inline void renderChatFeatureButtons(const float startX = 0, const float startY 
     // Configure the button
     std::vector<ButtonConfig> buttons;
 
-    std::string currentModelName = Model::ModelManager::getInstance().getCurrentModelName().value_or("Select Model");
+    std::string currentModelName = Model::ModelManager::getInstance()
+        .getCurrentModelName().value_or("Select Model");
 
     ButtonConfig openModelManager;
     openModelManager.id = "##openModalButton";
@@ -512,8 +517,16 @@ inline void renderInputField(const float inputHeight, const float inputWidth)
         // Check if we have a current chat
         if (!currentChat.has_value())
         {
-            throw std::runtime_error("No chat available to send message to");
+			std::cerr << "[ChatSection] No chat selected. Cannot send message.\n";
+			return;
         }
+
+		// Check if any model is selected
+		if (!Model::ModelManager::getInstance().getCurrentModelName().has_value())
+		{
+			std::cerr << "[ChatSection] No model selected. Cannot send message.\n";
+			return;
+		}
 
         // Handle user message
         {
@@ -529,12 +542,36 @@ inline void renderInputField(const float inputHeight, const float inputWidth)
         // Handle assistant response
         // TODO: Implement assistant response through callback
         {
-            Chat::Message assistantMessage;
-            assistantMessage.id = static_cast<int>(currentChat.value().messages.size()) + 2;
-            assistantMessage.role = "assistant";
-            assistantMessage.content = "Hello! I am an assistant. How can I help you today?";
+			Model::PresetManager& presetManager = Model::PresetManager::getInstance();
+			Model::ModelManager& modelManager = Model::ModelManager::getInstance();
 
-            chatManager.addMessageToCurrentChat(assistantMessage);
+			// Prepare completion parameters
+            ChatCompletionParameters completionParams;
+            {
+                // push system prompt
+                completionParams.messages.push_back(
+                    { "system", presetManager.getCurrentPreset().value().get().systemPrompt.c_str()});
+                for (const auto& msg : currentChat.value().messages)
+                {
+                    completionParams.messages.push_back({ msg.role.c_str(), msg.content.c_str()});
+                }
+                // push user new message
+                completionParams.messages.push_back({ "user", input.c_str()});
+
+				// set the preset parameters
+                completionParams.randomSeed     = presetManager.getCurrentPreset().value().get().random_seed;
+                completionParams.maxNewTokens   = static_cast<int>(presetManager.getCurrentPreset().value().get().max_new_tokens);
+                completionParams.minLength      = static_cast<int>(presetManager.getCurrentPreset().value().get().min_length);
+                completionParams.temperature    = presetManager.getCurrentPreset().value().get().temperature;
+                completionParams.topP           = presetManager.getCurrentPreset().value().get().top_p;
+				// TODO: add top_k to the completion parameters
+				// completionParams.topK        = presetManager.getCurrentPreset().value().get().top_k;
+                completionParams.streaming      = true;
+            }
+            int jobId = modelManager.startChatCompletionJob(completionParams);
+
+			// track the job ID in the chat manager
+			chatManager.setCurrentJobId(jobId);
         }
     };
 

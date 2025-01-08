@@ -2,7 +2,7 @@
     "name": "Llama 3.2 1B",
     "fullPrecision": {
         "type": "Full Precision",
-        "path": "models/Llama-3.2-1B-Instruct-f16.gguf",
+        "path": "models/llama-3.2-1B/fp16/Llama-3.2-1B-Instruct-f16.gguf",
         "downloadLink": "https://huggingface.co/kolosal/llama-3.2-1b/resolve/main/Llama-3.2-1B-Instruct-f16.gguf",
         "isDownloaded": false,
         "downloadProgress": 0.0,
@@ -10,7 +10,7 @@
     },
     "quantized4Bit": {
         "type": "4-bit Quantized",
-        "path": "models/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+        "path": "models/llama-3.2-1B/int4/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
         "downloadLink": "https://huggingface.co/kolosal/llama-3.2-1b/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
         "isDownloaded": false,
         "downloadProgress": 0.0,
