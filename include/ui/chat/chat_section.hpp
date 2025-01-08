@@ -60,8 +60,15 @@ inline void renderTimestamp(const Chat::Message msg, float bubblePadding)
     // Set timestamp color to a lighter gray
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7F, 0.7F, 0.7F, 1.0F)); // Light gray for timestamp
 
-    ImGui::SetCursorPosY(ImGui::GetWindowHeight() - ImGui::GetTextLineHeightWithSpacing() // Align timestamp at the bottom
-                         - (bubblePadding - Config::Timing::TIMESTAMP_OFFSET_Y));
+	float timestampPosY = ImGui::GetWindowHeight() - ImGui::GetTextLineHeightWithSpacing()
+                          - (bubblePadding - Config::Timing::TIMESTAMP_OFFSET_Y);
+
+	if (msg.role == "assistant")
+	{
+		timestampPosY += 5;
+	}
+
+	ImGui::SetCursorPosY(timestampPosY);
     ImGui::SetCursorPosX(bubblePadding); // Align timestamp to the left
     ImGui::TextWrapped("%s", timePointToString(msg.timestamp).c_str());
 
@@ -73,54 +80,28 @@ inline void renderButtons(const Chat::Message msg, int index, float bubbleWidth,
     ImVec2 textSize = ImGui::CalcTextSize(msg.content.c_str(), nullptr, true, bubbleWidth - bubblePadding * 2);
     float buttonPosY = textSize.y + bubblePadding;
 
-    if (msg.role == "user")
-    {
-        ButtonConfig copyButtonConfig;
-        copyButtonConfig.id = "##copy" + std::to_string(index);
-        copyButtonConfig.label = std::nullopt;
-        copyButtonConfig.icon = ICON_CI_COPY;
-        copyButtonConfig.size = ImVec2(Config::Button::WIDTH, 0);
-        copyButtonConfig.onClick = [&msg]()
+	if (msg.role == "assistant")
+	{
+		buttonPosY += 10;
+	}
+
+    ButtonConfig copyButtonConfig;
+    copyButtonConfig.id = "##copy" + std::to_string(index);
+    copyButtonConfig.label = std::nullopt;
+    copyButtonConfig.icon = ICON_CI_COPY;
+    copyButtonConfig.size = ImVec2(Config::Button::WIDTH, 0);
+    copyButtonConfig.onClick = [&index]()
         {
+			Chat::ChatHistory chatHistory = Chat::ChatManager::getInstance().getCurrentChat().value();
+			const Chat::Message& msg = chatHistory.messages[index];
             ImGui::SetClipboardText(msg.content.c_str());
-            std::cout << "Copied message content to clipboard" << std::endl;
         };
-        std::vector<ButtonConfig> userButtons = {copyButtonConfig};
+    std::vector<ButtonConfig> userButtons = { copyButtonConfig };
 
-        Button::renderGroup(
-            userButtons,
-            bubbleWidth - bubblePadding - Config::Button::WIDTH,
-            buttonPosY);
-    }
-    else
-    {
-        ButtonConfig likeButtonConfig;
-        likeButtonConfig.id = "##like" + std::to_string(index);
-        likeButtonConfig.label = std::nullopt;
-        likeButtonConfig.icon = ICON_CI_THUMBSUP;
-        likeButtonConfig.size = ImVec2(Config::Button::WIDTH, 0);
-        likeButtonConfig.onClick = [index]()
-        {
-            std::cout << "Like button clicked for message " << index << std::endl;
-        };
-
-        ButtonConfig dislikeButtonConfig;
-        dislikeButtonConfig.id = "##dislike" + std::to_string(index);
-        dislikeButtonConfig.label = std::nullopt;
-        dislikeButtonConfig.icon = ICON_CI_THUMBSDOWN;
-        dislikeButtonConfig.size = ImVec2(Config::Button::WIDTH, 0);
-        dislikeButtonConfig.onClick = [index]()
-        {
-            std::cout << "Dislike button clicked for message " << index << std::endl;
-        };
-
-        std::vector<ButtonConfig> assistantButtons = {likeButtonConfig, dislikeButtonConfig};
-
-        Button::renderGroup(
-            assistantButtons,
-            bubbleWidth - bubblePadding * 2 - 10 - (2 * Config::Button::WIDTH + Config::Button::SPACING),
-            buttonPosY);
-    }
+    Button::renderGroup(
+        userButtons,
+        bubbleWidth - bubblePadding - Config::Button::WIDTH,
+        buttonPosY);
 }
 
 inline void renderMessage(const Chat::Message &msg, int index, float contentWidth)
@@ -285,7 +266,8 @@ inline void renderModelManager(bool &openModal)
                         continue;
                     }
 
-                    modelVariants.push_back("4-bit Quantized");
+					// Default to 8-bit quantized
+                    modelVariants.push_back("8-bit Quantized");
                 }
             }
 
@@ -334,9 +316,94 @@ inline void renderModelManager(bool &openModal)
 
                 // add left padding
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4.0f);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
+
+				ButtonConfig fullPrecisionButton;
+				fullPrecisionButton.id = "##useFullPrecision" + std::to_string(i);
+				if (modelVariants[i] == "Full Precision")
+				{
+					fullPrecisionButton.icon = ICON_CI_CHECK;
+				}
+				else
+				{
+					// TODO's workarounds for the button size issue
+					fullPrecisionButton.icon = ICON_CI_CLOSE;
+					fullPrecisionButton.textColor = RGBAToImVec4(34, 34, 34, 255);
+				}
+				fullPrecisionButton.fontSize = FontsManager::SM;
+				fullPrecisionButton.size = ImVec2(24, 0);
+				fullPrecisionButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+				fullPrecisionButton.onClick = [i, models]()
+					{
+						modelVariants[i] = "Full Precision";
+					};
+				Button::render(fullPrecisionButton);
+
+				// Get the height of the full precision checkbox button
+				float fullPrecisionHeight = ImGui::GetTextLineHeightWithSpacing();
+
+				ImGui::SameLine(0.0f, 4.0f);
+
+				// Render labels
+				LabelConfig fullPrecisionLabel;
+				fullPrecisionLabel.id = "##fullprecision" + std::to_string(i);
+				fullPrecisionLabel.label = "Use Full Precision";
+				fullPrecisionLabel.size = ImVec2(0, 0);
+				fullPrecisionLabel.fontType = FontsManager::REGULAR;
+				fullPrecisionLabel.fontSize = FontsManager::SM;
+				fullPrecisionLabel.alignment = Alignment::LEFT;
+				float fullPrecisionLabelOffsetY = (fullPrecisionButton.size.y - ImGui::GetTextLineHeight()) / 4.0f + 2.0f;
+				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + fullPrecisionLabelOffsetY);
+				Label::render(fullPrecisionLabel);
+
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4.0f);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
 
                 // TODO: Check button rect size is bigger when no icon is present
-                //       make sure to adjust the size of the button accordingly                
+                //       make sure to adjust the size of the button accordingly     
+                
+				ButtonConfig use8bitButton;
+				use8bitButton.id = "##use8bit" + std::to_string(i);
+				if (modelVariants[i] == "8-bit Quantized")
+				{
+					use8bitButton.icon = ICON_CI_CHECK;
+				}
+				else
+				{
+					// TODO's workarounds for the button size issue
+					use8bitButton.icon = ICON_CI_CLOSE;
+					use8bitButton.textColor = RGBAToImVec4(34, 34, 34, 255);
+				}
+				use8bitButton.fontSize = FontsManager::SM;
+				use8bitButton.size = ImVec2(24, 0);
+				use8bitButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+				use8bitButton.onClick = [i, models]()
+					{
+						modelVariants[i] = "8-bit Quantized";
+					};
+				Button::render(use8bitButton);
+
+				// Get the height of the quantization checkbox button
+				float _8bitquantizationHeight = ImGui::GetTextLineHeightWithSpacing();
+
+				ImGui::SameLine(0.0f, 4.0f);
+
+				// Render labels
+				LabelConfig _8BitQuantizationLabel;
+				_8BitQuantizationLabel.id = "##8bitquantization" + std::to_string(i);
+				_8BitQuantizationLabel.label = "Use 8-bit quantization";
+				_8BitQuantizationLabel.size = ImVec2(0, 0);
+				_8BitQuantizationLabel.fontType = FontsManager::REGULAR;
+				_8BitQuantizationLabel.fontSize = FontsManager::SM;
+				_8BitQuantizationLabel.alignment = Alignment::LEFT;
+				float _8BitLabelOffsetY = (use8bitButton.size.y - ImGui::GetTextLineHeight()) / 4.0f + 2.0f;
+				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + _8BitLabelOffsetY);
+				Label::render(_8BitQuantizationLabel);
+
+				// add left padding
+				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4.0f);
+				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
+
                 ButtonConfig use4bitButton;
                 use4bitButton.id = "##use4bit" + std::to_string(i);
                 if (modelVariants[i] == "4-bit Quantized")
@@ -353,37 +420,30 @@ inline void renderModelManager(bool &openModal)
                 use4bitButton.size = ImVec2(24, 0);
                 use4bitButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
                 use4bitButton.onClick = [i, models]()
-                {
-                    if (modelVariants[i] == "4-bit Quantized")
                     {
-                        modelVariants[i] = "Full Precision";
-                    }
-                    else
-                    {
-                        modelVariants[i] = "4-bit Quantized";
-                    }
-                };
+						modelVariants[i] = "4-bit Quantized";
+                    };
                 Button::render(use4bitButton);
 
                 // Get the height of the quantization checkbox button
-                float quantizationHeight = ImGui::GetTextLineHeightWithSpacing();
+                float _4BitQantizationHeight = ImGui::GetTextLineHeightWithSpacing();
 
                 ImGui::SameLine(0.0f, 4.0f);
 
                 // Render labels
-                LabelConfig quantizationLabel;
-                quantizationLabel.id = "##quantization" + std::to_string(i);
-                quantizationLabel.label = "Use 4-bit quantization";
-                quantizationLabel.size = ImVec2(0, 0);
-                quantizationLabel.fontType = FontsManager::REGULAR;
-                quantizationLabel.fontSize = FontsManager::SM;
-                quantizationLabel.alignment = Alignment::LEFT;
+                LabelConfig _4BitQuantizationLabel;
+                _4BitQuantizationLabel.id = "##quantization" + std::to_string(i);
+                _4BitQuantizationLabel.label = "Use 4-bit quantization";
+                _4BitQuantizationLabel.size = ImVec2(0, 0);
+                _4BitQuantizationLabel.fontType = FontsManager::REGULAR;
+                _4BitQuantizationLabel.fontSize = FontsManager::SM;
+                _4BitQuantizationLabel.alignment = Alignment::LEFT;
                 float labelOffsetY = (use4bitButton.size.y - ImGui::GetTextLineHeight()) / 4.0f + 2.0f;
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + labelOffsetY);
-                Label::render(quantizationLabel);
+                Label::render(_4BitQuantizationLabel);
 
                 // Render select button at the bottom of the card
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (cardHeight - totalLabelHeight - quantizationHeight * 3 - 10));
+				ImGui::SetCursorPosY(cardHeight - 35);
 
                 bool isSelected = models[i].name == Model::ModelManager::getInstance().getCurrentModelName() &&
                                   modelVariants[i] == Model::ModelManager::getInstance().getCurrentVariantType();
@@ -413,7 +473,7 @@ inline void renderModelManager(bool &openModal)
                         selectButton.icon = ICON_CI_CLOUD_DOWNLOAD;
                         selectButton.state = ButtonState::DISABLED;
 
-                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - quantizationHeight - 6);
+                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - _4BitQantizationHeight - 6);
 
                         // Add a progress bar
                         ImGui::ProgressBar(

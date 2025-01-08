@@ -283,9 +283,11 @@ namespace Model
         {
             loadModelsAsync();
 
-			// Select which inference engine library to load
-            std::string backendName = useVulkanBackend() ? 
-                "InferenceEngineLibVulkan.dll" : "InferenceEngineLib.dll";
+			std::string backendName = "InferenceEngineLib.dll";
+            if (useVulkanBackend())
+            {
+				backendName = "InferenceEngineLibVulkan.dll";
+            }
 
             if (!loadInferenceEngineDynamically(backendName)) {
                 std::cerr << "[ModelManager] Failed to load inference engine for backend: "
@@ -319,6 +321,7 @@ namespace Model
                 for (auto& model : models) 
                 {
                     checkAndFixDownloadStatus(model.fullPrecision);
+					checkAndFixDownloadStatus(model.quantized8Bit);
                     checkAndFixDownloadStatus(model.quantized4Bit);
                 }
 
@@ -339,7 +342,7 @@ namespace Model
                 for (size_t i = 0; i < m_models.size(); ++i)
                 {
                     const auto& model = m_models[i];
-                    const ModelVariant* variants[] = { &model.quantized4Bit, &model.fullPrecision };
+                    const ModelVariant* variants[] = { &model.quantized8Bit, &model.quantized4Bit, &model.fullPrecision };
 
                     for (const ModelVariant* variant : variants)
                     {
@@ -401,10 +404,18 @@ namespace Model
             {
                 return const_cast<ModelVariant *>(&model.fullPrecision);
             }
-            else
+			else if (variantType == "8-bit Quantized")
+			{
+				return const_cast<ModelVariant*>(&model.quantized8Bit);
+			}
+			else if (variantType == "4-bit Quantized")
             {
                 return const_cast<ModelVariant *>(&model.quantized4Bit);
             }
+            else
+			{
+				return nullptr;
+			}
         }
 
         void startDownloadAsyncLocked(size_t modelIndex, const std::string &variantType)

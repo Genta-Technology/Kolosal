@@ -10,7 +10,7 @@ namespace Model
 {
     struct ModelVariant
     {
-        std::string type; // "Full Precision" or "4-bit Quantized"
+        std::string type; // "Full Precision", "8-bit Quantized", or "4-bit Quantized"
         std::string path;
         std::string downloadLink;
         bool isDownloaded;
@@ -56,13 +56,16 @@ namespace Model
     {
         std::string name;
         ModelVariant fullPrecision;
+		ModelVariant quantized8Bit;
         ModelVariant quantized4Bit;
 
         ModelData(const std::string &name = "",
                   const ModelVariant &fullPrecision = ModelVariant(),
+                  const ModelVariant &quantized8Bit = ModelVariant(),
                   const ModelVariant &quantized4Bit = ModelVariant())
             : name(name)
             , fullPrecision(fullPrecision)
+			, quantized8Bit(quantized8Bit)
             , quantized4Bit(quantized4Bit) {}
     };
 
@@ -71,6 +74,7 @@ namespace Model
         j = nlohmann::json{
             {"name", m.name},
             {"fullPrecision", m.fullPrecision},
+			{"quantized8Bit", m.quantized8Bit},
             {"quantized4Bit", m.quantized4Bit}};
     }
 
@@ -78,6 +82,7 @@ namespace Model
     {
         j.at("name").get_to(m.name);
         j.at("fullPrecision").get_to(m.fullPrecision);
+		j.at("quantized8Bit").get_to(m.quantized8Bit);
         j.at("quantized4Bit").get_to(m.quantized4Bit);
     }
 } // namespace Model

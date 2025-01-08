@@ -93,7 +93,7 @@ public:
 	InferenceEngine(InferenceEngine&&) = delete;
 	InferenceEngine& operator=(InferenceEngine&&) = delete;
 
-	bool loadModel(const char* engineDir, const int mainGpuId = 0);
+	bool loadModel(const char* engineDir, const int mainGpuId = -1);
 
 	/**
 	 * @brief Submits a completion job and returns the job ID.
