@@ -55,15 +55,18 @@ namespace Model
     struct ModelData
     {
         std::string name;
+        std::string author;
         ModelVariant fullPrecision;
 		ModelVariant quantized8Bit;
         ModelVariant quantized4Bit;
 
         ModelData(const std::string &name = "",
+			      const std::string& author = "",
                   const ModelVariant &fullPrecision = ModelVariant(),
                   const ModelVariant &quantized8Bit = ModelVariant(),
                   const ModelVariant &quantized4Bit = ModelVariant())
             : name(name)
+			, author(author)
             , fullPrecision(fullPrecision)
 			, quantized8Bit(quantized8Bit)
             , quantized4Bit(quantized4Bit) {}
@@ -73,6 +76,7 @@ namespace Model
     {
         j = nlohmann::json{
             {"name", m.name},
+			{"author", m.author},
             {"fullPrecision", m.fullPrecision},
 			{"quantized8Bit", m.quantized8Bit},
             {"quantized4Bit", m.quantized4Bit}};
@@ -81,6 +85,7 @@ namespace Model
     inline void from_json(const nlohmann::json &j, ModelData &m)
     {
         j.at("name").get_to(m.name);
+		j.at("author").get_to(m.author);
         j.at("fullPrecision").get_to(m.fullPrecision);
 		j.at("quantized8Bit").get_to(m.quantized8Bit);
         j.at("quantized4Bit").get_to(m.quantized4Bit);

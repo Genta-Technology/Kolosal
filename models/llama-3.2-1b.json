@@ -1,5 +1,6 @@
 {
   "name": "Llama 3.2 1B",
+  "author": "Meta",
   "fullPrecision": {
     "type": "Full Precision",
     "path": "models/llama-3.2-1B/fp16/Llama-3.2-1B-Instruct-f16.gguf",

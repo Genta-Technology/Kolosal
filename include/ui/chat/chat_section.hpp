@@ -289,7 +289,7 @@ inline void renderModelManager(bool &openModal)
                 // Render author label
                 LabelConfig modelAuthorLabel;
                 modelAuthorLabel.id = "##modelAuthor" + std::to_string(i);
-                modelAuthorLabel.label = "Meta";
+                modelAuthorLabel.label = models[i].author;
                 modelAuthorLabel.size = ImVec2(0, 0);
                 modelAuthorLabel.fontType = FontsManager::ITALIC;
                 modelAuthorLabel.alignment = Alignment::LEFT;

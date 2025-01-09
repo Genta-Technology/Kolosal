@@ -1,0 +1,28 @@
+{
+  "name": "Gemma 2 9B Sahabat AI",
+  "author": "Google, GoTo",
+  "fullPrecision": {
+    "type": "Full Precision",
+    "path": "models/gemma-2-sahabat-ai/fp16/gemma2-9b-cpt-sahabatai-v1-instruct.bf16.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/gemma-2-9b-sahabat-ai/resolve/main/gemma2-9b-cpt-sahabatai-v1-instruct.bf16.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized8Bit": {
+    "type": "8-bit Quantized",
+    "path": "models/gemma-2-sahabat-ai/int8/gemma2-9b-cpt-sahabatai-v1-instruct.Q8_0.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/gemma-2-9b-sahabat-ai/resolve/main/gemma2-9b-cpt-sahabatai-v1-instruct.Q8_0.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized4Bit": {
+    "type": "4-bit Quantized",
+    "path": "models/gemma-2-sahabat-ai/int4/gemma2-9b-cpt-sahabatai-v1-instruct.Q4_K_M.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/gemma-2-9b-sahabat-ai/resolve/main/gemma2-9b-cpt-sahabatai-v1-instruct.Q4_K_M.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  }
+}

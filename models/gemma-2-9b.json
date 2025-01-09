@@ -1,0 +1,28 @@
+{
+  "name": "Gemma 2 9B",
+  "author": "Google",
+  "fullPrecision": {
+    "type": "Full Precision",
+    "path": "models/gemma-2-9b/fp16/gemma-2-9b-it-f32.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/gemma-2-9b/resolve/main/gemma-2-9b-it-f32.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized8Bit": {
+    "type": "8-bit Quantized",
+    "path": "models/gemma-2-9b/int8/gemma-2-9b-it-Q8_0.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/gemma-2-9b/resolve/main/gemma-2-9b-it-Q8_0.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized4Bit": {
+    "type": "4-bit Quantized",
+    "path": "models/gemma-2-9b/int4/gemma-2-9b-it-Q4_K_L.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/gemma-2-9b/resolve/main/gemma-2-9b-it-Q4_K_L.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  }
+}

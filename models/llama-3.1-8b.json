@@ -1,0 +1,28 @@
+{
+  "name": "Llama 3.1 8B",
+  "author": "Meta",
+  "fullPrecision": {
+    "type": "Full Precision",
+    "path": "models/llama-3.1-8B/fp16/Meta-Llama-3.1-8B-Instruct.f16.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/llama-3.1-8b/resolve/main/Meta-Llama-3.1-8B-Instruct.f16.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized8Bit": {
+    "type": "8-bit Quantized",
+    "path": "models/llama-3.1-8B/int8/Meta-Llama-3.1-8B-Instruct.Q8_0.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/llama-3.1-8b/resolve/main/Meta-Llama-3.1-8B-Instruct.Q8_0.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized4Bit": {
+    "type": "4-bit Quantized",
+    "path": "models/llama-3.1-8B/int4/Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/llama-3.1-8b/resolve/main/Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  }
+}
