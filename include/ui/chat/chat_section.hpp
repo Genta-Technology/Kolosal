@@ -227,7 +227,7 @@ inline void renderModelManager(bool &openModal)
 
     // Card constants
     const float cardWidth = 200;
-    const float cardHeight = 200;
+    const float cardHeight = 220;
     const float cardSpacing = 10.0f;
     const float cardUnit = cardWidth + cardSpacing;
     const float paddingTotal = 2 * 16.0F; // 16.0F is the default padding value defined in the ModalWindow::render function
