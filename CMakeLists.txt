@@ -59,7 +59,7 @@ endif()
 message(STATUS "Found CURL: ${CURL_INCLUDE_DIR}")
 
 # genta personal engine library
-find_library(INFERENCE_ENGINE_LIB        NAMES InferenceEngineLib PATHS ${EXTERNAL_DIR}/genta-personal/lib)
+find_library(INFERENCE_ENGINE_LIB        NAMES InferenceEngineLib       PATHS ${EXTERNAL_DIR}/genta-personal/lib)
 find_library(INFERENCE_ENGINE_LIB_VULKAN NAMES InferenceEngineLibVulkan PATHS ${EXTERNAL_DIR}/genta-personal/lib)
 if(NOT INFERENCE_ENGINE_LIB OR NOT INFERENCE_ENGINE_LIB_VULKAN)
     message(FATAL_ERROR "Inference Engine library not found")
@@ -99,6 +99,7 @@ target_compile_definitions(kolosal_lib PUBLIC
     CHAT_HISTORY_DIRECTORY="${CMAKE_SOURCE_DIR}/chat_history"
     PRESETS_DIRECTORY="${CMAKE_SOURCE_DIR}/presets"
     CONFIG_PATH="${CMAKE_SOURCE_DIR}/config.json"
+    $<$<BOOL:${DEBUG}>:DEBUG>
 )
 
 target_include_directories(kolosal_lib PUBLIC
@@ -130,8 +131,6 @@ if(WIN32)
         gdi32
         shell32
         OpenSSL::SSL
-        ${INFERENCE_ENGINE_LIB}
-        ${INFERENCE_ENGINE_LIB_VULKAN}
         ${CURL_LIBRARIES}
     )
     

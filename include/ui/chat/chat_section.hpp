@@ -532,9 +532,69 @@ inline void renderModelManager(bool &openModal)
     ModalWindow::render(modalConfig);
 }
 
+inline void renderClearChatModal(bool& openModal)
+{
+	ModalConfig modalConfig
+	{
+		"Clear Chat",
+		"Clear Chat",
+		ImVec2(300, 120),
+		[&]()
+		{
+			// Render the confirmation message
+			LabelConfig confirmationLabel;
+			confirmationLabel.id = "##clearChatConfirmation";
+			confirmationLabel.label = "Are you sure you want to clear the chat?";
+			confirmationLabel.size = ImVec2(0, 0);
+			confirmationLabel.fontType = FontsManager::REGULAR;
+			confirmationLabel.alignment = Alignment::CENTER;
+			Label::render(confirmationLabel);
+
+			// Render the buttons
+			std::vector<ButtonConfig> buttons;
+            
+            ButtonConfig cancelButton;
+            cancelButton.id = "##cancelClearChat";
+            cancelButton.label = "Cancel";
+            cancelButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+            cancelButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
+            cancelButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
+            cancelButton.textColor = RGBAToImVec4(255, 255, 255, 255);
+			cancelButton.size = ImVec2(130, 0);
+            cancelButton.onClick = []()
+                {
+                    ImGui::CloseCurrentPopup();
+                };
+
+			buttons.push_back(cancelButton);
+
+			ButtonConfig confirmButton;
+			confirmButton.id = "##confirmClearChat";
+			confirmButton.label = "Confirm";
+			confirmButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
+			confirmButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
+			confirmButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
+			confirmButton.size = ImVec2(130, 0);
+			confirmButton.onClick = []()
+				{
+					Chat::ChatManager::getInstance().clearCurrentChat();
+					ImGui::CloseCurrentPopup();
+				};
+
+			buttons.push_back(confirmButton);
+
+			Button::renderGroup(buttons, 16, ImGui::GetCursorPosY() + 8);
+		},
+		openModal
+	};
+    modalConfig.padding = ImVec2(16.0F, 8.0F);
+	ModalWindow::render(modalConfig);
+}
+
 inline void renderChatFeatureButtons(const float startX = 0, const float startY = 0)
 {
-    static bool openModal = false;
+    static bool openModelSelectionModal = false;
+	static bool openClearChatModal      = false;
 
     // Configure the button
     std::vector<ButtonConfig> buttons;
@@ -549,15 +609,29 @@ inline void renderChatFeatureButtons(const float startX = 0, const float startY 
     openModelManager.size = ImVec2(128, 0);
     openModelManager.alignment = Alignment::LEFT;
     openModelManager.onClick = [&]()
-    { openModal = true; };
+    { openModelSelectionModal = true; };
 
     buttons.push_back(openModelManager);
+
+	ButtonConfig clearChatButton;
+	clearChatButton.id = "##clearChatButton";
+	clearChatButton.icon = ICON_CI_CLEAR_ALL;
+	clearChatButton.size = ImVec2(24, 0);
+	clearChatButton.alignment = Alignment::CENTER;
+	clearChatButton.onClick = []()
+		{
+			openClearChatModal = true;
+		};
+	clearChatButton.tooltip = "Clear Chat";
+
+	buttons.push_back(clearChatButton);
 
     // Render the button using renderGroup
     Button::renderGroup(buttons, startX, startY);
 
     // Open the modal window if the button was clicked
-    renderModelManager(openModal);
+    renderModelManager(openModelSelectionModal);
+	renderClearChatModal(openClearChatModal);
 }
 
 inline void renderInputField(const float inputHeight, const float inputWidth)

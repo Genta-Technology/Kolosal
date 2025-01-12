@@ -20,7 +20,7 @@ inline void renderChatHistoryList(ImVec2 contentArea)
         chatButtonConfig.id = "##chat" + std::to_string(chat.id);
         chatButtonConfig.label = chat.name;
         chatButtonConfig.icon = ICON_CI_COMMENT;
-        chatButtonConfig.size = ImVec2(contentArea.x - 20, 0);
+        chatButtonConfig.size = ImVec2(contentArea.x - 44, 0);
         chatButtonConfig.gap = 10.0F;
         chatButtonConfig.onClick = [chatName = chat.name]() {
             Chat::ChatManager::getInstance().switchToChat(chatName);
@@ -42,6 +42,25 @@ inline void renderChatHistoryList(ImVec2 contentArea)
         }
 
         Button::render(chatButtonConfig);
+
+		// same line for delete button
+		ImGui::SameLine(contentArea.x - 38);
+		// Set position to be a bit to the right and up
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
+
+		// Delete button
+		ButtonConfig deleteButtonConfig;
+		deleteButtonConfig.id = "##delete" + std::to_string(chat.id);
+		deleteButtonConfig.icon = ICON_CI_TRASH;
+		deleteButtonConfig.size = ImVec2(24, 0);
+		deleteButtonConfig.alignment = Alignment::CENTER;
+		deleteButtonConfig.onClick = [chatName = chat.name]() {
+			Chat::ChatManager::getInstance().deleteChat(chatName);
+			};
+		deleteButtonConfig.tooltip = "Delete Chat";
+
+		Button::render(deleteButtonConfig);
+
         ImGui::Spacing();
     }
 
@@ -85,7 +104,7 @@ inline void renderChatHistorySidebar(float& sidebarWidth)
     // Button dimensions
     float buttonHeight = 24.0f;
 
-    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 28);
+    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 22);
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ((labelHeight - buttonHeight) / 2.0f));
 
     ButtonConfig createNewChatButtonConfig;

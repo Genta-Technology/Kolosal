@@ -52,6 +52,7 @@ struct ButtonConfig
     std::optional<float> borderSize = 0.0F;
     std::optional<ButtonState> state = ButtonState::NORMAL;
     std::optional<Alignment> alignment = Alignment::CENTER;
+	std::optional<std::string> tooltip = "";
 };
 
 /**
@@ -462,6 +463,11 @@ namespace Button
         {
             config.onClick();
         }
+
+		if (!config.tooltip.value().empty() && ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip(config.tooltip.value().c_str());
+		}
 
         // Get the rectangle of the button
         ImVec2 buttonMin = ImGui::GetItemRectMin();

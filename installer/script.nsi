@@ -10,11 +10,16 @@
 ;-----------------------------------
 ; Embed version info (metadata)
 ;-----------------------------------
-VIProductVersion "1.0.0.0"
+VIProductVersion "0.1.1.0"
 VIAddVersionKey "ProductName" "Kolosal AI Installer"
 VIAddVersionKey "CompanyName" "Genta Technology"
 VIAddVersionKey "FileDescription" "Kolosal AI Installer"
 VIAddVersionKey "LegalCopyright" "Copyright (C) 2025"
+VIAddVersionKey "FileVersion" "0.1.1.0"
+VIAddVersionKey "ProductVersion" "0.1.1.0"
+VIAddVersionKey "OriginalFilename" "KolosalAI_Installer.exe"
+VIAddVersionKey "Comments" "Installer for Kolosal AI"
+VIAddVersionKey "Publisher" "Genta Technology"
 
 ;-----------------------------------
 ; Variables
@@ -39,7 +44,7 @@ InstallDir "$PROGRAMFILES\KolosalAI"
 InstallDirRegKey HKLM "Software\KolosalAI" "Install_Dir"
 
 ; Require admin rights for installation
-RequestExecutionLevel admin
+RequestExecutionLevel admin "Genta Technology"
 
 ;-----------------------------------
 ; Pages
@@ -104,6 +109,15 @@ Section "Kolosal AI" SecKolosalAI
       0 \
       "" \
       "$INSTDIR"
+
+    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Kolosal AI.lnk" \
+      "$INSTDIR\KolosalDesktop.exe" \
+      "" \
+      "$INSTDIR\assets\icon.ico" \
+      0 \
+      SW_SHOWNORMAL \
+      "" \
+      "Kolosal AI Desktop Application"
     
     CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk" \
       "$INSTDIR\Uninstall.exe"
@@ -115,8 +129,9 @@ Section "Kolosal AI" SecKolosalAI
     "" \
     "$INSTDIR\assets\icon.ico" \
     0 \
+    SW_SHOWNORMAL \
     "" \
-    "$INSTDIR"
+    "Kolosal AI Desktop Application"
 
   ; Write registry information
   WriteRegStr HKLM "Software\KolosalAI" "Install_Dir" "$INSTDIR"

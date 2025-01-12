@@ -1,6 +1,9 @@
 #ifndef INFERENCE_H
 #define INFERENCE_H
 
+#include "inference_interface.h"
+#include "types.h"
+
 #include <string>
 #include <vector>
 #include <memory>
@@ -16,60 +19,6 @@
 #define INFERENCE_API __declspec(dllimport)
 #endif
 
-//-----------------------------------------------------------------------------------------------
-// Data Structures
-//-----------------------------------------------------------------------------------------------
-
-/**
- * @brief Parameters for a completion job.
- */
-struct CompletionParameters
-{
-	std::string prompt;
-	int randomSeed = 42;
-	int maxNewTokens = 128;
-	int minLength = 8;
-	float temperature = 1.0f;
-	float topP = 0.5f;
-	bool streaming = false;
-
-	bool isValid() const;
-};
-
-/**
- * @brief Parameters for a chat completion job.
- */
-struct Message
-{
-	std::string role;
-	std::string content;
-};
-
-/**
- * @brief Parameters for a chat completion job.
- */
-struct ChatCompletionParameters
-{
-	std::vector<Message> messages;
-	int randomSeed = 42;
-	int maxNewTokens = 128;
-	int minLength = 8;
-	float temperature = 1.0f;
-	float topP = 0.5f;
-	bool streaming = false;
-
-	bool isValid() const;
-};
-
-/**
- * @brief Result of a completion job.
- */
-struct CompletionResult
-{
-	std::vector<int32_t> tokens;
-	std::string text;
-};
-
 /**
  * @brief Interface for an inference engine.
  *
@@ -77,21 +26,13 @@ struct CompletionResult
  * The engine can be implemented using a CPU or GPU.
  *
  * The engine is responsible for managing the completion jobs and returning the results.
+ *
+ *
  */
-class INFERENCE_API InferenceEngine
+class INFERENCE_API InferenceEngine : public IInferenceEngine
 {
 public:
-	static InferenceEngine& getInstance()
-	{
-		static InferenceEngine instance;
-		return instance;
-	}
-
-	// Delete copy constructor and assignment operator
-	InferenceEngine(const InferenceEngine&) = delete;
-	InferenceEngine& operator=(const InferenceEngine&) = delete;
-	InferenceEngine(InferenceEngine&&) = delete;
-	InferenceEngine& operator=(InferenceEngine&&) = delete;
+	explicit InferenceEngine();
 
 	bool loadModel(const char* engineDir, const int mainGpuId = -1);
 
@@ -150,19 +91,10 @@ public:
 	~InferenceEngine();
 
 private:
-	/**
-	 * @brief Constructs an InferenceEngine with the specified engine directory.
-	 * @param engineDir The directory where the engine is located.
-	 */
-	explicit InferenceEngine();
-
 	struct Impl;
 	std::unique_ptr<Impl> pimpl;
-
-	static std::unique_ptr<InferenceEngine> instance;
-	static std::mutex instanceMutex;
 };
 
-extern "C" INFERENCE_API InferenceEngine& getInferenceEngine();
+extern "C" INFERENCE_API IInferenceEngine* createInferenceEngine();
 
 #endif // INFERENCE_H

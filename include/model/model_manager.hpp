@@ -2,7 +2,8 @@
 
 #include "model_persistence.hpp"
 
-#include <inference.h>
+#include <types.h>
+#include <inference_interface.h>
 #include <string>
 #include <vector>
 #include <optional>
@@ -22,7 +23,7 @@
 
 #pragma comment(lib, "wbemuuid.lib")
 
-typedef InferenceEngine& (GetInferenceEngineFunc)();
+typedef IInferenceEngine* (CreateInferenceEngineFunc)();
 
 namespace Model
 {
@@ -175,24 +176,19 @@ namespace Model
 
         int startCompletionJob(const CompletionParameters& params)
         {
-			InferenceEngine& engine = m_getInferenceEnginePtr();
-
-            int jobId = engine.submitCompletionsJob(params);
+            int jobId = m_inferenceEngine->submitCompletionsJob(params);
             if (jobId < 0) {
                 std::cerr << "[ModelManager] Failed to submit completions job.\n";
                 return -1;
             }
 
             std::thread([this, jobId]() {
-                InferenceEngine& engine = m_getInferenceEnginePtr();
-
                 // Poll while job is running or until the engine says it's done
                 while (true)
                 {
-                    if (engine.isJobFinished(jobId)) break;
-                    if (engine.hasJobError(jobId)) break;
+                    if (this->m_inferenceEngine->hasJobError(jobId)) break;
 
-                    CompletionResult partial = engine.getJobResult(jobId);
+                    CompletionResult partial = this->m_inferenceEngine->getJobResult(jobId);
 
                     if (!partial.text.empty()) {
                         // Call the user’s callback
@@ -202,6 +198,8 @@ namespace Model
                             m_streamingCallback(partial.text, jobId);
                         }
                     }
+
+                    if (this->m_inferenceEngine->isJobFinished(jobId)) break;
 
                     // Sleep briefly to avoid busy-waiting
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -213,23 +211,19 @@ namespace Model
 
         int startChatCompletionJob(const ChatCompletionParameters& params)
         {
-            InferenceEngine& engine = m_getInferenceEnginePtr();
-
-            int jobId = engine.submitChatCompletionsJob(params);
+            int jobId = m_inferenceEngine->submitChatCompletionsJob(params);
             if (jobId < 0) {
                 std::cerr << "[ModelManager] Failed to submit chat completions job.\n";
                 return -1;
             }
 
             std::thread([this, jobId]() {
-                InferenceEngine& engine = m_getInferenceEnginePtr();
-
                 // Poll while job is running or until the engine says it's done
                 while (true)
                 {
-                    if (engine.hasJobError(jobId)) break;
+                    if (this->m_inferenceEngine->hasJobError(jobId)) break;
 
-                    CompletionResult partial = engine.getJobResult(jobId);
+                    CompletionResult partial = this->m_inferenceEngine->getJobResult(jobId);
 
                     if (!partial.text.empty()) {
                         // Call the user’s callback
@@ -239,7 +233,7 @@ namespace Model
                         }
                     }
 
-                    if (engine.isJobFinished(jobId)) break;
+                    if (this->m_inferenceEngine->isJobFinished(jobId)) break;
 
                     // Sleep briefly to avoid busy-waiting
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -251,26 +245,22 @@ namespace Model
 
         bool isJobFinished(int jobId)
         {
-			InferenceEngine& engine = m_getInferenceEnginePtr();
-            return engine.isJobFinished(jobId);
+            return m_inferenceEngine->isJobFinished(jobId);
         }
 
         CompletionResult getJobResult(int jobId)
         {
-			InferenceEngine& engine = m_getInferenceEnginePtr();
-            return engine.getJobResult(jobId);
+			return m_inferenceEngine->getJobResult(jobId);
         }
 
         bool hasJobError(int jobId)
         {
-			InferenceEngine& engine = m_getInferenceEnginePtr();
-            return engine.hasJobError(jobId);
+			return m_inferenceEngine->hasJobError(jobId);
         }
 
         std::string getJobError(int jobId)
         {
-            InferenceEngine& engine = m_getInferenceEnginePtr();
-            return engine.getJobError(jobId);
+            return m_inferenceEngine->getJobError(jobId);
         }
 
     private:
@@ -279,7 +269,8 @@ namespace Model
             , m_currentModelName(std::nullopt)
             , m_currentModelIndex(0)
             , m_inferenceLibHandle(nullptr)
-            , m_getInferenceEnginePtr(nullptr)
+            , m_createInferenceEnginePtr(nullptr)
+			, m_inferenceEngine(nullptr)
         {
             loadModelsAsync();
 
@@ -289,7 +280,11 @@ namespace Model
 				backendName = "InferenceEngineLibVulkan.dll";
             }
 
-            if (!loadInferenceEngineDynamically(backendName)) {
+#ifdef DEBUG
+			std::cout << "[ModelManager] Using backend: " << backendName << std::endl;
+#endif
+
+            if (!loadInferenceEngineDynamically(backendName.c_str())) {
                 std::cerr << "[ModelManager] Failed to load inference engine for backend: "
                     << backendName << std::endl;
                 return;
@@ -308,7 +303,7 @@ namespace Model
                 FreeLibrary(m_inferenceLibHandle);
 #endif
                 m_inferenceLibHandle = nullptr;
-                m_getInferenceEnginePtr = nullptr;
+                m_createInferenceEnginePtr = nullptr;
             }
         }
 
@@ -606,14 +601,24 @@ namespace Model
             }
 
             // Retrieve the symbol
-            m_getInferenceEnginePtr = (GetInferenceEngineFunc*)
-                GetProcAddress(m_inferenceLibHandle, "getInferenceEngine");
-            if (!m_getInferenceEnginePtr) {
-                std::cerr << "[ModelManager] Failed to get the address of getInferenceEngine from "
+            m_createInferenceEnginePtr = (CreateInferenceEngineFunc*)
+                GetProcAddress(m_inferenceLibHandle, "createInferenceEngine");
+            if (!m_createInferenceEnginePtr) {
+                std::cerr << "[ModelManager] Failed to get the address of createInferenceEngine from "
                     << backendName << std::endl;
                 // Optionally FreeLibrary here if you want to clean up immediately
                 return false;
             }
+
+			std::cout << "[ModelManager] Successfully loaded inference engine from: "
+				<< backendName << std::endl;
+
+			m_inferenceEngine = m_createInferenceEnginePtr();
+			if (!m_inferenceEngine) {
+				std::cerr << "[ModelManager] Failed to get InferenceEngine instance from "
+					<< backendName << std::endl;
+				return false;
+			}
 #endif
             return true;
         }
@@ -649,13 +654,10 @@ namespace Model
             }
 
             // Make sure we have a valid function pointer
-            if (!m_getInferenceEnginePtr) {
+            if (!m_createInferenceEnginePtr) {
                 std::cerr << "[ModelManager] No valid getInferenceEngine function pointer.\n";
                 return false;
             }
-
-			// TODO: Get the main GPU ID from the UI
-            int mainGpuId = 0;
 
 			// Get the model path directory instead of the full path file
 			std::string modelDir = modelPath.substr(0, modelPath.find_last_of("/\\"));
@@ -663,8 +665,7 @@ namespace Model
 			modelDir = std::filesystem::absolute(modelDir).string();
 
 			// Load the model into the inference engine
-            InferenceEngine& engine = m_getInferenceEnginePtr();
-            if (!engine.loadModel(modelDir.c_str(), mainGpuId))
+            if (!m_inferenceEngine->loadModel(modelDir.c_str()))
 			{
 				std::cerr << "[ModelManager] Failed to load model into InferenceEngine: "
 					<< modelDir << std::endl;
@@ -690,7 +691,8 @@ namespace Model
         HMODULE m_inferenceLibHandle = nullptr;
 #endif
 
-        GetInferenceEngineFunc* m_getInferenceEnginePtr = nullptr;
+        CreateInferenceEngineFunc* m_createInferenceEnginePtr = nullptr;
+        IInferenceEngine* m_inferenceEngine = nullptr;
 
 		std::function<void(const std::string&, const int)> m_streamingCallback;
     };

@@ -126,6 +126,22 @@ namespace Chat
             });
         }
 
+		std::future<bool> clearCurrentChat()
+		{
+			return std::async(std::launch::async, [this]() {
+				std::unique_lock<std::shared_mutex> lock(m_mutex);
+				if (!m_currentChatName || m_currentChatIndex >= m_chats.size())
+				{
+					return false;
+				}
+				m_chats[m_currentChatIndex].messages.clear();
+				m_chats[m_currentChatIndex].lastModified = static_cast<int>(std::time(nullptr));
+				// Launch async save operation
+				auto chat = m_chats[m_currentChatIndex];
+				return m_persistence->saveChat(chat).get();
+				});
+		}
+
         std::optional<ChatHistory> getCurrentChat() const
         {
             std::shared_lock<std::shared_mutex> lock(m_mutex);
