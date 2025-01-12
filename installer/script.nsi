@@ -44,7 +44,7 @@ InstallDir "$PROGRAMFILES\KolosalAI"
 InstallDirRegKey HKLM "Software\KolosalAI" "Install_Dir"
 
 ; Require admin rights for installation
-RequestExecutionLevel admin "Genta Technology"
+RequestExecutionLevel admin
 
 ;-----------------------------------
 ; Pages
@@ -102,13 +102,6 @@ Section "Kolosal AI" SecKolosalAI
   ; Create Start Menu shortcuts
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
-    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Kolosal AI.lnk" \
-      "$INSTDIR\KolosalDesktop.exe" \
-      "" \
-      "$INSTDIR\assets\icon.ico" \
-      0 \
-      "" \
-      "$INSTDIR"
 
     CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Kolosal AI.lnk" \
       "$INSTDIR\KolosalDesktop.exe" \
