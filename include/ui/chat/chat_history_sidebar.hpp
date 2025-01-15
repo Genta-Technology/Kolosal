@@ -33,13 +33,10 @@ inline void renderChatHistoryList(ImVec2 contentArea)
 
         chatButtonConfig.alignment = Alignment::LEFT;
 
-        // Add tooltip showing last modified time
-        if (ImGui::IsItemHovered()) {
-            std::time_t time = static_cast<std::time_t>(chat.lastModified);
-            char timeStr[26];
-            ctime_s(timeStr, sizeof(timeStr), &time);
-            ImGui::SetTooltip("Last modified: %s", timeStr);
-        }
+        std::time_t time = static_cast<std::time_t>(chat.lastModified);
+        char timeStr[26];
+        ctime_s(timeStr, sizeof(timeStr), &time);
+		chatButtonConfig.tooltip = "Last modified: " + std::string(timeStr);
 
         Button::render(chatButtonConfig);
 
@@ -113,7 +110,7 @@ inline void renderChatHistorySidebar(float& sidebarWidth)
     createNewChatButtonConfig.size = ImVec2(buttonHeight, 24);
     createNewChatButtonConfig.onClick = []() {
         Chat::ChatManager::getInstance().createNewChat(
-            Chat::ChatManager::getDefaultChatName() + " " + std::to_string(Chat::ChatManager::getInstance().getChatsSize()));
+            Chat::ChatManager::getDefaultChatName());
         };
     createNewChatButtonConfig.alignment = Alignment::CENTER;
     Button::render(createNewChatButtonConfig);

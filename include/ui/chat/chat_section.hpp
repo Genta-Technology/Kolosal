@@ -677,7 +677,7 @@ inline void renderInputField(const float inputHeight, const float inputWidth)
         // TODO: Implement assistant response through callback
         {
 			Model::PresetManager& presetManager = Model::PresetManager::getInstance();
-			Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+			Model::ModelManager&  modelManager  = Model::ModelManager::getInstance();
 
 			// Prepare completion parameters
             ChatCompletionParameters completionParams;
@@ -705,7 +705,10 @@ inline void renderInputField(const float inputHeight, const float inputWidth)
             int jobId = modelManager.startChatCompletionJob(completionParams);
 
 			// track the job ID in the chat manager
-			chatManager.setCurrentJobId(jobId);
+            if (!chatManager.setCurrentJobId(jobId))
+            {
+				std::cerr << "[ChatSection] Failed to set the current job ID.\n";
+            }
         }
     };
 

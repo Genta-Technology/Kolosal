@@ -5,7 +5,15 @@
 ;-----------------------------------
 ; Include Modern UI
 ;-----------------------------------
-!include "MUI2.nsh"  ; Updated to MUI2 for better compatibility
+!include "MUI2.nsh"
+!include "FileFunc.nsh"
+
+;-----------------------------------
+; Variables
+;-----------------------------------
+Var StartMenuFolder
+Var ChatHistoryDir
+Var DefaultChatDir
 
 ;-----------------------------------
 ; Embed version info (metadata)
@@ -20,11 +28,6 @@ VIAddVersionKey "ProductVersion" "0.1.1.0"
 VIAddVersionKey "OriginalFilename" "KolosalAI_Installer.exe"
 VIAddVersionKey "Comments" "Installer for Kolosal AI"
 VIAddVersionKey "Publisher" "Genta Technology"
-
-;-----------------------------------
-; Variables
-;-----------------------------------
-Var StartMenuFolder
 
 ;-----------------------------------
 ; Basic Installer Info
@@ -47,9 +50,16 @@ InstallDirRegKey HKLM "Software\KolosalAI" "Install_Dir"
 RequestExecutionLevel admin
 
 ;-----------------------------------
-; Pages
+; Pages Configuration
 ;-----------------------------------
 !define MUI_ABORTWARNING
+
+; Define the chat history directory page variables
+!define CHATHISTORY_TITLE "Choose Chat History Location"
+!define CHATHISTORY_SUBTITLE "Choose the folder where chat histories will be stored"
+!define MUI_PAGE_HEADER_TEXT "${CHATHISTORY_TITLE}"
+!define MUI_PAGE_HEADER_SUBTEXT "${CHATHISTORY_SUBTITLE}"
+!define MUI_DIRECTORYPAGE_VARIABLE $ChatHistoryDir
 
 ; Start Menu configuration
 !define MUI_STARTMENUPAGE_REGISTRY_ROOT "HKLM"
@@ -57,14 +67,39 @@ RequestExecutionLevel admin
 !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME "Start Menu Folder"
 !define MUI_STARTMENUPAGE_DEFAULTFOLDER "Kolosal AI"
 
+Function .onInit
+    StrCpy $DefaultChatDir "$LOCALAPPDATA\KolosalAI\ChatHistory"
+    StrCpy $ChatHistoryDir $DefaultChatDir
+FunctionEnd
+
+; Page order
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "LICENSE"
 !insertmacro MUI_PAGE_DIRECTORY
+
+; Custom chat history directory page
+!define MUI_PAGE_CUSTOMFUNCTION_PRE ChatHistoryDirectoryPre
+!insertmacro MUI_PAGE_DIRECTORY
+
 !insertmacro MUI_PAGE_STARTMENU Application $StartMenuFolder
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 
+; Uninstaller pages
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
 !insertmacro MUI_LANGUAGE "English"
+
+Function ChatHistoryDirectoryPre
+    StrCpy $ChatHistoryDir $DefaultChatDir
+    !undef MUI_DIRECTORYPAGE_VARIABLE
+    !define MUI_DIRECTORYPAGE_VARIABLE $ChatHistoryDir
+    !undef MUI_PAGE_HEADER_TEXT
+    !define MUI_PAGE_HEADER_TEXT "${CHATHISTORY_TITLE}"
+    !undef MUI_PAGE_HEADER_SUBTEXT
+    !define MUI_PAGE_HEADER_SUBTEXT "${CHATHISTORY_SUBTITLE}"
+FunctionEnd
 
 ;-----------------------------------
 ; Installation Section
@@ -97,49 +132,41 @@ Section "Kolosal AI" SecKolosalAI
   SetOutPath "$INSTDIR\models"
   File /r "models\*.*"
 
-  SetOutPath "$INSTDIR"  ; Reset working directory to main install dir
+  ; Create chat history directory
+  CreateDirectory "$ChatHistoryDir"
+  AccessControl::GrantOnFile "$ChatHistoryDir" "(S-1-5-32-545)" "FullAccess"
+
+  SetOutPath "$INSTDIR"
 
   ; Create Start Menu shortcuts
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
-
-    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Kolosal AI.lnk" \
-      "$INSTDIR\KolosalDesktop.exe" \
-      "" \
-      "$INSTDIR\assets\icon.ico" \
-      0 \
-      SW_SHOWNORMAL \
-      "" \
-      "Kolosal AI Desktop Application"
-    
-    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk" \
-      "$INSTDIR\Uninstall.exe"
+    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Kolosal AI.lnk" "$INSTDIR\KolosalDesktop.exe" "" "$INSTDIR\assets\icon.ico" 0 SW_SHOWNORMAL "" "Kolosal AI Desktop Application"
+    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
   !insertmacro MUI_STARTMENU_WRITE_END
 
   ; Create desktop shortcut
-  CreateShortCut "$DESKTOP\Kolosal AI.lnk" \
-    "$INSTDIR\KolosalDesktop.exe" \
-    "" \
-    "$INSTDIR\assets\icon.ico" \
-    0 \
-    SW_SHOWNORMAL \
-    "" \
-    "Kolosal AI Desktop Application"
+  CreateShortCut "$DESKTOP\Kolosal AI.lnk" "$INSTDIR\KolosalDesktop.exe" "" "$INSTDIR\assets\icon.ico" 0 SW_SHOWNORMAL "" "Kolosal AI Desktop Application"
 
   ; Write registry information
-  WriteRegStr HKLM "Software\KolosalAI" "Install_Dir" "$INSTDIR"
+  WriteRegStr HKLM "SOFTWARE\KolosalAI" "Install_Dir" "$INSTDIR"
+  WriteRegStr HKLM "SOFTWARE\KolosalAI" "ChatHistory_Dir" "$ChatHistoryDir"
+  
+  WriteRegStr HKCU "Software\KolosalAI" "Install_Dir" "$INSTDIR"
+  WriteRegStr HKCU "Software\KolosalAI" "ChatHistory_Dir" "$ChatHistoryDir"
   
   ; Write uninstaller registry information
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" \
-    "DisplayName" "Kolosal AI"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" \
-    "UninstallString" "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" \
-    "InstallLocation" "$INSTDIR"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" \
-    "Publisher" "Genta Technology"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" \
-    "DisplayIcon" "$INSTDIR\assets\icon.ico"
+  WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayName" "Kolosal AI"
+  WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "UninstallString" "$INSTDIR\Uninstall.exe"
+  WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "Publisher" "Genta Technology"
+  WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayIcon" "$INSTDIR\assets\icon.ico"
+  
+  WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayName" "Kolosal AI"
+  WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "UninstallString" "$INSTDIR\Uninstall.exe"
+  WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "Publisher" "Genta Technology"
+  WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayIcon" "$INSTDIR\assets\icon.ico"
 
   ; Create uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
@@ -151,11 +178,18 @@ SectionEnd
 Section "Uninstall"
   ; Retrieve Start Menu folder from registry
   !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuFolder
+  
+  ; Read chat history directory from registry
+  ReadRegStr $ChatHistoryDir HKLM "Software\KolosalAI" "ChatHistory_Dir"
 
-  MessageBox MB_ICONQUESTION|MB_YESNO \
-    "Are you sure you want to uninstall Kolosal AI?" \
-    IDNO noRemove
-
+  MessageBox MB_ICONQUESTION|MB_YESNO "Are you sure you want to uninstall Kolosal AI?" IDNO noRemove
+    
+  MessageBox MB_ICONQUESTION|MB_YESNO "Would you like to keep your chat history? Click Yes to keep, No to delete." IDYES keepChatHistory
+    
+  ; Remove chat history if user chose to delete it
+  RMDir /r "$ChatHistoryDir"
+  
+keepChatHistory:
   ; Remove shortcuts
   Delete "$SMPROGRAMS\$StartMenuFolder\Kolosal AI.lnk"
   Delete "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk"

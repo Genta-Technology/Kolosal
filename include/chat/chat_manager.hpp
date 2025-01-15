@@ -13,6 +13,12 @@
 #include <set>
 #include <unordered_set>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
+#endif
+
 namespace Chat
 {
     /**
@@ -23,7 +29,8 @@ namespace Chat
     public:
         static ChatManager& getInstance() 
         {
-            static ChatManager instance(std::make_unique<FileChatPersistence>("chats", Crypto::generateKey()));
+            static ChatManager instance(std::make_unique<FileChatPersistence>(
+                getChatPath().value_or("chat"), Crypto::generateKey()));
             return instance;
         }
 
@@ -65,7 +72,6 @@ namespace Chat
 
         bool switchToChat(const std::string& name)
         {
-            std::unique_lock<std::shared_mutex> lock(m_mutex);
             auto it = m_chatNameToIndex.find(name);
             if (it == m_chatNameToIndex.end()) 
             {
@@ -204,75 +210,94 @@ namespace Chat
 				});
 		}
 
-        // Async operations
-        std::future<bool> createNewChat(const std::string& name) 
+        std::optional<std::string> createNewChat(const std::string& name)
         {
-            return std::async(std::launch::async, [this, name]() {
-                if (!validateChatName(name)) 
-                {
-                    return false;
-                }
+            std::string newName = name;
 
-                std::unique_lock<std::shared_mutex> lock(m_mutex);
-                if (m_chatNameToIndex.find(name) != m_chatNameToIndex.end()) 
-                {
-                    return false;
-                }
+            std::unique_lock<std::shared_mutex> lock(m_mutex);
+            while (m_chatNameToIndex.find(newName) != m_chatNameToIndex.end())
+            {
+                newName = name + " (" + std::to_string(counter) + ")";
+                counter++;
+            }
 
-                const int newTimestamp = static_cast<int>(std::time(nullptr));
-                ChatHistory newChat{
-                    static_cast<int>(m_chats.size() + 1),
-                    newTimestamp,
-                    name,
-                    {}
-                };
+            if (!validateChatName(newName))
+            {
+                std::cerr << "[ChatManager] [ERROR] " << newName << " is not valid" << std::endl;
+                return std::nullopt;
+            }
 
-                size_t newIndex = m_chats.size();
-                m_chats.push_back(newChat);
-                m_chatNameToIndex[name] = newIndex;
+            const int newTimestamp = static_cast<int>(std::time(nullptr));
+            ChatHistory newChat{
+                static_cast<int>(counter),
+                newTimestamp,
+                newName,
+                {}
+            };
 
-                // Add to sorted indices
-                m_sortedIndices.insert({newTimestamp, newIndex, name});
+            size_t newIndex = m_chats.size();
+            m_chats.push_back(newChat);
+            m_chatNameToIndex[newName] = newIndex;
 
-                return m_persistence->saveChat(newChat).get();
-            });
+            // Add to sorted indices
+            m_sortedIndices.insert({ newTimestamp, newIndex, newName });
+
+            // Switch to the new chat
+            switchToChat(newName);
+
+            if (m_persistence->saveChat(newChat).get())
+            {
+                std::cout << "[ChatManager] Created new chat: " << newName << std::endl;
+            }
+
+            return newName;
         }
 
-        std::future<bool> deleteChat(const std::string& name) 
+        bool deleteChat(const std::string& name) 
         {
-            return std::async(std::launch::async, [this, name]() {
-                std::unique_lock<std::shared_mutex> lock(m_mutex);
-                
-                auto it = m_chatNameToIndex.find(name);
-                if (it == m_chatNameToIndex.end()) 
-                {
-                    return false;
-                }
+            std::unique_lock<std::shared_mutex> lock(m_mutex);
 
-                size_t indexToRemove = it->second;
-                
-                // Remove from sorted indices
-                auto timestamp = m_chats[indexToRemove].lastModified;
-                m_sortedIndices.erase({timestamp, indexToRemove, name});
+            auto it = m_chatNameToIndex.find(name);
+            if (it == m_chatNameToIndex.end())
+            {
+                std::cerr << "[ChatManager] Chat not found: " << name << std::endl;
+                return false;
+            }
 
-                m_chats.erase(m_chats.begin() + indexToRemove);
-                m_chatNameToIndex.erase(it);
+            size_t indexToRemove = it->second;
 
-                // Update indices
-                updateIndicesAfterDeletion(indexToRemove);
+            // Remove from sorted indices
+            auto timestamp = m_chats[indexToRemove].lastModified;
+            m_sortedIndices.erase({ timestamp, indexToRemove, name });
 
-                if (m_currentChatIndex == indexToRemove) 
-                {
-                    m_currentChatName = std::nullopt;
-                    m_currentChatIndex = 0;
-                }
-                else if (m_currentChatIndex > indexToRemove) 
-                {
-                    m_currentChatIndex--;
-                }
+            m_chats.erase(m_chats.begin() + indexToRemove);
+            m_chatNameToIndex.erase(it);
 
-                return m_persistence->deleteChat(name).get();
-            });
+            // Update indices
+            updateIndicesAfterDeletion(indexToRemove);
+
+            if (m_chats.empty())
+            {
+                createDefaultChat();
+            }
+            // i know it looks ugly, but it works
+            else if (m_currentChatIndex == indexToRemove)
+            {
+                // Select the most recent chat (first in sorted indices)
+                auto mostRecent = m_sortedIndices.begin();
+                switchToChat(mostRecent->name);
+            }
+            else if (m_currentChatIndex > indexToRemove)
+            {
+                m_currentChatIndex--;
+            }
+
+            if (m_persistence->deleteChat(name).get())
+            {
+                std::cout << "[ChatManager] Deleted chat: " << name << std::endl;
+            }
+
+            return true;
         }
 
         void addMessage(const std::string& chatName, const Message& message) 
@@ -380,6 +405,21 @@ namespace Chat
 			return true;
 		}
 
+		bool removeJobId(int jobId)
+		{
+			std::unique_lock<std::shared_mutex> lock(m_mutex);
+			// remove the job id from the chat index
+			for (auto& [chatIndex, chatJobId] : m_chatInferenceJobIdMap)
+			{
+				if (chatJobId == jobId)
+				{
+					m_chatInferenceJobIdMap[chatIndex] = -1;
+					return true;
+				}
+			}
+			return false;
+		}
+
 		int getCurrentJobId()
 		{
 			std::shared_lock<std::shared_mutex> lock(m_mutex);
@@ -422,6 +462,63 @@ namespace Chat
 			, m_chatNameToIndex()
         {
             loadChatsAsync();
+        }
+
+        static std::optional<std::filesystem::path> getChatPath()
+        {
+            HKEY hKey;
+
+            // Try to open the registry key
+            LONG result = RegOpenKeyExW(
+                HKEY_CURRENT_USER,
+                L"Software\\KolosalAI",
+                0,
+                KEY_READ,
+                &hKey
+            );
+
+            if (result != ERROR_SUCCESS) {
+				std::cerr << "[ChatManager] Failed to open registry key\n";
+                return std::nullopt;
+            }
+
+            // Get the size of the value first
+            DWORD dataSize = 0;
+            result = RegQueryValueExW(
+                hKey,
+                L"ChatHistory_Dir",
+                nullptr,
+                nullptr,
+                nullptr,
+                &dataSize
+            );
+
+            if (result != ERROR_SUCCESS) {
+                RegCloseKey(hKey);
+				std::cerr << "[ChatManager] Failed to query registry value\n";
+                return std::nullopt;
+            }
+
+            // Allocate buffer and read the value
+            std::vector<wchar_t> buffer(dataSize / sizeof(wchar_t) + 1);
+
+            result = RegQueryValueExW(
+                hKey,
+                L"ChatHistory_Dir",
+                nullptr,
+                nullptr,
+                reinterpret_cast<LPBYTE>(buffer.data()),
+                &dataSize
+            );
+
+            RegCloseKey(hKey);
+
+            if (result != ERROR_SUCCESS) {
+				std::cerr << "[ChatManager] Failed to read registry value\n";
+                return std::nullopt;
+            }
+
+            return std::filesystem::path(buffer.data());
         }
 
         // Validation helpers
@@ -512,6 +609,8 @@ namespace Chat
                     m_currentChatIndex = mostRecent->index;
                     m_currentChatName = mostRecent->name;
                 }
+
+				counter = m_sortedIndices.size();
             });
         }
 
@@ -544,6 +643,7 @@ namespace Chat
         size_t m_currentChatIndex;
         mutable std::shared_mutex m_mutex;
 		std::unordered_map<int, int> m_chatInferenceJobIdMap;
+        int counter;
     };
 
     inline void initializeChatManager() {

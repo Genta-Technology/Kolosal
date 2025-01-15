@@ -29,7 +29,7 @@ namespace Chat
     class FileChatPersistence : public IChatPersistence 
     {
     public:
-        explicit FileChatPersistence(std::string basePath, std::array<uint8_t, 32> key)
+        explicit FileChatPersistence(std::filesystem::path basePath, std::array<uint8_t, 32> key)
             : m_basePath(std::move(basePath)), m_key(key) 
         {
 			// Create base path if it doesn't exist
@@ -56,8 +56,9 @@ namespace Chat
                     std::filesystem::remove(getChatPath(chatName));
                     return true;
                 }
-                catch (...) 
+                catch (const std::exception& e)
                 {
+                    std::cerr << "[FileChatPersistence] Failed to delete chat: " << chatName << "\n";
                     return false;
                 }
                 });
@@ -72,13 +73,14 @@ namespace Chat
         }
 
     private:
-        const std::string m_basePath;
-        const std::array<uint8_t, 32> m_key;
-        mutable std::shared_mutex m_ioMutex;
+        const   std::filesystem::path   m_basePath;
+        const   std::array<uint8_t, 32> m_key;
+        mutable std::shared_mutex       m_ioMutex;
 
-        auto getChatPath(const std::string& chatName) const -> std::string 
+		auto getChatPath(const std::string& chatName) const -> std::filesystem::path
         {
-            return (std::filesystem::path(m_basePath) / (chatName + ".chat")).string();
+            return std::filesystem::absolute(
+                std::filesystem::path(m_basePath) / (chatName + ".chat"));
         }
 
         bool saveEncryptedChat(const ChatHistory& chat) 
@@ -96,7 +98,7 @@ namespace Chat
                 auto encrypted = Crypto::encrypt(plaintext, m_key);
 
                 // Save to file
-				std::string chatPath = getChatPath(chat.name);
+				std::filesystem::path chatPath = getChatPath(chat.name);
                 std::ofstream file(chatPath, std::ios::binary);
                 if (!file) {
                     return false;

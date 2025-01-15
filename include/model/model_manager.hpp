@@ -204,6 +204,14 @@ namespace Model
                     // Sleep briefly to avoid busy-waiting
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
+
+                // Reset jobid tracking on chat manager to -1
+                {
+                    if (!Chat::ChatManager::getInstance().removeJobId(jobId))
+                    {
+						std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
+                    }
+                }
                 }).detach();
 
             return jobId;
@@ -237,6 +245,14 @@ namespace Model
 
                     // Sleep briefly to avoid busy-waiting
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+
+                // Reset jobid tracking on chat manager to -1
+                {
+                    if (!Chat::ChatManager::getInstance().removeJobId(jobId))
+                    {
+                        std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
+                    }
                 }
                 }).detach();
 
