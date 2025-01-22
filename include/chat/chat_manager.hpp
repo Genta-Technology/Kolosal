@@ -3,6 +3,7 @@
 #pragma once
 
 #include "chat_persistence.hpp"
+#include "model/model_manager.hpp"
 
 #include <vector>
 #include <string>
@@ -482,7 +483,11 @@ namespace Chat
 			{
 				return std::nullopt;
 			}
-			return m_persistence->getKvChatPath(m_chats[m_currentChatIndex].name);
+
+			Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+
+			return m_persistence->getKvChatPath(m_chats[m_currentChatIndex].name 
+                + modelManager.getCurrentModelName().value() + modelManager.getCurrentVariantType());
 		}
 
 		static const std::string getDefaultChatName() { return DEFAULT_CHAT_NAME; }
