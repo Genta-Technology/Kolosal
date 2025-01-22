@@ -26,8 +26,8 @@
  * The engine can be implemented using a CPU or GPU.
  *
  * The engine is responsible for managing the completion jobs and returning the results.
- *
- *
+ * 
+ * 
  */
 class INFERENCE_API InferenceEngine : public IInferenceEngine
 {

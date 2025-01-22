@@ -247,6 +247,16 @@ namespace Model
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
 
+				// save the chat history
+				{
+					auto& chatManager = Chat::ChatManager::getInstance();
+					auto chatName = chatManager.getChatNameByJobId(jobId);
+                    if (!chatManager.saveChat(chatName))
+                    {
+                        std::cerr << "[ModelManager] Failed to save chat: " << chatName << std::endl;
+                    }
+				}
+
                 // Reset jobid tracking on chat manager to -1
                 {
                     if (!Chat::ChatManager::getInstance().removeJobId(jobId))
@@ -445,7 +455,7 @@ namespace Model
 
         bool useVulkanBackend() const
         {
-            bool useVulkan = false;  // This will store our detection results
+            bool useVulkan = false;
 
             // Initialize COM
             HRESULT hres = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -459,17 +469,17 @@ namespace Model
             // Set COM security levels
             hres = CoInitializeSecurity(
                 nullptr,
-                -1,                          // COM negotiates services
-                nullptr,                     // Authentication services
-                nullptr,                     // Reserved
-                RPC_C_AUTHN_LEVEL_DEFAULT,   // Default authentication
-                RPC_C_IMP_LEVEL_IMPERSONATE, // Default impersonation
-                nullptr,                     // Authentication info
-                EOAC_NONE,                   // Additional capabilities
-                nullptr                      // Reserved
+                -1,
+                nullptr,
+                nullptr,
+                RPC_C_AUTHN_LEVEL_DEFAULT,
+                RPC_C_IMP_LEVEL_IMPERSONATE,
+                nullptr,
+                EOAC_NONE,
+                nullptr
             );
 
-            if (FAILED(hres))
+            if (FAILED(hres) && hres != RPC_E_TOO_LATE) // Ignore if security is already initialized
             {
                 std::cerr << "[Error] Failed to initialize security. HR = 0x"
                     << std::hex << hres << std::endl;
@@ -498,14 +508,14 @@ namespace Model
             // Connect to the ROOT\CIMV2 namespace
             IWbemServices* pSvc = nullptr;
             hres = pLoc->ConnectServer(
-                _bstr_t(L"ROOT\\CIMV2"), // WMI namespace
-                nullptr,                 // User name
-                nullptr,                 // Password
-                nullptr,                 // Locale
-                0,                       // Security flags
-                nullptr,                 // Authority
-                nullptr,                 // Context
-                &pSvc                    // IWbemServices proxy
+                _bstr_t(L"ROOT\\CIMV2"),
+                nullptr,
+                nullptr,
+                nullptr,
+                0,
+                nullptr,
+                nullptr,
+                &pSvc
             );
 
             if (FAILED(hres))
@@ -520,13 +530,13 @@ namespace Model
             // Set security levels on the WMI proxy
             hres = CoSetProxyBlanket(
                 pSvc,
-                RPC_C_AUTHN_WINNT,           // Authentication service
-                RPC_C_AUTHZ_NONE,            // Authorization service
-                nullptr,                     // Principal name
-                RPC_C_AUTHN_LEVEL_CALL,      // Authentication level
-                RPC_C_IMP_LEVEL_IMPERSONATE, // Impersonation level
-                nullptr,                     // Client identity
-                EOAC_NONE                    // Proxy capabilities
+                RPC_C_AUTHN_WINNT,
+                RPC_C_AUTHZ_NONE,
+                nullptr,
+                RPC_C_AUTHN_LEVEL_CALL,
+                RPC_C_IMP_LEVEL_IMPERSONATE,
+                nullptr,
+                EOAC_NONE
             );
 
             if (FAILED(hres))
@@ -543,7 +553,7 @@ namespace Model
             IEnumWbemClassObject* pEnumerator = nullptr;
             hres = pSvc->ExecQuery(
                 bstr_t("WQL"),
-                bstr_t("SELECT * FROM Win32_VideoController"),
+                bstr_t("SELECT * FROM Win32_VideoController WHERE VideoProcessor IS NOT NULL"),
                 WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
                 nullptr,
                 &pEnumerator
@@ -568,31 +578,70 @@ namespace Model
                 HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
                 if (0 == uReturn)
                 {
-                    break;  // No more objects
+                    break;
                 }
 
-                // Get the AdapterCompatibility (or Name, or PNPDeviceID) property
-                VARIANT vtProp;
-                hr = pclsObj->Get(L"AdapterCompatibility", 0, &vtProp, 0, 0);
-                if (SUCCEEDED(hr) && vtProp.vt == VT_BSTR && vtProp.bstrVal != nullptr)
+                // Check multiple properties to improve detection reliability
+                VARIANT vtName, vtDesc, vtProcName;
+                bool isGPUFound = false;
+
+                // Check Name property
+                hr = pclsObj->Get(L"Name", 0, &vtName, 0, 0);
+                if (SUCCEEDED(hr) && vtName.vt == VT_BSTR && vtName.bstrVal != nullptr)
                 {
-                    std::wstring adapterName = vtProp.bstrVal;
-
-                    // Check for NVIDIA
-                    if (adapterName.find(L"NVIDIA") != std::wstring::npos)
+                    std::wstring name = vtName.bstrVal;
+                    if (name.find(L"NVIDIA") != std::wstring::npos ||
+                        name.find(L"AMD") != std::wstring::npos ||
+                        name.find(L"ATI") != std::wstring::npos ||
+                        name.find(L"Radeon") != std::wstring::npos)
                     {
-                        useVulkan = true;
-                        break;
-                    }
-                    // Check for AMD / ATI
-                    if (adapterName.find(L"AMD") != std::wstring::npos ||
-                        adapterName.find(L"ATI") != std::wstring::npos)
-                    {
-                        useVulkan = true;
-                        break;
+                        isGPUFound = true;
                     }
                 }
-                VariantClear(&vtProp);
+                VariantClear(&vtName);
+
+                // Check Description property if GPU not found yet
+                if (!isGPUFound)
+                {
+                    hr = pclsObj->Get(L"Description", 0, &vtDesc, 0, 0);
+                    if (SUCCEEDED(hr) && vtDesc.vt == VT_BSTR && vtDesc.bstrVal != nullptr)
+                    {
+                        std::wstring desc = vtDesc.bstrVal;
+                        if (desc.find(L"NVIDIA") != std::wstring::npos ||
+                            desc.find(L"AMD") != std::wstring::npos ||
+                            desc.find(L"ATI") != std::wstring::npos ||
+                            desc.find(L"Radeon") != std::wstring::npos)
+                        {
+                            isGPUFound = true;
+                        }
+                    }
+                    VariantClear(&vtDesc);
+                }
+
+                // Check VideoProcessor property if GPU not found yet
+                if (!isGPUFound)
+                {
+                    hr = pclsObj->Get(L"VideoProcessor", 0, &vtProcName, 0, 0);
+                    if (SUCCEEDED(hr) && vtProcName.vt == VT_BSTR && vtProcName.bstrVal != nullptr)
+                    {
+                        std::wstring procName = vtProcName.bstrVal;
+                        if (procName.find(L"NVIDIA")    != std::wstring::npos ||
+                            procName.find(L"AMD")       != std::wstring::npos ||
+                            procName.find(L"ATI")       != std::wstring::npos ||
+                            procName.find(L"Radeon")    != std::wstring::npos)
+                        {
+                            isGPUFound = true;
+                        }
+                    }
+                    VariantClear(&vtProcName);
+                }
+
+                if (isGPUFound)
+                {
+                    useVulkan = true;
+                    pclsObj->Release();
+                    break;
+                }
 
                 pclsObj->Release();
             }

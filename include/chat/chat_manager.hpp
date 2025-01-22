@@ -126,6 +126,7 @@ namespace Chat
                 if (saveResult) 
                 {
                     m_persistence->deleteChat(oldName).get();
+                    m_persistence->deleteKvChat(oldName).get();
                 }
 
                 return saveResult;
@@ -194,21 +195,31 @@ namespace Chat
 				});
 		}
 
-		void updateChat(const std::string& chatName, const ChatHistory& chat)
+		bool updateChat(const std::string& chatName, const ChatHistory& chat)
 		{
 			std::unique_lock<std::shared_mutex> lock(m_mutex);
 			auto it = m_chatNameToIndex.find(chatName);
 			if (it == m_chatNameToIndex.end())
 			{
 				std::cerr << "[ChatManager] Chat not found: " << chatName << std::endl;
-				return;
+				return false;
 			}
 			m_chats[it->second] = chat;
-			// Launch async save operation
-			std::async(std::launch::async, [this, chat]() {
-				m_persistence->saveChat(chat);
-				});
+            return true;
 		}
+
+        bool saveChat(const std::string& chatName)
+        {
+            std::unique_lock<std::shared_mutex> lock(m_mutex);
+            auto it = m_chatNameToIndex.find(chatName);
+            if (it == m_chatNameToIndex.end())
+            {
+                std::cerr << "[ChatManager] Chat not found: " << chatName << std::endl;
+                return false;
+            }
+            auto chat = m_chats[it->second];
+			return m_persistence->saveChat(chat).get();
+        }
 
         std::optional<std::string> createNewChat(const std::string& name)
         {
@@ -229,7 +240,7 @@ namespace Chat
 
             const int newTimestamp = static_cast<int>(std::time(nullptr));
             ChatHistory newChat{
-                static_cast<int>(counter),
+                static_cast<int>(counter) + newTimestamp,
                 newTimestamp,
                 newName,
                 {}
@@ -292,10 +303,19 @@ namespace Chat
                 m_currentChatIndex--;
             }
 
-            if (m_persistence->deleteChat(name).get())
+            if (!m_persistence->deleteChat(name).get())
             {
-                std::cout << "[ChatManager] Deleted chat: " << name << std::endl;
+				std::cerr << "[ChatManager] Failed to delete chat: " << name << std::endl;
+				return false;
             }
+
+            if (!m_persistence->deleteKvChat(name).get())
+            {
+				std::cerr << "[ChatManager] Failed to delete kv chat: " << name << std::endl;
+				return false;
+            }
+
+            std::cout << "[ChatManager] Deleted chat: " << name << std::endl;
 
             return true;
         }
@@ -310,12 +330,6 @@ namespace Chat
             {
                 it->messages.push_back(message);
                 it->lastModified = static_cast<int>(std::time(nullptr));
-
-                // Launch async save operation without blocking
-                auto chat = *it;
-                std::async(std::launch::async, [this, chat]() {
-                    m_persistence->saveChat(chat);
-                    });
             }
         }
 
@@ -449,6 +463,26 @@ namespace Chat
 				}
 			}
 			return "";
+		}
+
+		auto getCurrentChatPath() const -> std::optional<std::filesystem::path>
+		{
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			if (!m_currentChatName || m_currentChatIndex >= m_chats.size())
+			{
+				return std::nullopt;
+			}
+			return m_persistence->getChatPath(m_chats[m_currentChatIndex].name);
+		}
+
+		auto getCurrentKvChatPath() const -> std::optional<std::filesystem::path>
+		{
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			if (!m_currentChatName || m_currentChatIndex >= m_chats.size())
+			{
+				return std::nullopt;
+			}
+			return m_persistence->getKvChatPath(m_chats[m_currentChatIndex].name);
 		}
 
 		static const std::string getDefaultChatName() { return DEFAULT_CHAT_NAME; }

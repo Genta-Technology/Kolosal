@@ -55,13 +55,12 @@ namespace Chat
 
     inline void from_json(const json& j, Message& msg)
     {
-        msg.id = j.at("id").get<int>();
-        msg.isLiked = j.at("isLiked").get<bool>();
-        msg.isDisliked = j.at("isDisliked").get<bool>();
-        msg.role = j.at("role").get<std::string>();
-        msg.content = j.at("content").get<std::string>();
-        std::string timestampStr = j.at("timestamp").get<std::string>();
-        msg.timestamp = stringToTimePoint(timestampStr);
+        msg.id          = j.at("id").get<int>();
+        msg.isLiked     = j.at("isLiked").get<bool>();
+        msg.isDisliked  = j.at("isDisliked").get<bool>();
+        msg.role        = j.at("role").get<std::string>();
+        msg.content     = j.at("content").get<std::string>();
+        msg.timestamp   = stringToTimePoint(j.at("timestamp").get<std::string>());
     }
 
     struct ChatHistory

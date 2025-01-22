@@ -20,7 +20,10 @@ namespace Chat
         virtual ~IChatPersistence() = default;
         virtual std::future<bool> saveChat(const ChatHistory& chat) = 0;
         virtual std::future<bool> deleteChat(const std::string& chatName) = 0;
+		virtual std::future<bool> deleteKvChat(const std::string& chatName) = 0;
         virtual std::future<std::vector<ChatHistory>> loadAllChats() = 0;
+		virtual std::filesystem::path getChatPath(const std::string& chatName) const = 0;
+		virtual std::filesystem::path getKvChatPath(const std::string& chatName) const = 0;
     };
 
     /**
@@ -64,6 +67,23 @@ namespace Chat
                 });
         }
 
+		std::future<bool> deleteKvChat(const std::string& chatName) override
+		{
+			return std::async(std::launch::async, [this, chatName]() {
+				std::unique_lock<std::shared_mutex> lock(m_ioMutex);
+				try
+				{
+					std::filesystem::remove(getKvChatPath(chatName));
+					return true;
+				}
+				catch (const std::exception& e)
+				{
+					std::cerr << "[FileChatPersistence] Failed to delete chat: " << chatName << "\n";
+					return false;
+				}
+				});
+		}
+
         std::future<std::vector<ChatHistory>> loadAllChats() override 
         {
             return std::async(std::launch::async, [this]() {
@@ -72,16 +92,22 @@ namespace Chat
                 });
         }
 
-    private:
-        const   std::filesystem::path   m_basePath;
-        const   std::array<uint8_t, 32> m_key;
-        mutable std::shared_mutex       m_ioMutex;
-
-		auto getChatPath(const std::string& chatName) const -> std::filesystem::path
+        std::filesystem::path getChatPath(const std::string& chatName) const override
         {
             return std::filesystem::absolute(
                 std::filesystem::path(m_basePath) / (chatName + ".chat"));
         }
+
+        std::filesystem::path getKvChatPath(const std::string& chatName) const override
+		{
+			return std::filesystem::absolute(
+				std::filesystem::path(m_basePath) / (chatName + ".bin"));
+		}
+
+    private:
+        const   std::filesystem::path   m_basePath;
+        const   std::array<uint8_t, 32> m_key;
+        mutable std::shared_mutex       m_ioMutex;
 
         bool saveEncryptedChat(const ChatHistory& chat) 
         {

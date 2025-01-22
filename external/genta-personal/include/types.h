@@ -16,6 +16,7 @@ struct CompletionParameters
 	float temperature = 1.0f;
 	float topP = 0.5f;
 	bool streaming = false;
+	std::string kvCacheFilePath = "";
 
 	bool isValid() const;
 };
@@ -41,6 +42,7 @@ struct ChatCompletionParameters
 	float temperature = 1.0f;
 	float topP = 0.5f;
 	bool streaming = false;
+	std::string kvCacheFilePath = "";
 
 	bool isValid() const;
 };

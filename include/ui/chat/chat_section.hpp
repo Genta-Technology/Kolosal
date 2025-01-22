@@ -693,14 +693,15 @@ inline void renderInputField(const float inputHeight, const float inputWidth)
                 completionParams.messages.push_back({ "user", input.c_str()});
 
 				// set the preset parameters
-                completionParams.randomSeed     = presetManager.getCurrentPreset().value().get().random_seed;
-                completionParams.maxNewTokens   = static_cast<int>(presetManager.getCurrentPreset().value().get().max_new_tokens);
-                completionParams.minLength      = static_cast<int>(presetManager.getCurrentPreset().value().get().min_length);
-                completionParams.temperature    = presetManager.getCurrentPreset().value().get().temperature;
-                completionParams.topP           = presetManager.getCurrentPreset().value().get().top_p;
+                completionParams.randomSeed         = presetManager.getCurrentPreset().value().get().random_seed;
+                completionParams.maxNewTokens       = static_cast<int>(presetManager.getCurrentPreset().value().get().max_new_tokens);
+                completionParams.minLength          = static_cast<int>(presetManager.getCurrentPreset().value().get().min_length);
+                completionParams.temperature        = presetManager.getCurrentPreset().value().get().temperature;
+                completionParams.topP               = presetManager.getCurrentPreset().value().get().top_p;
 				// TODO: add top_k to the completion parameters
-				// completionParams.topK        = presetManager.getCurrentPreset().value().get().top_k;
-                completionParams.streaming      = true;
+				// completionParams.topK            = presetManager.getCurrentPreset().value().get().top_k;
+                completionParams.streaming          = true;
+				completionParams.kvCacheFilePath    = chatManager.getCurrentKvChatPath().value().string();
             }
             int jobId = modelManager.startChatCompletionJob(completionParams);
 
