@@ -701,7 +701,10 @@ inline void renderInputField(const float inputHeight, const float inputWidth)
 				// TODO: add top_k to the completion parameters
 				// completionParams.topK            = presetManager.getCurrentPreset().value().get().top_k;
                 completionParams.streaming          = true;
-				completionParams.kvCacheFilePath    = chatManager.getCurrentKvChatPath().value().string();
+				completionParams.kvCacheFilePath    = chatManager.getCurrentKvChatPath(
+                    modelManager.getCurrentModelName().value(),
+					modelManager.getCurrentVariantType()
+                ).value().string();
             }
             int jobId = modelManager.startChatCompletionJob(completionParams);
 
