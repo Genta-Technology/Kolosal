@@ -1,0 +1,28 @@
+{
+  "name": "Qwen Coder 7B",
+  "author": "Alibaba",
+  "fullPrecision": {
+    "type": "Full Precision",
+    "path": "models/qwen-coder-7b/fp16/qwen2.5-coder-7b-instruct-fp16.gguf",
+    "downloadLink": "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-fp16.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized8Bit": {
+    "type": "8-bit Quantized",
+    "path": "models/qwen-coder-7b/int8/qwen2.5-coder-3b-instruct-q8_0.gguf",
+    "downloadLink": "https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q8_0.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized4Bit": {
+    "type": "4-bit Quantized",
+    "path": "models/qwen-coder-7b/int4/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+    "downloadLink": "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  }
+}
