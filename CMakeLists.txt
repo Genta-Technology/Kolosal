@@ -112,7 +112,6 @@ target_include_directories(kolosal_lib PUBLIC
     ${EXTERNAL_DIR}/nativefiledialog-extended/src/include
     ${EXTERNAL_DIR}/genta-personal/include
     ${EXTERNAL_DIR}/stb
-    ${EXTERNAL_DIR}/imgui_markdown
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/assets
     ${CURL_INCLUDE_DIR}
@@ -168,6 +167,18 @@ else()
         assets/resource.rc
     )
 endif()
+
+target_include_directories(KolosalDesktop PRIVATE
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+    ${OpenGL_INCLUDE_DIR}
+    ${EXTERNAL_DIR}/glad/include
+    ${EXTERNAL_DIR}/icons
+    ${EXTERNAL_DIR}/nlohmann
+    ${EXTERNAL_DIR}/nativefiledialog-extended/src/include
+    ${EXTERNAL_DIR}/genta-personal/include
+    ${CMAKE_SOURCE_DIR}/include
+)
 
 target_link_libraries(KolosalDesktop PRIVATE kolosal_lib)
 
