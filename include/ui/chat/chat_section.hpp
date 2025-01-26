@@ -3,33 +3,13 @@
 #include "imgui.h"
 #include "config.hpp"
 #include "ui/widgets.hpp"
+#include "ui/markdown.hpp"
 #include "chat/chat_manager.hpp"
 #include "model/preset_manager.hpp"
 #include "model/model_manager.hpp"
 
 #include <iostream>
 #include <inference.h>
-
-inline void pushIDAndColors(const Chat::Message msg, int index)
-{
-    ImGui::PushID(index);
-
-    // Set background color to #2f2f2f for user
-    ImVec4 bgColor = ImVec4(
-        Config::UserColor::COMPONENT,
-        Config::UserColor::COMPONENT,
-        Config::UserColor::COMPONENT,
-        1.0F);
-
-    // Set background color to transparent for assistant
-    if (msg.role == "assistant")
-    {
-        bgColor = ImVec4(0.0F, 0.0F, 0.0F, 0.0F);
-    }
-
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, bgColor);
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 1.0F, 1.0F, 1.0F)); // White text
-}
 
 inline auto calculateDimensions(const Chat::Message msg, float windowWidth) -> std::tuple<float, float, float>
 {
@@ -49,10 +29,19 @@ inline auto calculateDimensions(const Chat::Message msg, float windowWidth) -> s
 inline void renderMessageContent(const Chat::Message msg, float bubbleWidth, float bubblePadding)
 {
     ImGui::SetCursorPosX(bubblePadding);
-    ImGui::SetCursorPosY(bubblePadding);
-    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + bubbleWidth - (bubblePadding * 2));
-    ImGui::TextWrapped("%s", msg.content.c_str());
-    ImGui::PopTextWrapPos();
+
+    if (msg.role == "user")
+    {
+        ImGui::SetCursorPosY(bubblePadding);
+        ImGui::TextWrapped("%s", msg.content.c_str());
+    }
+    else
+    {
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 24);
+        ImGui::BeginGroup();
+        RenderMarkdown(msg.content.c_str()); // Capture height here
+        ImGui::EndGroup();
+    }
 }
 
 inline void renderTimestamp(const Chat::Message msg, float bubblePadding)
@@ -60,16 +49,7 @@ inline void renderTimestamp(const Chat::Message msg, float bubblePadding)
     // Set timestamp color to a lighter gray
     ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7F, 0.7F, 0.7F, 1.0F)); // Light gray for timestamp
 
-	float timestampPosY = ImGui::GetWindowHeight() - ImGui::GetTextLineHeightWithSpacing()
-                          - (bubblePadding - Config::Timing::TIMESTAMP_OFFSET_Y);
-
-	if (msg.role == "assistant")
-	{
-		timestampPosY += 5;
-	}
-
-	ImGui::SetCursorPosY(timestampPosY);
-    ImGui::SetCursorPosX(bubblePadding); // Align timestamp to the left
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + bubblePadding); // Align timestamp to the left
     ImGui::TextWrapped("%s", timePointToString(msg.timestamp).c_str());
 
     ImGui::PopStyleColor(); // Restore original text color
@@ -77,13 +57,9 @@ inline void renderTimestamp(const Chat::Message msg, float bubblePadding)
 
 inline void renderButtons(const Chat::Message msg, int index, float bubbleWidth, float bubblePadding)
 {
-    ImVec2 textSize = ImGui::CalcTextSize(msg.content.c_str(), nullptr, true, bubbleWidth - bubblePadding * 2);
-    float buttonPosY = textSize.y + bubblePadding;
-
-	if (msg.role == "assistant")
-	{
-		buttonPosY += 10;
-	}
+	ImGui::SetCursorPosX(
+		ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - Config::Button::WIDTH - bubblePadding
+    );
 
     ButtonConfig copyButtonConfig;
     copyButtonConfig.id = "##copy" + std::to_string(index);
@@ -96,53 +72,73 @@ inline void renderButtons(const Chat::Message msg, int index, float bubbleWidth,
 			const Chat::Message& msg = chatHistory.messages[index];
             ImGui::SetClipboardText(msg.content.c_str());
         };
-    std::vector<ButtonConfig> userButtons = { copyButtonConfig };
-
-    Button::renderGroup(
-        userButtons,
-        bubbleWidth - bubblePadding - Config::Button::WIDTH,
-        buttonPosY);
+	Button::render(copyButtonConfig);
 }
 
-inline void renderMessage(const Chat::Message &msg, int index, float contentWidth)
+inline void renderMessage(const Chat::Message& msg, int index, float contentWidth)
 {
-    pushIDAndColors(msg, index);
     float windowWidth = contentWidth;
     auto [bubbleWidth, bubblePadding, paddingX] = calculateDimensions(msg, windowWidth);
 
-    ImVec2 textSize = ImGui::CalcTextSize(msg.content.c_str(), nullptr, true, bubbleWidth - bubblePadding * 2);
-    float estimatedHeight = textSize.y + bubblePadding * 2 + ImGui::GetTextLineHeightWithSpacing();
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, Config::InputField::CHILD_ROUNDING);
+    ImVec4 bgColor = ImVec4( // Default to user color
+        Config::UserColor::COMPONENT,
+        Config::UserColor::COMPONENT,
+        Config::UserColor::COMPONENT,
+        1.0F);
 
-    ImGui::SetCursorPosX(paddingX);
-
-    if (msg.role == "user")
+    if (msg.role == "assistant")
     {
-        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, Config::InputField::CHILD_ROUNDING);
+        bgColor = ImVec4(0.0F, 0.0F, 0.0F, 0.0F); // Transparent for assistant
     }
 
-    ImGui::BeginGroup();
-    ImGui::BeginChild(
-        ("MessageCard" + std::to_string(index)).c_str(),
-        ImVec2(bubbleWidth, estimatedHeight),
-        false,
-        ImGuiWindowFlags_NoScrollbar);
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, bgColor);
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 1.0F, 1.0F, 1.0F));
 
-    renderMessageContent(msg, bubbleWidth, bubblePadding);
-    ImGui::Spacing();
-    renderTimestamp(msg, bubblePadding);
-    renderButtons(msg, index, bubbleWidth, bubblePadding);
-
-    ImGui::EndChild();
-    ImGui::EndGroup();
-
-    if (msg.role == "user")
+    // Add frame on user message
     {
-        ImGui::PopStyleVar();
+        if (msg.role == "user")
+        {
+            ImVec2 textSize = ImGui::CalcTextSize(msg.content.c_str(), nullptr, true, bubbleWidth - bubblePadding * 2);
+            float estimatedHeight = textSize.y + bubblePadding * 2 + ImGui::GetTextLineHeightWithSpacing() + 12;
+
+            // User message frame with background and border
+            ImGui::SetCursorPosX(paddingX);
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(bubblePadding, bubblePadding));
+            ImGui::BeginChild(("##UsrMessage" + std::to_string(msg.id)).c_str(),
+                ImVec2(bubbleWidth, estimatedHeight),
+                ImGuiChildFlags_Border | ImGuiChildFlags_AlwaysUseWindowPadding);
+            ImGui::PopStyleVar();
+
+            // Calculate content width accounting for padding
+            const float contentWidthInside = bubbleWidth - 2 * bubblePadding;
+            renderMessageContent(msg, contentWidthInside, bubblePadding);
+            ImGui::Spacing();
+
+            // Render timestamp and buttons
+            renderTimestamp(msg, 0);
+            ImGui::SameLine();
+            renderButtons(msg, index, contentWidthInside, 0);
+
+            ImGui::EndChild();
+        }
+        else
+        {
+            // Assistant message (existing layout)
+            ImGui::SetCursorPosX(paddingX);
+            renderMessageContent(msg, bubbleWidth, bubblePadding);
+            ImGui::Spacing();
+            ImGui::SetCursorPosX(paddingX);
+            renderTimestamp(msg, bubblePadding);
+            ImGui::SameLine();
+            renderButtons(msg, index, bubbleWidth, bubblePadding);
+        }
     }
 
+    ImGui::PopStyleVar(); // ChildRounding
     ImGui::PopStyleColor(2);
-    ImGui::PopID();
-    ImGui::Spacing();
+
+    ImGui::Dummy(ImVec2(0, 20.0f)); // Add some spacing between messages
 }
 
 inline void renderChatHistory(const Chat::ChatHistory chatHistory, float contentWidth)
