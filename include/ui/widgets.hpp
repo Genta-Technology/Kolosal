@@ -1,6 +1,7 @@
 // TODO: refactor to use builder pattern
 
-#pragma once
+#ifndef WIDGETS_HPP
+#define WIDGETS_HPP
 
 #include <string>
 #include <optional>
@@ -106,6 +107,16 @@ struct InputFieldConfig
         const ImVec2 &size,
         std::string &inputTextBuffer,
         bool &focusInputField)
+        : id(id),
+          size(size),
+          inputTextBuffer(inputTextBuffer),
+          focusInputField(focusInputField) {}
+
+    InputFieldConfig(
+        const char* id,
+        const ImVec2& size,
+        std::string& inputTextBuffer,
+        bool& focusInputField)
         : id(id),
           size(size),
           inputTextBuffer(inputTextBuffer),
@@ -480,6 +491,7 @@ namespace Button
         labelConfig.icon = config.icon.value_or("");
         labelConfig.size = config.size;
         labelConfig.fontType = config.fontType.value_or(FontsManager::REGULAR);
+		labelConfig.fontSize = config.fontSize.value_or(FontsManager::MD);
         labelConfig.iconType = config.iconType.value_or(FontsManager::CODICON);
         labelConfig.gap = config.gap.value_or(5.0f);
         labelConfig.alignment = config.alignment.value_or(Alignment::CENTER);
@@ -1001,3 +1013,5 @@ namespace ModalWindow
         ImGui::PopStyleColor();
     }
 }
+
+#endif // WIDGETS_H

@@ -68,9 +68,10 @@ message(STATUS "Found InferenceEngine libraries:")
 message(STATUS "  - OpenBLAS: ${INFERENCE_ENGINE_LIB}")
 message(STATUS "  - Vulkan:   ${INFERENCE_ENGINE_LIB_VULKAN}")
 
-# MD4C and imgui_md
+# MD4C, ImGuiTextEdit and imgui_md
 set(MARKDOWN_RENDERER
     ${EXTERNAL_DIR}/md4c/src/md4c.c
+    ${EXTERNAL_DIR}/ImGuiColorTextEdit/TextEditor.cpp
     ${EXTERNAL_DIR}/imgui_md/imgui_md.cpp
 )
 
@@ -120,6 +121,7 @@ target_include_directories(kolosal_lib PUBLIC
     ${EXTERNAL_DIR}/genta-personal/include
     ${EXTERNAL_DIR}/stb
     ${EXTERNAL_DIR}/md4c/src
+    ${EXTERNAL_DIR}/ImGuiColorTextEdit
     ${EXTERNAL_DIR}/imgui_md
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/assets
