@@ -112,6 +112,8 @@ protected:
 
             ImGui::PushFont(FontsManager::GetInstance().GetMarkdownFont(
                 FontsManager::CODE, FontsManager::MD));
+
+			m_is_code_block = true;
         }
         else {
             if (!m_code_stack.empty()) {
@@ -186,8 +188,23 @@ protected:
                 m_code_stack.pop_back();
             }
             ImGui::PopFont();
+            
+			m_is_code_block = false;
         }
     }
+
+    void SPAN_CODE(bool e) override
+	{
+		if (e) {
+			ImGui::PushFont(FontsManager::GetInstance().GetMarkdownFont(
+				FontsManager::CODE, FontsManager::MD));
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(180, 230, 180, 255)); // Greenish text
+		}
+		else {
+            ImGui::PopStyleColor();
+			ImGui::PopFont();
+		}
+	}
 };
 
 inline void RenderMarkdown(const char* text)
