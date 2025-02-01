@@ -1,5 +1,7 @@
 ## Kolosal AI
 
+https://github.com/user-attachments/assets/99ef34c8-f8b7-4e8f-b11a-ec923c09570e
+
 **Kolosal AI** is an open-source desktop application designed to simplify the training and inference of large language models on your own device. It supports any CPU with **AVX2** instructions and also works with **AMD** and **NVIDIA** GPUs. Built to be lightweight (only ~20 MB compiled), **Kolosal AI** runs smoothly on most edge devices, enabling on-premise or on-edge AI solutions without heavy cloud dependencies.
 
 - **License:** [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)
@@ -37,9 +39,23 @@
 
 ### License Notice
 
-Although the Kolosal AI is entirely Open-Source, and can be distributed for free or commercial purposes under Apache 2.0 License, the main engine (the Genta Inference Engine Personal) can not be distributed for commercial purposes. For those who are planning to use Kolosal AI for commercial purpose, must contact our team at [rifky@genta.tech](mailto:rifky@genta.tech), or you can implement your own or other inference engine on Kolosal AI. This is intended to motivate contribution by companies to the Kolosal AI community by integrating other engine.
+Although the Kolosal AI is entirely Open-Source, and can be distributed for free or commercial purposes under Apache 2.0 License, the main engine (the Genta Inference Engine Personal) can not be distributed for commercial purposes. For those who are planning to use Kolosal AI for commercial purpose, must contact our team at [rifky@genta.tech](mailto:rifky@genta.tech), or you can implement your own or other inference engine on Kolosal AI, **or by being a contributor to Kolosal AI**. This is intended to motivate contribution by companies to the Kolosal AI community.
 
 [Genta Inference Engine Personal](https://github.com/Genta-Technology/Kolosal/tree/main/external/genta-personal) © 2025 by [Rifky Bujana Bisri](https://linkedin.com/in/rifkybujana) is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). To view a copy of this license, visit https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+---
+
+## Credits & Attribution
+
+Kolosal AI uses or references the following third-party projects, each licensed under their respective terms:
+
+- [Dear ImGui](https://github.com/ocornut/imgui) (MIT License)  
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) (MIT License)  
+- [nativefiledialog-extended](https://github.com/btzy/nativefiledialog-extended) (zlib License)  
+- [nlohmann/json](https://github.com/nlohmann/json) (MIT License)  
+- [stb libraries](https://github.com/nothings/stb) (Public Domain or MIT License)  
+
+These projects are distributed under their own licenses, separate from Kolosal AI. We are not affiliated with nor endorsed by the above entities.
 
 ---
 
