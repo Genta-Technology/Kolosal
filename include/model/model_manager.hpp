@@ -169,7 +169,7 @@ namespace Model
 		// Inference Engine
 		//--------------------------------------------------------------------------------------------
 
-        void setStreamingCallback(std::function<void(const std::string&, const int)> callback)
+        void setStreamingCallback(std::function<void(const std::string&, const float, const int)> callback)
         {
             std::unique_lock<std::shared_mutex> lock(m_mutex);
             m_streamingCallback = std::move(callback);
@@ -196,7 +196,7 @@ namespace Model
                         // (hold shared lock if needed to be thread-safe)
                         std::shared_lock<std::shared_mutex> lock(m_mutex);
                         if (m_streamingCallback) {
-                            m_streamingCallback(partial.text, jobId);
+                            m_streamingCallback(partial.text, partial.tps, jobId);
                         }
                     }
 
@@ -238,7 +238,7 @@ namespace Model
                         // Call the user’s callback
                         std::shared_lock<std::shared_mutex> lock(m_mutex);
                         if (m_streamingCallback) {
-                            m_streamingCallback(partial.text, jobId);
+                            m_streamingCallback(partial.text, partial.tps, jobId);
                         }
                     }
 
@@ -941,7 +941,7 @@ namespace Model
 
         IInferenceEngine* m_inferenceEngine = nullptr;
 
-		std::function<void(const std::string&, const int)> m_streamingCallback;
+		std::function<void(const std::string&, const float, const int)> m_streamingCallback;
     };
 
     inline void initializeModelManager()

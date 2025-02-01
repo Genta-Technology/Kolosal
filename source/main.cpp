@@ -185,7 +185,7 @@ void HandleException(const std::exception& e)
 
 		// TODO: encapsulate to have a cleaner code
         Model::ModelManager::getInstance().setStreamingCallback(
-            [](const std::string& partialOutput, const int jobId) {
+            [](const std::string& partialOutput, const float tps, const int jobId) {
                 // Grab the current chat by the tracked jobId:
                 auto& chatManager = Chat::ChatManager::getInstance();
 				std::string chatName = chatManager.getChatNameByJobId(jobId);
@@ -197,6 +197,7 @@ void HandleException(const std::exception& e)
                 {
                     // Append to the existing assistant message
                     chat.messages.back().content = partialOutput;
+					chat.messages.back().tps = tps;
 					chatManager.updateChat(chatName, chat);
                 }
                 else
@@ -207,6 +208,7 @@ void HandleException(const std::exception& e)
                     assistantMsg.id = static_cast<int>(chat.messages.size()) + 1;
                     assistantMsg.role = "assistant";
                     assistantMsg.content = partialOutput;
+					assistantMsg.tps = tps;
 					chatManager.addMessage(chatName, assistantMsg);
                 }
             }

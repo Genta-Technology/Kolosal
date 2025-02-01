@@ -22,12 +22,14 @@ namespace Chat
         bool isDisliked;
         std::string role;
         std::string content;
+        float tps;
         std::chrono::system_clock::time_point timestamp;
 
         Message(
             int id = 0,
             const std::string& role = "user",
             const std::string& content = "",
+			const float tps = 0.0f,
             bool isLiked = false,
             bool isDisliked = false,
             const std::chrono::system_clock::time_point& timestamp = std::chrono::system_clock::now())
@@ -38,6 +40,7 @@ namespace Chat
                 ? role
                 : throw std::invalid_argument("Invalid role: " + role))
             , content(content)
+			, tps(tps)
             , timestamp(timestamp) {
         }
     };
@@ -50,7 +53,9 @@ namespace Chat
             {"isDisliked", msg.isDisliked},
             {"role", msg.role},
             {"content", msg.content},
-            {"timestamp", timePointToString(msg.timestamp)} };
+            {"timestamp", timePointToString(msg.timestamp)},
+			{"tps", msg.tps}
+        };
     }
 
     inline void from_json(const json& j, Message& msg)
@@ -61,6 +66,7 @@ namespace Chat
         msg.role        = j.at("role").get<std::string>();
         msg.content     = j.at("content").get<std::string>();
         msg.timestamp   = stringToTimePoint(j.at("timestamp").get<std::string>());
+        msg.tps         = j.value("tps", 0.0f);
     }
 
     struct ChatHistory

@@ -190,6 +190,14 @@ inline void renderTimestamp(const Chat::Message msg, float bubblePadding)
     ImGui::PopStyleColor(); // Restore original text color
 }
 
+inline void renderTps(const Chat::Message msg, float bubblePadding)
+{
+	// Set timestamp color to a lighter gray
+	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.7F, 0.7F, 0.7F, 1.0F)); // Light gray for timestamp
+	ImGui::TextWrapped("TPS: %.2f", msg.tps);
+	ImGui::PopStyleColor(); // Restore original text color
+}
+
 inline void renderButtons(const Chat::Message msg, int index, float bubbleWidth, float bubblePadding)
 {
 	ImGui::SetCursorPosX(
@@ -264,6 +272,10 @@ inline void renderMessage(const Chat::Message& msg, int index, float contentWidt
             renderMessageContent(msg, bubbleWidth, bubblePadding);
             ImGui::Spacing();
             renderTimestamp(msg, bubblePadding);
+            ImGui::SameLine();
+			// add some spacing between messages
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 10);
+			renderTps(msg, bubblePadding);
             ImGui::SameLine();
             renderButtons(msg, index, bubbleWidth, bubblePadding);
         }
