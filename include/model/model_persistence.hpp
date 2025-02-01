@@ -61,13 +61,15 @@ namespace Model
         std::future<void> downloadModelVariant(ModelData& modelData, ModelVariant& variant) override
         {
             return std::async(std::launch::async, [&variant, &modelData, this]() {
-                CURL *curl = curl_easy_init();
+                // Reset cancellation flag at the start.
+                variant.cancelDownload = false;
+
+                CURL* curl = curl_easy_init();
                 if (curl)
                 {
-					// Make sure the variant path folder exists
-					std::filesystem::create_directories(std::filesystem::path(variant.path).parent_path());
-
-                    std::ofstream file(variant.path,  std::ios::binary);
+                    // Ensure the target directory exists.
+                    std::filesystem::create_directories(std::filesystem::path(variant.path).parent_path());
+                    std::ofstream file(variant.path, std::ios::binary);
                     if (!file.is_open())
                     {
                         curl_easy_cleanup(curl);
@@ -85,21 +87,28 @@ namespace Model
                     CURLcode res = curl_easy_perform(curl);
                     if (res != CURLE_OK)
                     {
-                        // Handle error
+                        if (res == CURLE_ABORTED_BY_CALLBACK) {
+                            // Download was canceled:
+                            file.close();
+                            std::filesystem::remove(variant.path);  // Remove incomplete file
+                            variant.downloadProgress = 0.0;
+                            variant.isDownloaded = false;
+                        }
+                        else {
+                            // Handle other error cases as needed.
+                        }
                     }
                     else
                     {
                         variant.isDownloaded = true;
                         variant.downloadProgress = 100.0;
-
-                        // Save the model data
+                        // Save the updated model data.
                         saveModelData(modelData).get();
                     }
-
                     curl_easy_cleanup(curl);
                     file.close();
                 }
-            });
+                });
         }
 
         std::future<void> saveModelData(const ModelData& modelData) override
@@ -133,10 +142,12 @@ namespace Model
         static int progress_callback(void* ptr, curl_off_t total, curl_off_t now, curl_off_t, curl_off_t)
         {
             ModelVariant* variant = static_cast<ModelVariant*>(ptr);
-            if (total > 0)
-            {
+            if (total > 0) {
                 variant->downloadProgress = static_cast<double>(now) / static_cast<double>(total) * 100.0;
             }
+            // If cancel flag is set, abort the transfer.
+            if (variant->cancelDownload)
+                return 1; // non-zero return value signals curl to abort
             return 0;
         }
 

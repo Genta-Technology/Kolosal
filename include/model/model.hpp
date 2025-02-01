@@ -8,27 +8,44 @@ using json = nlohmann::json;
 
 namespace Model
 {
-    struct ModelVariant
-    {
-        std::string type; // "Full Precision", "8-bit Quantized", or "4-bit Quantized"
+    // In model.hpp or the appropriate header:
+    struct ModelVariant {
+        std::string type;
         std::string path;
         std::string downloadLink;
         bool isDownloaded;
-        double downloadProgress; // 0.0 to 100.0
+        double downloadProgress;
         int lastSelected;
+        std::atomic_bool cancelDownload{ false };
 
-        ModelVariant(const std::string &type = "",
-                     const std::string &path = "",
-                     const std::string &downloadLink = "",
-                     bool isDownloaded = false,
-                     double downloadProgress = 0.0,
-                     int lastSelected = 0)
-            : type(type)
-            , path(path)
-            , downloadLink(downloadLink)
-            , isDownloaded(isDownloaded)
-            , downloadProgress(downloadProgress)
-            , lastSelected(lastSelected) {}
+        // Default constructor is fine.
+        ModelVariant() = default;
+
+        // Custom copy constructor.
+        ModelVariant(const ModelVariant& other)
+            : type(other.type)
+            , path(other.path)
+            , downloadLink(other.downloadLink)
+            , isDownloaded(other.isDownloaded)
+            , downloadProgress(other.downloadProgress)
+            , lastSelected(other.lastSelected)
+            , cancelDownload(false) // Always initialize to false on copy.
+        {
+        }
+
+        // Custom copy assignment operator.
+        ModelVariant& operator=(const ModelVariant& other) {
+            if (this != &other) {
+                type = other.type;
+                path = other.path;
+                downloadLink = other.downloadLink;
+                isDownloaded = other.isDownloaded;
+                downloadProgress = other.downloadProgress;
+                lastSelected = other.lastSelected;
+                cancelDownload = false; // Reinitialize the cancellation flag.
+            }
+            return *this;
+        }
     };
 
     inline void to_json(nlohmann::json &j, const ModelVariant &v)

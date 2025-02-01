@@ -96,5 +96,6 @@ private:
 };
 
 extern "C" INFERENCE_API IInferenceEngine* createInferenceEngine();
+extern "C" INFERENCE_API void destroyInferenceEngine(IInferenceEngine* engine);
 
 #endif // INFERENCE_H

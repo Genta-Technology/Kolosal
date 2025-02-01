@@ -54,6 +54,7 @@ struct CompletionResult
 {
 	std::vector<int32_t> tokens;
 	std::string text;
+	float tps;
 };
 
 #endif // TYPES_H
