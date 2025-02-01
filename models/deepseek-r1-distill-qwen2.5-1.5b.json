@@ -4,7 +4,7 @@
   "fullPrecision": {
     "type": "Full Precision",
     "path": "models/deepseek-r1-qwen-1.5b/fp16/DeepSeek-R1-Distill-Qwen-1.5B-f16.gguf",
-    "downloadLink": "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-f16.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Qwen-1.5B/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-f16.gguf",
     "isDownloaded": false,
     "downloadProgress": 0.0,
     "lastSelected": 0
@@ -12,7 +12,7 @@
   "quantized8Bit": {
     "type": "8-bit Quantized",
     "path": "models/deepseek-r1-qwen-1.5b/int8/DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf",
-    "downloadLink": "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Qwen-1.5B/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf",
     "isDownloaded": false,
     "downloadProgress": 0.0,
     "lastSelected": 0
@@ -20,7 +20,7 @@
   "quantized4Bit": {
     "type": "4-bit Quantized",
     "path": "models/deepseek-r1-qwen-1.5b/int4/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
-    "downloadLink": "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Qwen-1.5B/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
     "isDownloaded": false,
     "downloadProgress": 0.0,
     "lastSelected": 0

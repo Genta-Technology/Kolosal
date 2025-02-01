@@ -52,48 +52,56 @@ namespace Model
         }
 
         // Switch to a specific model variant. If not downloaded, trigger download.
-        bool switchModel(const std::string &modelName, const std::string &variantType)
+        bool switchModel(const std::string& modelName, const std::string& variantType)
         {
             std::unique_lock<std::shared_mutex> lock(m_mutex);
+
             auto it = m_modelNameToIndex.find(modelName);
             if (it == m_modelNameToIndex.end())
             {
                 return false; // Model not found
             }
 
+            // Update state with the new model/variant.
             m_currentModelName = modelName;
             m_currentVariantType = variantType;
-			m_currentModelIndex = it->second;
+            m_currentModelIndex = it->second;
             setPreferredVariant(modelName, variantType);
 
-            // If not downloaded, start download
-            ModelVariant *variant = getVariantLocked(m_currentModelIndex, m_currentVariantType);
+            // Get the desired variant.
+            ModelVariant* variant = getVariantLocked(m_currentModelIndex, m_currentVariantType);
             if (variant)
             {
+                // If the model variant is not downloaded, trigger its download.
                 if (!variant->isDownloaded && variant->downloadProgress == 0.0)
                 {
                     startDownloadAsyncLocked(m_currentModelIndex, m_currentVariantType);
                 }
                 else
                 {
-                    // Update lastSelected
+                    // Update the variant's lastSelected time and save model data.
                     variant->lastSelected = static_cast<int>(std::time(nullptr));
                     m_persistence->saveModelData(m_models[m_currentModelIndex]);
 
-					// Load model into inference engine
-                    {
-                        // Release the lock to avoid potential deadlock
-                        lock.unlock();
+                    // Release the lock before loading the model to avoid potential deadlocks.
+                    lock.unlock();
 
-                        if (!loadModelIntoEngine())
-                        {
-                            std::cerr << "[ModelManager] Failed to load model into inference engine.\n";
-                            return false;
-                        }
+                    // Try to load the model into the inference engine.
+                    if (!loadModelIntoEngine())
+                    {
+                        std::cerr << "[ModelManager] Failed to load model into inference engine.\n";
+
+                        // Reacquire lock and reset state to default (no model loaded).
+                        std::unique_lock<std::shared_mutex> restoreLock(m_mutex);
+                        resetModelState();
+                        return false;
+                    }
+                    else
+                    {
+                        m_modelLoaded = true;
                     }
                 }
             }
-
             return true;
         }
 
@@ -177,6 +185,20 @@ namespace Model
 
         int startCompletionJob(const CompletionParameters& params)
         {
+            {
+                std::shared_lock<std::shared_mutex> lock(m_mutex);
+                if (!m_inferenceEngine)
+                {
+                    std::cerr << "[ModelManager] Inference engine is not initialized.\n";
+                    return -1;
+                }
+                if (!m_modelLoaded)
+                {
+                    std::cerr << "[ModelManager] No model is currently loaded.\n";
+                    return -1;
+                }
+            }
+
             int jobId = m_inferenceEngine->submitCompletionsJob(params);
             if (jobId < 0) {
                 std::cerr << "[ModelManager] Failed to submit completions job.\n";
@@ -220,6 +242,20 @@ namespace Model
 
         int startChatCompletionJob(const ChatCompletionParameters& params)
         {
+            {
+                std::shared_lock<std::shared_mutex> lock(m_mutex);
+                if (!m_inferenceEngine)
+                {
+                    std::cerr << "[ModelManager] Inference engine is not initialized.\n";
+                    return -1;
+                }
+                if (!m_modelLoaded)
+                {
+                    std::cerr << "[ModelManager] No model is currently loaded.\n";
+                    return -1;
+                }
+            }
+
             int jobId = m_inferenceEngine->submitChatCompletionsJob(params);
             if (jobId < 0) {
                 std::cerr << "[ModelManager] Failed to submit chat completions job.\n";
@@ -272,21 +308,41 @@ namespace Model
 
         bool isJobFinished(int jobId)
         {
+            if (!m_inferenceEngine)
+            {
+                std::cerr << "[ModelManager] Inference engine is not initialized.\n";
+                return true; // No engine means nothing is running
+            }
             return m_inferenceEngine->isJobFinished(jobId);
         }
 
         CompletionResult getJobResult(int jobId)
         {
+            if (!m_inferenceEngine)
+            {
+                std::cerr << "[ModelManager] Inference engine is not initialized.\n";
+                return { {}, "" };
+            }
 			return m_inferenceEngine->getJobResult(jobId);
         }
 
         bool hasJobError(int jobId)
         {
+            if (!m_inferenceEngine)
+            {
+                std::cerr << "[ModelManager] Inference engine is not initialized.\n";
+                return true;
+            }
 			return m_inferenceEngine->hasJobError(jobId);
         }
 
         std::string getJobError(int jobId)
         {
+            if (!m_inferenceEngine)
+            {
+                std::cerr << "[ModelManager] Inference engine is not initialized.\n";
+                return "Inference engine not initialized";
+            }
             return m_inferenceEngine->getJobError(jobId);
         }
 
@@ -330,6 +386,13 @@ namespace Model
             return true;
         }
 
+        void resetModelState() {
+            m_currentModelName = std::nullopt;
+            m_currentVariantType = "";
+            m_currentModelIndex = 0;
+            m_modelLoaded = false;
+        }
+
     private:
         explicit ModelManager(std::unique_ptr<IModelPersistence> persistence)
             : m_persistence(std::move(persistence))
@@ -338,6 +401,7 @@ namespace Model
             , m_inferenceLibHandle(nullptr)
             , m_createInferenceEnginePtr(nullptr)
 			, m_inferenceEngine(nullptr)
+			, m_modelLoaded(false)
         {
             loadModelsAsync();
 
@@ -360,6 +424,7 @@ namespace Model
             if (!loadModelIntoEngine())
             {
                 std::cerr << "[ModelManager] Failed to load model into inference engine.\n";
+				resetModelState();
             }
         }
 
@@ -589,6 +654,9 @@ namespace Model
                             lock.unlock();
                             if (!loadModelIntoEngine())
                             {
+                                std::unique_lock<std::shared_mutex> restoreLock(m_mutex);
+                                resetModelState();
+
                                 std::cerr << "[ModelManager] Failed to load model after download completion.\n";
                             }
                         }
@@ -857,6 +925,7 @@ namespace Model
             // Check if we have a selected model
             if (!m_currentModelName.has_value()) {
                 std::cerr << "[ModelManager] No current model selected.\n";
+				m_modelLoaded = false;
                 return false;
             }
 
@@ -864,12 +933,14 @@ namespace Model
             ModelVariant* variant = getVariantLocked(m_currentModelIndex, m_currentVariantType);
             if (!variant) {
                 std::cerr << "[ModelManager] Variant not found for current model.\n";
+                m_modelLoaded = false;
                 return false;
             }
 
             // Check if downloaded
             if (!variant->isDownloaded) {
                 std::cerr << "[ModelManager] Variant is not downloaded. Cannot load.\n";
+                m_modelLoaded = false;
                 return false;
             }
 
@@ -877,12 +948,14 @@ namespace Model
             std::string modelPath = variant->path;
             if (!std::filesystem::exists(modelPath)) {
                 std::cerr << "[ModelManager] Model file not found at: " << modelPath << "\n";
+                m_modelLoaded = false;
                 return false;
             }
 
             // Make sure we have a valid function pointer
             if (!m_createInferenceEnginePtr) {
                 std::cerr << "[ModelManager] No valid getInferenceEngine function pointer.\n";
+                m_modelLoaded = false;
                 return false;
             }
 
@@ -892,12 +965,25 @@ namespace Model
 			modelDir = std::filesystem::absolute(modelDir).string();
 
 			// Load the model into the inference engine
-            if (!m_inferenceEngine->loadModel(modelDir.c_str()))
-			{
-				std::cerr << "[ModelManager] Failed to load model into InferenceEngine: "
-					<< modelDir << std::endl;
-				return false;
-			}
+            try {
+                if (!m_inferenceEngine->loadModel(modelDir.c_str()))
+                {
+                    std::cerr << "[ModelManager] Failed to load model into InferenceEngine: "
+                        << modelDir << std::endl;
+                    m_modelLoaded = false;
+                    return false;
+                }
+            }
+            catch (const std::bad_alloc& e) {
+                std::cerr << "[ModelManager] Memory allocation error during model load: " << e.what() << std::endl;
+                m_modelLoaded = false;
+                return false;
+            }
+            catch (const std::exception& e) {
+                std::cerr << "[ModelManager] Exception during model load: " << e.what() << std::endl;
+                m_modelLoaded = false;
+                return false;
+            }
 
             std::cout << "[ModelManager] Successfully loaded model into InferenceEngine: "
                 << modelDir << std::endl;
@@ -931,6 +1017,7 @@ namespace Model
         size_t                                          m_currentModelIndex;
         std::vector<std::future<void>>                  m_downloadFutures;
         std::unordered_map<std::string, std::string>    m_modelVariantMap;
+        bool                                            m_modelLoaded = false;
 
 #ifdef _WIN32
         HMODULE m_inferenceLibHandle = nullptr;
