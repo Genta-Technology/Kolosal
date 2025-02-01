@@ -350,6 +350,56 @@ inline void renderRenameChatDialog(bool &showRenameChatDialog)
     ModalWindow::render(modalConfig);
 }
 
+inline void renderDeleteModelModal(bool& openModal, int index, std::string variant)
+{
+    ModalConfig modalConfig
+    {
+        "Confirm Delete Model",
+        "Confirm Delete Model",
+        ImVec2(300, 96),
+        [&]()
+        {
+            // Render the buttons
+            std::vector<ButtonConfig> buttons;
+
+            ButtonConfig cancelButton;
+            cancelButton.id = "##cancelDeleteModel";
+            cancelButton.label = "Cancel";
+            cancelButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+            cancelButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
+            cancelButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
+            cancelButton.textColor = RGBAToImVec4(255, 255, 255, 255);
+            cancelButton.size = ImVec2(130, 0);
+            cancelButton.onClick = []()
+                {
+                    ImGui::CloseCurrentPopup();
+                };
+
+            buttons.push_back(cancelButton);
+
+            ButtonConfig confirmButton;
+            confirmButton.id = "##confirmDeleteModel";
+            confirmButton.label = "Confirm";
+            confirmButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
+            confirmButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
+            confirmButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
+            confirmButton.size = ImVec2(130, 0);
+            confirmButton.onClick = [index, variant]()
+                {
+                    Model::ModelManager::getInstance().deleteDownloadedModel(index, variant);
+                    ImGui::CloseCurrentPopup();
+                };
+
+            buttons.push_back(confirmButton);
+
+            Button::renderGroup(buttons, 16, ImGui::GetCursorPosY() + 8);
+        },
+        openModal
+    };
+    modalConfig.padding = ImVec2(16.0F, 8.0F);
+    ModalWindow::render(modalConfig);
+}
+
 inline void renderModelManager(bool& openModal)
 {
     ImVec2 windowSize = ImGui::GetWindowSize();
@@ -612,9 +662,35 @@ inline void renderModelManager(bool& openModal)
                         std::string variant = Model::ModelManager::getInstance().getCurrentVariantForModel(models[i].name);
                         Model::ModelManager::getInstance().switchModel(models[i].name, variant);
                     };
+                    selectButton.size = ImVec2(cardWidth - 18 /*gap*/ - 5 /*delete button size*/ - 24, 0);
                 }
 
                 Button::render(selectButton);
+
+				static bool openModelDeleteModal = false;
+
+                if (isDownloaded)
+                {
+                    ImGui::SameLine();
+					ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2);
+					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 24 - 2);
+
+                    // Render the "Delete" button on the same row.
+                    ButtonConfig deleteButton;
+                    deleteButton.id = "##delete" + std::to_string(i);
+                    deleteButton.size = ImVec2(24, 0);
+                    deleteButton.backgroundColor = RGBAToImVec4(200, 50, 50, 255);
+                    deleteButton.hoverColor = RGBAToImVec4(220, 70, 70, 255);
+                    deleteButton.activeColor = RGBAToImVec4(200, 50, 50, 255);
+                    deleteButton.icon = ICON_CI_TRASH; // Use your trash icon.
+                    deleteButton.onClick = []()
+                        {
+							openModelDeleteModal = true;
+                        };
+                    Button::render(deleteButton);
+                }
+
+				renderDeleteModelModal(openModelDeleteModal, i, currentVariant);
 
                 ImGui::EndChild();
 
@@ -643,24 +719,16 @@ inline void renderModelManager(bool& openModal)
     ModalWindow::render(modalConfig);
 }
 
+// TODO: refactor to be reusable
 inline void renderClearChatModal(bool& openModal)
 {
 	ModalConfig modalConfig
 	{
-		"Clear Chat",
-		"Clear Chat",
-		ImVec2(300, 120),
+		"Confirm Clear Chat",
+		"Confirm Clear Chat",
+		ImVec2(300, 96),
 		[&]()
 		{
-			// Render the confirmation message
-			LabelConfig confirmationLabel;
-			confirmationLabel.id = "##clearChatConfirmation";
-			confirmationLabel.label = "Are you sure you want to clear the chat?";
-			confirmationLabel.size = ImVec2(0, 0);
-			confirmationLabel.fontType = FontsManager::REGULAR;
-			confirmationLabel.alignment = Alignment::CENTER;
-			Label::render(confirmationLabel);
-
 			// Render the buttons
 			std::vector<ButtonConfig> buttons;
             

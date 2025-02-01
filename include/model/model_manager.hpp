@@ -313,6 +313,23 @@ namespace Model
             return true;
         }
 
+        bool deleteDownloadedModel(size_t modelIndex, const std::string& variantType)
+        {
+            std::unique_lock<std::shared_mutex> lock(m_mutex);
+            if (modelIndex >= m_models.size())
+                return false;
+
+            ModelVariant* variant = getVariantLocked(modelIndex, variantType);
+            if (!variant)
+                return false;
+
+            // Call the persistence layer to delete the file.
+            lock.unlock();
+            auto fut = m_persistence->deleteModelVariant(m_models[modelIndex], *variant);
+            fut.get(); // Wait for deletion to complete.
+            return true;
+        }
+
     private:
         explicit ModelManager(std::unique_ptr<IModelPersistence> persistence)
             : m_persistence(std::move(persistence))
@@ -348,6 +365,8 @@ namespace Model
 
         ~ModelManager()
         {
+            cancelAllDownloads();
+
             if (m_inferenceEngine && m_destroyInferenceEnginePtr) {
                 m_destroyInferenceEnginePtr(m_inferenceEngine);
                 m_inferenceEngine = nullptr;
@@ -418,29 +437,34 @@ namespace Model
                     m_modelNameToIndex.clear();
                     m_modelVariantMap.clear();
 
-                    // Rebuild the lookup maps.
+                    // For each model, choose the "best" variant based on lastSelected,
+                    // but prioritize the downloaded state and the desired order:
+                    // first check 8-bit Quantized, then 4-bit Quantized, and lastly Full Precision.
                     for (size_t i = 0; i < m_models.size(); ++i)
                     {
                         m_modelNameToIndex[m_models[i].name] = i;
-
-                        // Determine the best (most-recent) variant for this model.
-                        int bestLastSelected = -1;
+                        int bestEffectiveValue = -1;
                         std::string bestVariant;
-                        if (m_models[i].fullPrecision.lastSelected > bestLastSelected)
-                        {
-                            bestLastSelected = m_models[i].fullPrecision.lastSelected;
-                            bestVariant = m_models[i].fullPrecision.type;
-                        }
-                        if (m_models[i].quantized8Bit.lastSelected > bestLastSelected)
-                        {
-                            bestLastSelected = m_models[i].quantized8Bit.lastSelected;
-                            bestVariant = m_models[i].quantized8Bit.type;
-                        }
-                        if (m_models[i].quantized4Bit.lastSelected > bestLastSelected)
-                        {
-                            bestLastSelected = m_models[i].quantized4Bit.lastSelected;
-                            bestVariant = m_models[i].quantized4Bit.type;
-                        }
+
+                        // Helper lambda to calculate effective value.
+                        auto checkVariant = [&](const ModelVariant& variant) {
+                            int effectiveValue = variant.lastSelected;
+                            if (variant.isDownloaded)
+                            {
+                                effectiveValue += 1000000;  // boost for downloaded variants
+                            }
+                            if (effectiveValue > bestEffectiveValue)
+                            {
+                                bestEffectiveValue = effectiveValue;
+                                bestVariant = variant.type;
+                            }
+                            };
+
+                        // Check in the desired order: 8-bit, then 4-bit, then full precision.
+                        checkVariant(m_models[i].quantized8Bit);
+                        checkVariant(m_models[i].quantized4Bit);
+                        checkVariant(m_models[i].fullPrecision);
+
                         // If no variant was ever selected, default to "8-bit Quantized".
                         if (bestVariant.empty())
                         {
@@ -879,6 +903,23 @@ namespace Model
                 << modelDir << std::endl;
 
             return true;
+        }
+
+        void cancelAllDownloads() {
+            std::unique_lock<std::shared_mutex> lock(m_mutex);
+            for (auto& model : m_models) {
+                // For each variant, if it’s still in progress (i.e. download progress is between 0 and 100)
+                // set the cancel flag.
+                if (model.fullPrecision.downloadProgress > 0.0 && model.fullPrecision.downloadProgress < 100.0) {
+                    model.fullPrecision.cancelDownload = true;
+                }
+                if (model.quantized8Bit.downloadProgress > 0.0 && model.quantized8Bit.downloadProgress < 100.0) {
+                    model.quantized8Bit.cancelDownload = true;
+                }
+                if (model.quantized4Bit.downloadProgress > 0.0 && model.quantized4Bit.downloadProgress < 100.0) {
+                    model.quantized4Bit.cancelDownload = true;
+                }
+            }
         }
 
         mutable std::shared_mutex                       m_mutex;

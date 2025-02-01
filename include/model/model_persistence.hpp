@@ -18,6 +18,7 @@ namespace Model
         virtual std::future<std::vector<ModelData>> loadAllModels() = 0;
         virtual std::future<void> downloadModelVariant(ModelData& modelData, ModelVariant& variant) = 0;
         virtual std::future<void> saveModelData(const ModelData& modelData) = 0;
+        virtual std::future<void> deleteModelVariant(ModelData& modelData, ModelVariant& variant) = 0;
     };
 
     class FileModelPersistence : public IModelPersistence
@@ -149,6 +150,30 @@ namespace Model
             if (variant->cancelDownload)
                 return 1; // non-zero return value signals curl to abort
             return 0;
+        }
+
+        std::future<void> deleteModelVariant(ModelData& modelData, ModelVariant& variant) override
+        {
+            return std::async(std::launch::async, [this, &modelData, &variant]() {
+                // Check if the file exists and attempt to remove it.
+                if (std::filesystem::exists(variant.path))
+                {
+                    try {
+                        std::filesystem::remove(variant.path);
+                    }
+                    catch (const std::filesystem::filesystem_error& e) {
+                        std::cerr << "[FileModelPersistence] Error deleting file " << variant.path
+                            << ": " << e.what() << "\n";
+                    }
+                }
+                // Reset the variant’s state so that it can be redownloaded.
+                variant.isDownloaded = false;
+                variant.downloadProgress = 0.0;
+                variant.lastSelected = 0;
+
+                // Save the updated model data.
+                saveModelData(modelData).get();
+                });
         }
 
     private:
