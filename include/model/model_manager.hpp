@@ -988,6 +988,8 @@ namespace Model
             std::cout << "[ModelManager] Successfully loaded model into InferenceEngine: "
                 << modelDir << std::endl;
 
+			m_modelLoaded = true;
+
             return true;
         }
 
