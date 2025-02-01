@@ -133,8 +133,6 @@ protected:
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, Config::InputField::INPUT_FIELD_BG_COLOR);
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
 
-                ImGui::TextUnformatted(std::to_string(block.render_id).c_str());
-
                 // Use stable ID for child window
                 ImGui::BeginChild(ImGui::GetID(("##code_content_" + std::to_string(block.render_id)).c_str()),
                     ImVec2(0, total_height + 36 + (!block.lang.empty() ? 4 : 0)), false,
