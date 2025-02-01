@@ -89,6 +89,11 @@ inline void renderMessageContent(const Chat::Message msg, float bubbleWidth, flo
             bool isThink = segments[i].first;
             const std::string& text = segments[i].second;
 
+            // Skip rendering if this is a "think" segment with no (or only whitespace) text.
+            if (isThink && text.find_first_not_of(" \t\n") == std::string::npos) {
+                continue;
+            }
+
             if (isThink)
             {
                 const std::string uniqueID =
