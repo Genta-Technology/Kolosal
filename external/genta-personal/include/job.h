@@ -19,6 +19,7 @@ struct Job {
     bool hasError = false;
     std::string errorMessage;
     float tps = 0;
+    std::atomic<bool> cancelRequested{ false };
 };
 
 #endif // JOB_H

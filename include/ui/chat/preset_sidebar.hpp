@@ -80,7 +80,7 @@ void renderSamplingSettings(const float sidebarWidth)
 
     // Generation settings
     Slider::render("##min_length", currentPreset.min_length, 0.0f, 4096.0f, sidebarWidth - 30, "%.0f");
-    Slider::render("##max_new_tokens", currentPreset.max_new_tokens, 0.0f, 4096.0f, sidebarWidth - 30, "%.0f");
+    Slider::render("##max_new_tokens", currentPreset.max_new_tokens, 0.0f, 8192.0f, sidebarWidth - 30, "%.0f");
 }
 
 /**

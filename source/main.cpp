@@ -126,7 +126,7 @@ void InitializeGradientBackground(int display_w, int display_h)
 
 void renderPlayground(float& chatHistorySidebarWidth, float& modelPresetSidebarWidth)
 {
-    renderChatHistorySidebar(chatHistorySidebarWidth);
+    //renderChatHistorySidebar(chatHistorySidebarWidth);
     renderModelPresetSidebar(modelPresetSidebarWidth);
     renderChatWindow(Config::INPUT_HEIGHT, chatHistorySidebarWidth, modelPresetSidebarWidth);
 }
@@ -156,9 +156,9 @@ void HandleException(const std::exception& e)
 }
 
 #ifdef DEBUG
-    int main()
+int main()
 #else
-    int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 #endif
 {
     try 
@@ -231,6 +231,8 @@ void HandleException(const std::exception& e)
         float chatHistorySidebarWidth = Config::ChatHistorySidebar::SIDEBAR_WIDTH;
         float modelPresetSidebarWidth = Config::ModelPresetSidebar::SIDEBAR_WIDTH;
 
+        ChatHistorySidebar chatHistorySidebar;
+
         // Enter the main loop
         while (!window->shouldClose()) 
         {
@@ -245,6 +247,8 @@ void HandleException(const std::exception& e)
 
             // Render title bar
             titleBar(window->getNativeHandle());
+
+			chatHistorySidebar.render();
 
 			// Render the chat section
             renderPlayground(chatHistorySidebarWidth, modelPresetSidebarWidth);

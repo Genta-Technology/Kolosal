@@ -5,119 +5,148 @@
 #include "ui/widgets.hpp"
 #include "chat/chat_manager.hpp"
 
-inline void renderChatHistoryList(ImVec2 contentArea)
-{
-    // Render chat history buttons scroll region
-    ImGui::BeginChild("ChatHistoryButtons", contentArea, false, ImGuiWindowFlags_NoScrollbar);
+class ChatHistorySidebar {
+public:
+    ChatHistorySidebar() {
+        // Initialize reusable configurations
+        {
+            createNewChatButtonConfig.id = "##createNewChat";
+            createNewChatButtonConfig.label = "";
+            createNewChatButtonConfig.icon = ICON_CI_ADD;
+            createNewChatButtonConfig.size = ImVec2(24, 24);
+            createNewChatButtonConfig.alignment = Alignment::CENTER;
+            createNewChatButtonConfig.onClick = []() { Chat::ChatManager::getInstance().createNewChat(Chat::ChatManager::getDefaultChatName()); };
+        }
 
-    // Get sorted chats from ChatManager
-    const auto& chats = Chat::ChatManager::getInstance().getChats();
-    const auto currentChatName = Chat::ChatManager::getInstance().getCurrentChatName();
+        {
+			baseChatButtonConfig.id = "";
+			baseChatButtonConfig.label = "";
+			baseChatButtonConfig.icon = ICON_CI_COMMENT;
+			baseChatButtonConfig.size = ImVec2(0, 0);
+			baseChatButtonConfig.alignment = Alignment::LEFT;
+			baseChatButtonConfig.onClick = nullptr;
+			baseChatButtonConfig.state = ButtonState::NORMAL;
+			baseChatButtonConfig.fontSize = FontsManager::MD;
+        }
 
-    for (const auto& chat : chats)
-    {
-        ButtonConfig chatButtonConfig;
-        chatButtonConfig.id = "##chat" + std::to_string(chat.id);
-        chatButtonConfig.label = chat.name;
-        chatButtonConfig.icon = ICON_CI_COMMENT;
-        chatButtonConfig.size = ImVec2(contentArea.x - 44, 0);
-        chatButtonConfig.gap = 10.0F;
-        chatButtonConfig.onClick = [chatName = chat.name]() {
-            Chat::ChatManager::getInstance().switchToChat(chatName);
-            };
+        {
+			baseDeleteButtonConfig.id = "";
+			baseDeleteButtonConfig.label = "";
+			baseDeleteButtonConfig.icon = ICON_CI_TRASH;
+			baseDeleteButtonConfig.size = ImVec2(24, 0);
+			baseDeleteButtonConfig.alignment = Alignment::CENTER;
+			baseDeleteButtonConfig.onClick = nullptr;
+			baseDeleteButtonConfig.state = ButtonState::NORMAL;
+			baseDeleteButtonConfig.fontSize = FontsManager::MD;
+			baseDeleteButtonConfig.tooltip = "Delete Chat";
+		}
 
-        // Set active state if this is the current chat
-        chatButtonConfig.state = (currentChatName && *currentChatName == chat.name)
-            ? ButtonState::ACTIVE
-            : ButtonState::NORMAL;
+		{
+			recentsLabelConfig.id = "##chathistory";
+			recentsLabelConfig.label = "Recents";
+			recentsLabelConfig.icon = ICON_CI_COMMENT;
+			recentsLabelConfig.size = ImVec2(Config::Icon::DEFAULT_FONT_SIZE, 0);
+			recentsLabelConfig.fontSize = FontsManager::MD;
+			recentsLabelConfig.fontType = FontsManager::BOLD;
+		}
 
-        chatButtonConfig.alignment = Alignment::LEFT;
-
-        std::time_t time = static_cast<std::time_t>(chat.lastModified);
-        char timeStr[26];
-        ctime_s(timeStr, sizeof(timeStr), &time);
-		chatButtonConfig.tooltip = "Last modified: " + std::string(timeStr);
-
-        Button::render(chatButtonConfig);
-
-		// same line for delete button
-		ImGui::SameLine(contentArea.x - 38);
-		// Set position to be a bit to the right and up
-		ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
-
-		// Delete button
-		ButtonConfig deleteButtonConfig;
-		deleteButtonConfig.id = "##delete" + std::to_string(chat.id);
-		deleteButtonConfig.icon = ICON_CI_TRASH;
-		deleteButtonConfig.size = ImVec2(24, 0);
-		deleteButtonConfig.alignment = Alignment::CENTER;
-		deleteButtonConfig.onClick = [chatName = chat.name]() {
-			Chat::ChatManager::getInstance().deleteChat(chatName);
-			};
-		deleteButtonConfig.tooltip = "Delete Chat";
-
-		Button::render(deleteButtonConfig);
-
-        ImGui::Spacing();
+        sidebarWidth = Config::ChatHistorySidebar::SIDEBAR_WIDTH;
     }
 
-    ImGui::EndChild();
-}
+    void render() {
+        ImGuiIO& io = ImGui::GetIO();
+        const float sidebarHeight = io.DisplaySize.y - Config::TITLE_BAR_HEIGHT;
 
-inline void renderChatHistorySidebar(float& sidebarWidth)
-{
-    ImGuiIO& io = ImGui::GetIO();
-    const float sidebarHeight = io.DisplaySize.y - Config::TITLE_BAR_HEIGHT;
+        ImGui::SetNextWindowPos(ImVec2(0, Config::TITLE_BAR_HEIGHT), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(sidebarWidth, sidebarHeight), ImGuiCond_Always);
+        ImGui::SetNextWindowSizeConstraints(
+            ImVec2(Config::ChatHistorySidebar::MIN_SIDEBAR_WIDTH, sidebarHeight),
+            ImVec2(Config::ChatHistorySidebar::MAX_SIDEBAR_WIDTH, sidebarHeight));
 
-    ImGui::SetNextWindowPos(ImVec2(0, Config::TITLE_BAR_HEIGHT), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(sidebarWidth, sidebarHeight), ImGuiCond_Always);
-    ImGui::SetNextWindowSizeConstraints(
-        ImVec2(Config::ChatHistorySidebar::MIN_SIDEBAR_WIDTH, sidebarHeight),
-        ImVec2(Config::ChatHistorySidebar::MAX_SIDEBAR_WIDTH, sidebarHeight));
+        ImGui::Begin("Chat History", nullptr, sidebarFlags);
+        sidebarWidth = ImGui::GetWindowSize().x;
 
-    ImGuiWindowFlags sidebarFlags = ImGuiWindowFlags_NoMove |
+        renderHeader();
+        renderChatList(sidebarHeight);
+
+        ImGui::End();
+    }
+
+private:
+    float sidebarWidth;
+    ButtonConfig createNewChatButtonConfig;
+    ButtonConfig baseChatButtonConfig;
+    ButtonConfig baseDeleteButtonConfig;
+    LabelConfig recentsLabelConfig;
+
+    static constexpr ImGuiWindowFlags sidebarFlags =
+        ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoTitleBar |
         ImGuiWindowFlags_NoBackground |
         ImGuiWindowFlags_NoScrollbar;
 
-    ImGui::Begin("Chat History", nullptr, sidebarFlags);
+    void renderHeader() {
+        Label::render(recentsLabelConfig);
 
-    ImVec2 currentSize = ImGui::GetWindowSize();
-    sidebarWidth = currentSize.x;
+        // Position create new chat button
+        const ImVec2 labelSize = ImGui::CalcTextSize(recentsLabelConfig.label.c_str());
+        const float buttonHeight = 24.0f;
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 22);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ((labelSize.y - buttonHeight) / 2.0f));
 
-    LabelConfig labelConfig;
-    labelConfig.id = "##chathistory";
-    labelConfig.label = "Recents";
-    labelConfig.size = ImVec2(Config::Icon::DEFAULT_FONT_SIZE, 0);
-    labelConfig.iconPaddingX = 10.0F;
-	labelConfig.fontType = FontsManager::BOLD;
-    Label::render(labelConfig);
+        Button::render(createNewChatButtonConfig);
+        ImGui::Spacing();
+    }
 
-    // Calculate label height
-    ImVec2 labelSize = ImGui::CalcTextSize(labelConfig.label.c_str());
-    float labelHeight = labelSize.y;
+    void renderChatList(float sidebarHeight) {
+        const auto& chatManager = Chat::ChatManager::getInstance();
+        const auto chats = chatManager.getChats(); // Get copy to ensure iteration safety
+        const auto currentChatName = chatManager.getCurrentChatName();
 
-    // Button dimensions
-    float buttonHeight = 24.0f;
+        const ImVec2 contentArea(sidebarWidth, sidebarHeight - ImGui::GetCursorPosY());
+        ImGui::BeginChild("ChatHistoryButtons", contentArea, false, ImGuiWindowFlags_NoScrollbar);
 
-    ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - 22);
-    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ((labelHeight - buttonHeight) / 2.0f));
+        for (const auto& chat : chats) {
+            renderChatButton(chat, contentArea, currentChatName);
+            renderDeleteButton(chat, contentArea);
+            ImGui::Spacing();
+        }
 
-    ButtonConfig createNewChatButtonConfig;
-    createNewChatButtonConfig.id = "##createNewChat";
-    createNewChatButtonConfig.icon = ICON_CI_ADD;
-    createNewChatButtonConfig.size = ImVec2(buttonHeight, 24);
-    createNewChatButtonConfig.onClick = []() {
-        Chat::ChatManager::getInstance().createNewChat(
-            Chat::ChatManager::getDefaultChatName());
-        };
-    createNewChatButtonConfig.alignment = Alignment::CENTER;
-    Button::render(createNewChatButtonConfig);
+        ImGui::EndChild();
+    }
 
-    ImGui::Spacing();
+    void renderChatButton(const Chat::ChatHistory& chat, const ImVec2& contentArea,
+        const std::optional<std::string>& currentChatName) {
+        ButtonConfig config = baseChatButtonConfig;
+        config.id = "##chat" + std::to_string(chat.id);
+        config.label = chat.name;
+        config.size = ImVec2(contentArea.x - 44, 0);
+        config.state = (currentChatName && *currentChatName == chat.name)
+            ? ButtonState::ACTIVE : ButtonState::NORMAL;
+        config.onClick = [chatName = chat.name]() {
+            Chat::ChatManager::getInstance().switchToChat(chatName);
+            };
 
-    renderChatHistoryList(ImVec2(sidebarWidth, sidebarHeight - labelHeight));
+        // Format last modified time
+        std::time_t time = static_cast<std::time_t>(chat.lastModified);
+        char timeStr[26];
+        ctime_s(timeStr, sizeof(timeStr), &time);
+        config.tooltip = "Last modified: " + std::string(timeStr);
 
-    ImGui::End();
-}
+        Button::render(config);
+    }
+
+    void renderDeleteButton(const Chat::ChatHistory& chat, const ImVec2& contentArea) {
+        ImGui::SameLine(contentArea.x - 38);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
+
+        ButtonConfig config = baseDeleteButtonConfig;
+        config.id = "##delete" + std::to_string(chat.id);
+        config.onClick = [chatName = chat.name]() {
+            Chat::ChatManager::getInstance().deleteChat(chatName);
+            };
+
+        Button::render(config);
+    }
+};
