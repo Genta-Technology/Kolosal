@@ -127,7 +127,7 @@ void InitializeGradientBackground(int display_w, int display_h)
 void renderPlayground(float& chatHistorySidebarWidth, float& modelPresetSidebarWidth)
 {
     //renderChatHistorySidebar(chatHistorySidebarWidth);
-    renderModelPresetSidebar(modelPresetSidebarWidth);
+    //renderModelPresetSidebar(modelPresetSidebarWidth);
     renderChatWindow(Config::INPUT_HEIGHT, chatHistorySidebarWidth, modelPresetSidebarWidth);
 }
 
@@ -232,6 +232,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         float modelPresetSidebarWidth = Config::ModelPresetSidebar::SIDEBAR_WIDTH;
 
         ChatHistorySidebar chatHistorySidebar;
+		ModelPresetSidebar modelPresetSidebar;
 
         // Enter the main loop
         while (!window->shouldClose()) 
@@ -249,6 +250,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             titleBar(window->getNativeHandle());
 
 			chatHistorySidebar.render();
+			modelPresetSidebar.render();
 
 			// Render the chat section
             renderPlayground(chatHistorySidebarWidth, modelPresetSidebarWidth);
