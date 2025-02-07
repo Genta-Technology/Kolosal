@@ -20,7 +20,7 @@ namespace Config
     constexpr float FRAME_PADDING_X = 10.0F;
     constexpr float FRAME_PADDING_Y = 10.0F;
 
-    // Constants to replace magic numbers
+    // ModelManagerConstants to replace magic numbers
     namespace Font
     {
         constexpr float DEFAULT_FONT_SIZE = 18.0F;
