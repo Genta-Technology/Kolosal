@@ -4,6 +4,7 @@
 #include "config.hpp"
 #include "ui/widgets.hpp"
 #include "ui/markdown.hpp"
+#include "ui/chat/model_manager_modal.hpp"
 #include "chat/chat_manager.hpp"
 #include "model/preset_manager.hpp"
 #include "model/model_manager.hpp"
@@ -367,375 +368,6 @@ inline void renderRenameChatDialog(bool &showRenameChatDialog)
     ModalWindow::render(modalConfig);
 }
 
-inline void renderDeleteModelModal(bool& openModal, int index, std::string variant)
-{
-    ModalConfig modalConfig
-    {
-        "Confirm Delete Model",
-        "Confirm Delete Model",
-        ImVec2(300, 96),
-        [&]()
-        {
-            // Render the buttons
-            std::vector<ButtonConfig> buttons;
-
-            ButtonConfig cancelButton;
-            cancelButton.id = "##cancelDeleteModel";
-            cancelButton.label = "Cancel";
-            cancelButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-            cancelButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
-            cancelButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
-            cancelButton.textColor = RGBAToImVec4(255, 255, 255, 255);
-            cancelButton.size = ImVec2(130, 0);
-            cancelButton.onClick = []()
-                {
-                    ImGui::CloseCurrentPopup();
-                };
-
-            buttons.push_back(cancelButton);
-
-            ButtonConfig confirmButton;
-            confirmButton.id = "##confirmDeleteModel";
-            confirmButton.label = "Confirm";
-            confirmButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
-            confirmButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
-            confirmButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
-            confirmButton.size = ImVec2(130, 0);
-            confirmButton.onClick = [index, variant]()
-                {
-                    Model::ModelManager::getInstance().deleteDownloadedModel(index, variant);
-                    ImGui::CloseCurrentPopup();
-                };
-
-            buttons.push_back(confirmButton);
-
-            Button::renderGroup(buttons, 16, ImGui::GetCursorPosY() + 8);
-        },
-        openModal
-    };
-    modalConfig.padding = ImVec2(16.0F, 8.0F);
-    ModalWindow::render(modalConfig);
-}
-
-inline void renderModelManager(bool& openModal)
-{
-    ImVec2 windowSize = ImGui::GetWindowSize();
-    const float targetWidth = windowSize.x;
-
-    // Card constants
-    const float cardWidth = 200;
-    const float cardHeight = 220;
-    const float cardSpacing = 10.0f;
-    const float cardUnit = cardWidth + cardSpacing;
-    const float paddingTotal = 2 * 16.0F; // 16.0F is the default padding value
-
-    // Calculate number of cards that fit within target width
-    float availableWidth = targetWidth - paddingTotal;
-    int numCards = static_cast<int>(availableWidth / cardUnit);
-
-    // Calculate actual modal width
-    float modalWidth = (numCards * cardUnit) + paddingTotal;
-    if (targetWidth - modalWidth > cardUnit * 0.5f)
-    {
-        numCards++;
-        modalWidth = (numCards * cardUnit) + paddingTotal;
-    }
-
-    ImVec2 modalSize = ImVec2(modalWidth, windowSize.y * 0.9F);
-
-    ModalConfig modalConfig{
-        "Model Manager",
-        "Model Manager",
-        modalSize,
-        [numCards, cardSpacing, cardWidth, cardHeight, targetWidth]()
-        {
-            std::vector<Model::ModelData> models = Model::ModelManager::getInstance().getModels();
-
-            for (size_t i = 0; i < models.size(); i++)
-            {
-                // Get the current variant for THIS model directly from the manager
-                std::string currentVariant = Model::ModelManager::getInstance()
-                    .getCurrentVariantForModel(models[i].name);
-
-                // Start new row
-                if (i % numCards == 0)
-                {
-                    ImGui::SetCursorPos(ImVec2(16.0F, ImGui::GetCursorPosY() + (i > 0 ? cardSpacing : 0)));
-                }
-
-                ImGui::BeginGroup();
-                ImGui::PushStyleColor(ImGuiCol_ChildBg, RGBAToImVec4(26, 26, 26, 255));
-                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0F);
-
-                ImGui::BeginChild(("ModelCard" + std::to_string(i)).c_str(),
-                                  ImVec2(cardWidth, cardHeight), true);
-
-                // Render author label
-                LabelConfig modelAuthorLabel;
-                modelAuthorLabel.id = "##modelAuthor" + std::to_string(i);
-                modelAuthorLabel.label = models[i].author;
-                modelAuthorLabel.size = ImVec2(0, 0);
-                modelAuthorLabel.fontType = FontsManager::ITALIC;
-                modelAuthorLabel.alignment = Alignment::LEFT;
-                modelAuthorLabel.fontSize = FontsManager::SM;
-                Label::render(modelAuthorLabel);
-
-                float authorLabelHeight = ImGui::GetTextLineHeightWithSpacing();
-
-                // Render model name label
-                LabelConfig modelNameLabel;
-                modelNameLabel.id = "##modelName" + std::to_string(i);
-                modelNameLabel.label = models[i].name;
-                modelNameLabel.size = ImVec2(0, 0);
-                modelNameLabel.fontType = FontsManager::BOLD;
-                modelNameLabel.alignment = Alignment::LEFT;
-                Label::render(modelNameLabel);
-
-                float modelNameLabelHeight = ImGui::GetTextLineHeightWithSpacing();
-                float totalLabelHeight = authorLabelHeight + modelNameLabelHeight;
-
-                // Add some padding.
-                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4.0f);
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
-
-                // ---------------- Variant Buttons ----------------
-                // Full Precision button:
-                ButtonConfig fullPrecisionButton;
-                fullPrecisionButton.id = "##useFullPrecision" + std::to_string(i);
-                if (currentVariant == "Full Precision")
-                {
-                    fullPrecisionButton.icon = ICON_CI_CHECK;
-                }
-                else
-                {
-                    fullPrecisionButton.icon = ICON_CI_CLOSE;
-                    fullPrecisionButton.textColor = RGBAToImVec4(34, 34, 34, 255);
-                }
-                fullPrecisionButton.fontSize = FontsManager::SM;
-                fullPrecisionButton.size = ImVec2(24, 0);
-                fullPrecisionButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-                fullPrecisionButton.onClick = [i, models, &currentVariant]()
-                {
-					currentVariant = "Full Precision";
-                    Model::ModelManager::getInstance().setPreferredVariant(models[i].name, "Full Precision");
-                };
-                Button::render(fullPrecisionButton);
-
-                float fullPrecisionHeight = ImGui::GetTextLineHeightWithSpacing();
-                ImGui::SameLine(0.0f, 4.0f);
-
-                // Full Precision label:
-                LabelConfig fullPrecisionLabel;
-                fullPrecisionLabel.id = "##fullprecision" + std::to_string(i);
-                fullPrecisionLabel.label = "Use Full Precision";
-                fullPrecisionLabel.size = ImVec2(0, 0);
-                fullPrecisionLabel.fontType = FontsManager::REGULAR;
-                fullPrecisionLabel.fontSize = FontsManager::SM;
-                fullPrecisionLabel.alignment = Alignment::LEFT;
-                float fullPrecisionLabelOffsetY = (fullPrecisionButton.size.y - ImGui::GetTextLineHeight()) / 4.0f + 2.0f;
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + fullPrecisionLabelOffsetY);
-                Label::render(fullPrecisionLabel);
-
-                // 8-bit Quantized button:
-                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4.0f);
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
-
-                ButtonConfig use8bitButton;
-                use8bitButton.id = "##use8bit" + std::to_string(i);
-                if (currentVariant == "8-bit Quantized")
-                {
-                    use8bitButton.icon = ICON_CI_CHECK;
-                }
-                else
-                {
-                    use8bitButton.icon = ICON_CI_CLOSE;
-                    use8bitButton.textColor = RGBAToImVec4(34, 34, 34, 255);
-                }
-                use8bitButton.fontSize = FontsManager::SM;
-                use8bitButton.size = ImVec2(24, 0);
-                use8bitButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-                use8bitButton.onClick = [i, models, &currentVariant]()
-                {
-					currentVariant = "8-bit Quantized";
-                    Model::ModelManager::getInstance().setPreferredVariant(models[i].name, "8-bit Quantized");
-                };
-                Button::render(use8bitButton);
-
-                float _8bitquantizationHeight = ImGui::GetTextLineHeightWithSpacing();
-                ImGui::SameLine(0.0f, 4.0f);
-
-                // 8-bit Quantized label:
-                LabelConfig _8BitQuantizationLabel;
-                _8BitQuantizationLabel.id = "##8bitquantization" + std::to_string(i);
-                _8BitQuantizationLabel.label = "Use 8-bit quantization";
-                _8BitQuantizationLabel.size = ImVec2(0, 0);
-                _8BitQuantizationLabel.fontType = FontsManager::REGULAR;
-                _8BitQuantizationLabel.fontSize = FontsManager::SM;
-                _8BitQuantizationLabel.alignment = Alignment::LEFT;
-                float _8BitLabelOffsetY = (use8bitButton.size.y - ImGui::GetTextLineHeight()) / 4.0f + 2.0f;
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + _8BitLabelOffsetY);
-                Label::render(_8BitQuantizationLabel);
-
-                // 4-bit Quantized button:
-                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4.0f);
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4.0f);
-
-                ButtonConfig use4bitButton;
-                use4bitButton.id = "##use4bit" + std::to_string(i);
-                if (currentVariant == "4-bit Quantized")
-                {
-                    use4bitButton.icon = ICON_CI_CHECK;
-                }
-                else
-                {
-                    use4bitButton.icon = ICON_CI_CLOSE;
-                    use4bitButton.textColor = RGBAToImVec4(34, 34, 34, 255);
-                }
-                use4bitButton.fontSize = FontsManager::SM;
-                use4bitButton.size = ImVec2(24, 0);
-                use4bitButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-                use4bitButton.onClick = [i, models, &currentVariant]()
-                {
-					currentVariant = "4-bit Quantized";
-                    Model::ModelManager::getInstance().setPreferredVariant(models[i].name, "4-bit Quantized");
-                };
-                Button::render(use4bitButton);
-
-                float _4BitQantizationHeight = ImGui::GetTextLineHeightWithSpacing();
-                ImGui::SameLine(0.0f, 4.0f);
-
-                // 4-bit Quantized label:
-                LabelConfig _4BitQuantizationLabel;
-                _4BitQuantizationLabel.id = "##quantization" + std::to_string(i);
-                _4BitQuantizationLabel.label = "Use 4-bit quantization";
-                _4BitQuantizationLabel.size = ImVec2(0, 0);
-                _4BitQuantizationLabel.fontType = FontsManager::REGULAR;
-                _4BitQuantizationLabel.fontSize = FontsManager::SM;
-                _4BitQuantizationLabel.alignment = Alignment::LEFT;
-                float labelOffsetY = (use4bitButton.size.y - ImGui::GetTextLineHeight()) / 4.0f + 2.0f;
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + labelOffsetY);
-                Label::render(_4BitQuantizationLabel);
-                // ----------------------------------------------------
-
-                // Render select/download button at the bottom.
-                ImGui::SetCursorPosY(cardHeight - 35);
-
-                bool isSelected = models[i].name == Model::ModelManager::getInstance().getCurrentModelName() &&
-                                  currentVariant == Model::ModelManager::getInstance().getCurrentVariantType();
-                bool isDownloaded = Model::ModelManager::getInstance().isModelDownloaded(i, currentVariant);
-
-                ButtonConfig selectButton;
-                selectButton.size = ImVec2(cardWidth - 18, 0);
-
-                if (!isDownloaded)
-                {
-                    selectButton.id = "##download" + std::to_string(i);
-                    selectButton.label = "Download";
-                    selectButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
-                    selectButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
-                    selectButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
-                    selectButton.icon = ICON_CI_CLOUD_DOWNLOAD;
-                    selectButton.borderSize = 1.0F;
-                    selectButton.onClick = [i, models]()
-                    {
-                        // Commit the current variant before downloading.
-                        std::string variant = Model::ModelManager::getInstance().getCurrentVariantForModel(models[i].name);
-                        Model::ModelManager::getInstance().setPreferredVariant(models[i].name, variant);
-                        Model::ModelManager::getInstance().downloadModel(i, variant);
-                    };
-
-                    if (Model::ModelManager::getInstance().getModelDownloadProgress(i, currentVariant) > 0.0)
-                    {
-						selectButton.id = "##cancel" + std::to_string(i);
-                        selectButton.label = "Cancel";
-                        selectButton.backgroundColor = RGBAToImVec4(200, 50, 50, 255);
-                        selectButton.hoverColor = RGBAToImVec4(220, 70, 70, 255);
-                        selectButton.activeColor = RGBAToImVec4(200, 50, 50, 255);
-                        selectButton.icon = ICON_CI_CLOSE;
-                        selectButton.onClick = [i, currentVariant]()
-                            {
-                                Model::ModelManager::getInstance().cancelDownload(i, currentVariant);
-                            };
-                        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - _4BitQantizationHeight - 6);
-                        ImGui::ProgressBar(
-                            Model::ModelManager::getInstance().getModelDownloadProgress(i, currentVariant) / 100.0,
-                            ImVec2(cardWidth - 18, 0));
-                    }
-                }
-                else
-                {
-                    selectButton.id = "##select" + std::to_string(i);
-                    selectButton.label = isSelected ? "selected" : "select";
-                    selectButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-                    if (isSelected)
-                    {
-                        selectButton.icon = ICON_CI_PASS;
-                        selectButton.borderColor = RGBAToImVec4(172, 131, 255, 255 / 4);
-                        selectButton.borderSize = 1.0F;
-                        selectButton.state = ButtonState::ACTIVE;
-                    }
-                    selectButton.onClick = [i, models]()
-                    {
-                        std::string variant = Model::ModelManager::getInstance().getCurrentVariantForModel(models[i].name);
-                        Model::ModelManager::getInstance().switchModel(models[i].name, variant);
-                    };
-                    selectButton.size = ImVec2(cardWidth - 18 /*gap*/ - 5 /*delete button size*/ - 24, 0);
-                }
-
-                Button::render(selectButton);
-
-				static bool openModelDeleteModal = false;
-
-                if (isDownloaded)
-                {
-                    ImGui::SameLine();
-					ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2);
-					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 24 - 2);
-
-                    // Render the "Delete" button on the same row.
-                    ButtonConfig deleteButton;
-                    deleteButton.id = "##delete" + std::to_string(i);
-                    deleteButton.size = ImVec2(24, 0);
-                    deleteButton.backgroundColor = RGBAToImVec4(200, 50, 50, 255);
-                    deleteButton.hoverColor = RGBAToImVec4(220, 70, 70, 255);
-                    deleteButton.activeColor = RGBAToImVec4(200, 50, 50, 255);
-                    deleteButton.icon = ICON_CI_TRASH; // Use your trash icon.
-                    deleteButton.onClick = []()
-                        {
-							openModelDeleteModal = true;
-                        };
-                    Button::render(deleteButton);
-                }
-
-				renderDeleteModelModal(openModelDeleteModal, i, currentVariant);
-
-                ImGui::EndChild();
-
-                if (ImGui::IsItemHovered() || isSelected)
-                {
-                    ImVec2 min = ImGui::GetItemRectMin();
-                    ImVec2 max = ImGui::GetItemRectMax();
-                    ImU32 borderColor = IM_COL32(172, 131, 255, 255 / 2);
-                    ImGui::GetWindowDrawList()->AddRect(min, max, borderColor, 8.0f, 0, 1.0f);
-                }
-
-                ImGui::PopStyleVar();
-                ImGui::PopStyleColor();
-
-                ImGui::EndGroup();
-
-                if ((i + 1) % numCards != 0 && i < models.size() - 1)
-                {
-                    ImGui::SameLine(0.0f, cardSpacing);
-                }
-            }
-        },
-        openModal
-    };
-
-    ModalWindow::render(modalConfig);
-}
-
 // TODO: refactor to be reusable
 inline void renderClearChatModal(bool& openModal)
 {
@@ -789,10 +421,11 @@ inline void renderClearChatModal(bool& openModal)
 
 inline void renderChatFeatureButtons(const float startX = 0, const float startY = 0)
 {
+    static ModelManagerModal modelManagerModal;
     static bool openModelSelectionModal = false;
-	static bool openClearChatModal      = false;
+    static bool openClearChatModal = false;
 
-    // Configure the button
+    // Configure the buttons.
     std::vector<ButtonConfig> buttons;
 
     std::string currentModelName = Model::ModelManager::getInstance()
@@ -804,30 +437,31 @@ inline void renderChatFeatureButtons(const float startX = 0, const float startY 
     openModelManager.icon = ICON_CI_SPARKLE;
     openModelManager.size = ImVec2(128, 0);
     openModelManager.alignment = Alignment::LEFT;
-    openModelManager.onClick = [&]()
-    { openModelSelectionModal = true; };
+    // Simply set the external flag to true when clicked.
+    openModelManager.onClick = [&]() {
+        openModelSelectionModal = true;
+        };
 
     buttons.push_back(openModelManager);
 
-	ButtonConfig clearChatButton;
-	clearChatButton.id = "##clearChatButton";
-	clearChatButton.icon = ICON_CI_CLEAR_ALL;
-	clearChatButton.size = ImVec2(24, 0);
-	clearChatButton.alignment = Alignment::CENTER;
-	clearChatButton.onClick = []()
-		{
-			openClearChatModal = true;
-		};
-	clearChatButton.tooltip = "Clear Chat";
+    ButtonConfig clearChatButton;
+    clearChatButton.id = "##clearChatButton";
+    clearChatButton.icon = ICON_CI_CLEAR_ALL;
+    clearChatButton.size = ImVec2(24, 0);
+    clearChatButton.alignment = Alignment::CENTER;
+    clearChatButton.onClick = []() {
+        openClearChatModal = true;
+        };
+    clearChatButton.tooltip = "Clear Chat";
 
-	buttons.push_back(clearChatButton);
+    buttons.push_back(clearChatButton);
 
-    // Render the button using renderGroup
+    // Render the buttons using renderGroup.
     Button::renderGroup(buttons, startX, startY);
 
-    // Open the modal window if the button was clicked
-    renderModelManager(openModelSelectionModal);
-	renderClearChatModal(openClearChatModal);
+    // Render the modals by passing the external flag.
+    modelManagerModal.render(openModelSelectionModal);
+    renderClearChatModal(openClearChatModal);
 }
 
 inline void renderInputField(const float inputHeight, const float inputWidth)
@@ -870,7 +504,6 @@ inline void renderInputField(const float inputHeight, const float inputWidth)
         }
 
         // Handle assistant response
-        // TODO: Implement assistant response through callback
         {
 			Model::PresetManager& presetManager = Model::PresetManager::getInstance();
 			Model::ModelManager&  modelManager  = Model::ModelManager::getInstance();

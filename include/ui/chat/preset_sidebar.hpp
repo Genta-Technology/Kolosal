@@ -227,7 +227,7 @@ public:
         // Always render the modal so that it stays open if already open.
         ModalConfig config{
             "Save Preset As",         // Title
-            "Save As New Preset",       // Identifier
+            "Save As New Preset",     // Identifier
             ImVec2(300, 140),
             [&]() {
                 // If no new preset name is provided, default to the current preset name.
