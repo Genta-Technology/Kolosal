@@ -124,6 +124,15 @@ namespace Model
 
             m_currentPresetName = presetName;
             m_currentPresetIndex = it->second;
+
+			// Set the last modified time to the current time
+			m_presets[m_currentPresetIndex].lastModified = static_cast<int>(std::time(nullptr));
+            {
+				// unlock the mutex before saving the preset
+				lock.unlock();
+                saveCurrentPresetInternal();
+            }
+
             return true;
         }
 
