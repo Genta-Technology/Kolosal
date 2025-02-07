@@ -124,12 +124,12 @@ void InitializeGradientBackground(int display_w, int display_h)
     GradientBackground::setupFullScreenQuad();
 }
 
-void renderPlayground(float& chatHistorySidebarWidth, float& modelPresetSidebarWidth)
-{
-    //renderChatHistorySidebar(chatHistorySidebarWidth);
-    //renderModelPresetSidebar(modelPresetSidebarWidth);
-    renderChatWindow(Config::INPUT_HEIGHT, chatHistorySidebarWidth, modelPresetSidebarWidth);
-}
+//void renderPlayground(float& chatHistorySidebarWidth, float& modelPresetSidebarWidth)
+//{
+//    //renderChatHistorySidebar(chatHistorySidebarWidth);
+//    //renderModelPresetSidebar(modelPresetSidebarWidth);
+//    renderChatWindow(Config::INPUT_HEIGHT, chatHistorySidebarWidth, modelPresetSidebarWidth);
+//}
 
 void StartNewFrame() {
     // Start the ImGui frame
@@ -233,6 +233,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         ChatHistorySidebar chatHistorySidebar;
 		ModelPresetSidebar modelPresetSidebar;
+		ChatWindow chatWindow;
 
         // Enter the main loop
         while (!window->shouldClose()) 
@@ -251,9 +252,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 			chatHistorySidebar.render();
 			modelPresetSidebar.render();
-
-			// Render the chat section
-            renderPlayground(chatHistorySidebarWidth, modelPresetSidebarWidth);
+            chatWindow.render(Config::INPUT_HEIGHT, chatHistorySidebarWidth, modelPresetSidebarWidth);
 
             // Render the ImGui frame
             ImGui::Render();
