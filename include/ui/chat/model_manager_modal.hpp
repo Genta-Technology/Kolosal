@@ -9,7 +9,7 @@
 #include <vector>
 #include <functional>
 
-namespace Constants {
+namespace ModelManagerConstants {
     constexpr float cardWidth = 200.0f;
     constexpr float cardHeight = 220.0f;
     constexpr float cardSpacing = 10.0f;
@@ -78,7 +78,7 @@ public:
         : m_index(index), m_model(modelData)
     {
 		selectButton.id = "##select" + std::to_string(m_index);
-        selectButton.size = ImVec2(Constants::cardWidth - 18, 0);
+        selectButton.size = ImVec2(ModelManagerConstants::cardWidth - 18, 0);
 
         deleteButton.id = "##delete" + std::to_string(m_index);
         deleteButton.size = ImVec2(24, 0);
@@ -113,14 +113,14 @@ public:
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
 
         std::string childName = "ModelCard" + std::to_string(m_index);
-        ImGui::BeginChild(childName.c_str(), ImVec2(Constants::cardWidth, Constants::cardHeight), true);
+        ImGui::BeginChild(childName.c_str(), ImVec2(ModelManagerConstants::cardWidth, ModelManagerConstants::cardHeight), true);
 
         renderHeader();
         ImGui::Spacing();
         renderVariantOptions(currentVariant);
 
         // Position the extra button row near the bottom of the card.
-        ImGui::SetCursorPosY(Constants::cardHeight - 35);
+        ImGui::SetCursorPosY(ModelManagerConstants::cardHeight - 35);
 
         // Determine state: selected and downloaded.
         bool isSelected = (m_model.name == manager.getCurrentModelName() &&
@@ -159,7 +159,7 @@ public:
                 // Move cursor up a bit before drawing progress bar.
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 24);
                 ImGui::ProgressBar(static_cast<float>(progress) / 100.0f,
-                    ImVec2(Constants::cardWidth - 18, 0));
+                    ImVec2(ModelManagerConstants::cardWidth - 18, 0));
             }
         }
         else
@@ -181,7 +181,7 @@ public:
                 Model::ModelManager::getInstance().switchModel(m_model.name, variant);
                 };
             // Reduce width to leave space for a delete button.
-            selectButton.size = ImVec2(Constants::cardWidth - 18 - 5 - 24, 0);
+            selectButton.size = ImVec2(ModelManagerConstants::cardWidth - 18 - 5 - 24, 0);
         }
         Button::render(selectButton);
 
@@ -284,16 +284,16 @@ public:
         if (windowSize.x == 0)
             windowSize = ImGui::GetMainViewport()->Size;
         const float targetWidth = windowSize.x;
-        float availableWidth = targetWidth - (2 * Constants::padding);
+        float availableWidth = targetWidth - (2 * ModelManagerConstants::padding);
 
         // Calculate how many cards fit in one row.
-        int numCards = static_cast<int>(availableWidth / (Constants::cardWidth + Constants::cardSpacing));
-        float modalWidth = (numCards * (Constants::cardWidth + Constants::cardSpacing)) + (2 * Constants::padding);
-        if (targetWidth - modalWidth > (Constants::cardWidth + Constants::cardSpacing) * 0.5f) {
+        int numCards = static_cast<int>(availableWidth / (ModelManagerConstants::cardWidth + ModelManagerConstants::cardSpacing));
+        float modalWidth = (numCards * (ModelManagerConstants::cardWidth + ModelManagerConstants::cardSpacing)) + (2 * ModelManagerConstants::padding);
+        if (targetWidth - modalWidth > (ModelManagerConstants::cardWidth + ModelManagerConstants::cardSpacing) * 0.5f) {
             ++numCards;
-            modalWidth = (numCards * (Constants::cardWidth + Constants::cardSpacing)) + (2 * Constants::padding);
+            modalWidth = (numCards * (ModelManagerConstants::cardWidth + ModelManagerConstants::cardSpacing)) + (2 * ModelManagerConstants::padding);
         }
-        ImVec2 modalSize = ImVec2(modalWidth, windowSize.y * Constants::modalVerticalScale);
+        ImVec2 modalSize = ImVec2(modalWidth, windowSize.y * ModelManagerConstants::modalVerticalScale);
 
         // Lambda that renders the grid of model cards.
         auto renderCards = [numCards](void) {
@@ -302,14 +302,14 @@ public:
             for (size_t i = 0; i < models.size(); ++i) {
                 // Start a new row.
                 if (i % numCards == 0) {
-                    ImGui::SetCursorPos(ImVec2(Constants::padding,
-                        ImGui::GetCursorPosY() + (i > 0 ? Constants::cardSpacing : 0)));
+                    ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding,
+                        ImGui::GetCursorPosY() + (i > 0 ? ModelManagerConstants::cardSpacing : 0)));
                 }
                 ModelCardRenderer card(static_cast<int>(i), models[i]);
                 card.render();
                 // Add horizontal spacing if this is not the last card in the row.
                 if ((i + 1) % numCards != 0 && i < models.size() - 1) {
-                    ImGui::SameLine(0.0f, Constants::cardSpacing);
+                    ImGui::SameLine(0.0f, ModelManagerConstants::cardSpacing);
                 }
             }
             };
@@ -322,7 +322,7 @@ public:
             renderCards,         // Content renderer (grid of cards)
             showDialog           // External open flag.
         };
-        config.padding = ImVec2(Constants::padding, 8.0f);
+        config.padding = ImVec2(ModelManagerConstants::padding, 8.0f);
 
         // Render the modal.
         ModalWindow::render(config);
