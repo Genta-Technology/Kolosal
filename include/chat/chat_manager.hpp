@@ -130,7 +130,7 @@ namespace Chat
                 if (saveResult) 
                 {
                     m_persistence->deleteChat(oldName).get();
-                    m_persistence->deleteKvChat(oldName).get();
+                    m_persistence->renameKvChat(oldName, newName).get();
                 }
 
                 return saveResult;
@@ -270,7 +270,7 @@ namespace Chat
             return newName;
         }
 
-        bool deleteChat(const std::string& name) 
+        bool deleteChat(const std::string& name, const std::string& modelName, const std::string& modelVariant) 
         {
             std::unique_lock<std::shared_mutex> lock(m_mutex);
 
@@ -314,6 +314,8 @@ namespace Chat
 				std::cerr << "[ChatManager] Failed to delete chat: " << name << std::endl;
 				return false;
             }
+
+            lock.unlock();
 
             if (!m_persistence->deleteKvChat(name).get())
             {
@@ -489,7 +491,7 @@ namespace Chat
 				return std::nullopt;
 			}
 
-			return m_persistence->getKvChatPath(m_chats[m_currentChatIndex].name + modelName + modelVariant);
+			return m_persistence->getKvChatPath(m_chats[m_currentChatIndex].name + "@" + modelName + modelVariant);
 		}
 
 		static const std::string getDefaultChatName() { return DEFAULT_CHAT_NAME; }

@@ -21,6 +21,7 @@ namespace Chat
         virtual std::future<bool> saveChat(const ChatHistory& chat) = 0;
         virtual std::future<bool> deleteChat(const std::string& chatName) = 0;
 		virtual std::future<bool> deleteKvChat(const std::string& chatName) = 0;
+		virtual std::future<bool> renameKvChat(const std::string& oldChatName, const std::string& newChatName) = 0;
         virtual std::future<std::vector<ChatHistory>> loadAllChats() = 0;
 		virtual std::filesystem::path getChatPath(const std::string& chatName) const = 0;
 		virtual std::filesystem::path getKvChatPath(const std::string& chatName) const = 0;
@@ -67,22 +68,110 @@ namespace Chat
                 });
         }
 
-		std::future<bool> deleteKvChat(const std::string& chatName) override
-		{
-			return std::async(std::launch::async, [this, chatName]() {
-				std::unique_lock<std::shared_mutex> lock(m_ioMutex);
-				try
-				{
-					std::filesystem::remove(getKvChatPath(chatName));
-					return true;
-				}
-				catch (const std::exception& e)
-				{
-					std::cerr << "[FileChatPersistence] Failed to delete chat: " << chatName << "\n";
-					return false;
-				}
-				});
-		}
+        std::future<bool> deleteKvChat(const std::string& chatName) {
+            return std::async(std::launch::async, [this, chatName]() {
+                std::unique_lock<std::shared_mutex> lock(m_ioMutex);
+                bool allDeleted = true;
+
+                try {
+                    for (const auto& entry : std::filesystem::directory_iterator(m_basePath)) {
+                        if (entry.is_regular_file()) {
+                            std::string fileName = entry.path().filename().string();
+
+                            // First, ensure the filename ends with ".bin"
+                            if (fileName.size() >= 4 &&
+                                fileName.compare(fileName.size() - 4, 4, ".bin") == 0)
+                            {
+                                // Remove the ".bin" extension.
+                                std::string baseName = fileName.substr(0, fileName.size() - 4);
+
+                                // Find the last occurrence of '@' in the baseName.
+                                auto atPos = baseName.rfind('@');
+                                if (atPos != std::string::npos) {
+                                    // Extract the chat name portion (everything before the last '@')
+                                    std::string fileChatName = baseName.substr(0, atPos);
+
+                                    // Compare with the provided chatName.
+                                    if (fileChatName == chatName) {
+                                        try {
+                                            if (!std::filesystem::remove(entry.path())) {
+                                                std::cerr << "[FileChatPersistence] Failed to remove file: "
+                                                    << entry.path() << "\n";
+                                                allDeleted = false;
+                                            }
+                                        }
+                                        catch (const std::exception& e) {
+                                            std::cerr << "[FileChatPersistence] Exception deleting file "
+                                                << entry.path() << ": " << e.what() << "\n";
+                                            allDeleted = false;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (const std::exception& e) {
+                    std::cerr << "[FileChatPersistence] Exception iterating directory: "
+                        << e.what() << "\n";
+                    return false;
+                }
+
+                return allDeleted;
+                });
+        }
+
+        std::future<bool> renameKvChat(const std::string& oldChatName, const std::string& newChatName) {
+            return std::async(std::launch::async, [this, oldChatName, newChatName]() {
+                std::unique_lock<std::shared_mutex> lock(m_ioMutex);
+                bool allRenamed = true;
+                try {
+                    for (const auto& entry : std::filesystem::directory_iterator(m_basePath)) {
+                        if (entry.is_regular_file()) {
+                            std::string fileName = entry.path().filename().string();
+                            // Check that the file ends with ".bin"
+                            if (fileName.size() >= 4 &&
+                                fileName.compare(fileName.size() - 4, 4, ".bin") == 0)
+                            {
+                                // Remove the ".bin" extension.
+                                std::string baseName = fileName.substr(0, fileName.size() - 4);
+
+                                // Find the last occurrence of '@'
+                                auto atPos = baseName.rfind('@');
+                                if (atPos != std::string::npos) {
+                                    // Extract the chat name portion (everything before the last '@')
+                                    std::string fileChatName = baseName.substr(0, atPos);
+
+                                    // If it matches the old chat name, we need to rename it.
+                                    if (fileChatName == oldChatName) {
+                                        // The part starting with '@' (i.e. the model name and separator)
+                                        std::string modelPart = baseName.substr(atPos);
+                                        // Build the new file name: newChatName + modelPart + ".bin"
+                                        std::string newFileName = newChatName + modelPart + ".bin";
+                                        std::filesystem::path newPath = std::filesystem::absolute(
+                                            std::filesystem::path(m_basePath) / newFileName);
+                                        try {
+                                            std::filesystem::rename(entry.path(), newPath);
+                                        }
+                                        catch (const std::exception& e) {
+                                            std::cerr << "[FileChatPersistence] Exception renaming file "
+                                                << entry.path() << " to " << newPath << ": " << e.what() << "\n";
+                                            allRenamed = false;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (const std::exception& e) {
+                    std::cerr << "[FileChatPersistence] Exception iterating directory for renaming: "
+                        << e.what() << "\n";
+                    return false;
+                }
+                return allRenamed;
+                });
+        }
 
         std::future<std::vector<ChatHistory>> loadAllChats() override 
         {

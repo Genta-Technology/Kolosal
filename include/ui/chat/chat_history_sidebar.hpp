@@ -4,6 +4,7 @@
 #include "config.hpp"
 #include "ui/widgets.hpp"
 #include "chat/chat_manager.hpp"
+#include "model/model_manager.hpp"
 
 #include <optional>
 #include <string>
@@ -104,7 +105,9 @@ private:
         ButtonConfig config = m_baseDeleteButtonConfig;
         config.id = "##delete" + std::to_string(chat.id);
         config.onClick = [chatName = chat.name]() {
-            Chat::ChatManager::getInstance().deleteChat(chatName);
+            Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+            Chat::ChatManager::getInstance().deleteChat(chatName, 
+                modelManager.getCurrentModelName().value(), modelManager.getCurrentVariantType());
             };
 
         Button::render(config);
