@@ -965,7 +965,6 @@ namespace ModalWindow
         if (config.openFlag)
         {
             ImGui::OpenPopup(config.id.c_str());
-            config.openFlag = false;
         }
         
         ImGui::PushStyleColor(ImGuiCol_ModalWindowDimBg, ImVec4(0.0F, 0.0F, 0.0F, 0.5F));

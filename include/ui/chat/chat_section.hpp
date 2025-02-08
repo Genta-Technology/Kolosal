@@ -17,6 +17,79 @@
 #include <optional>
 #include <functional>
 
+class RenameChatModalComponent {
+public:
+    RenameChatModalComponent() : isOpen(false) {
+        // Cache the new chat name buffer
+        newChatName = std::string(Config::InputField::TEXT_SIZE, '\0');
+    }
+
+    // Call this to trigger the modal to open
+    void open() {
+        isOpen = true;
+        focusInput = true;
+
+        // Initialize with current chat name
+        auto currentChatName = Chat::ChatManager::getInstance().getCurrentChatName();
+        if (currentChatName.has_value()) {
+            newChatName = currentChatName.value();
+        }
+    }
+
+    // Call this every frame to render the modal (if open)
+    void render() {
+        if (!isOpen)
+            return;
+
+        ModalConfig config{
+            "Rename Chat",    // unique id and title
+            "Rename Chat",
+            ImVec2(300, 98),
+            [this]() {
+                // Update input configuration
+                InputFieldConfig inputConfig(
+                    "##newchatname",
+                    ImVec2(ImGui::GetWindowSize().x - 32.0F, 0),
+                    newChatName,
+                    focusInput
+                );
+                inputConfig.flags = ImGuiInputTextFlags_EnterReturnsTrue;
+                inputConfig.frameRounding = 5.0F;
+
+                // Set up the input processing callback
+                inputConfig.processInput = [this](const std::string& input) {
+                    Chat::ChatManager::getInstance().renameCurrentChat(input);
+                    isOpen = false;
+                    newChatName.clear();
+                };
+
+                // Render the input field
+                InputField::render(inputConfig);
+
+                // Reset focus flag after first render
+                if (focusInput)
+                    focusInput = false;
+            },
+            isOpen  // pass in our cached state instead of an external bool
+        };
+
+        // Set modal padding
+        config.padding = ImVec2(16.0F, 8.0F);
+        ModalWindow::render(config);
+
+        // Ensure that if the popup closes (e.g. by user dismiss), our state is kept in sync
+        if (!ImGui::IsPopupOpen(config.id.c_str())) {
+            isOpen = false;
+            newChatName.clear();
+        }
+    }
+
+private:
+    bool isOpen;
+    bool focusInput;
+    std::string newChatName;
+};
+
 class ClearChatModalComponent {
 public:
     ClearChatModalComponent() : isOpen(false) {
@@ -92,7 +165,7 @@ public:
         renameButtonConfig.gap = 10.0F;
         renameButtonConfig.alignment = Alignment::CENTER;
         renameButtonConfig.hoverColor = ImVec4(0.1F, 0.1F, 0.1F, 0.5F);
-        renameButtonConfig.onClick = [this]() { showRenameChatDialog = true; };
+        renameButtonConfig.onClick = [this]() { renameChatModal.open(); };
 
         openModelManagerConfig.id = "##openModalButton";
         openModelManagerConfig.icon = ICON_CI_SPARKLE;
@@ -112,7 +185,7 @@ public:
 
     // Render the chat window. This method computes layout values and then renders
     // the cached widgets, updating only the dynamic properties.
-    void render(float inputHeight, float leftSidebarWidth, float rightSidebarWidth) {
+    void render(float leftSidebarWidth, float rightSidebarWidth) {
         ImGuiIO& io = ImGui::GetIO();
         ImVec2 windowSize = ImVec2(io.DisplaySize.x - rightSidebarWidth - leftSidebarWidth,
             io.DisplaySize.y - Config::TITLE_BAR_HEIGHT);
@@ -142,6 +215,9 @@ public:
         // Render the clear chat modal.
         clearChatModal.render();
 
+		// Render the rename chat modal.
+        renameChatModal.render();
+
         // Spacing between widgets.
         for (int i = 0; i < 4; ++i)
             ImGui::Spacing();
@@ -150,7 +226,7 @@ public:
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + paddingX);
 
         // Render the chat history region.
-        float availableHeight = ImGui::GetContentRegionAvail().y - inputHeight - Config::BOTTOM_MARGIN;
+        float availableHeight = ImGui::GetContentRegionAvail().y - m_inputHeight - Config::BOTTOM_MARGIN;
         ImGui::BeginChild("ChatHistoryRegion", ImVec2(contentWidth, availableHeight), false, ImGuiWindowFlags_NoScrollbar);
         if (auto chat = Chat::ChatManager::getInstance().getCurrentChat())
             chatHistoryRenderer.render(*chat, contentWidth);
@@ -160,7 +236,7 @@ public:
         float inputFieldPaddingX = (availableWidth - contentWidth) / 2.0F;
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + inputFieldPaddingX);
 
-        renderInputField(inputHeight, contentWidth);
+        renderInputField(contentWidth);
 
         ImGui::End();
         ImGui::PopStyleVar();
@@ -181,7 +257,7 @@ private:
     }
 
     // Render the input field and then place the chat feature buttons in its vicinity.
-    void renderInputField(const float inputHeight, const float inputWidth) {
+    void renderInputField(const float inputWidth) {
         // Lambda to process the user's input.
         auto processInput = [this](const std::string& input) {
             auto& chatManager = Chat::ChatManager::getInstance();
@@ -237,7 +313,7 @@ private:
         // Construct InputFieldConfig using its proper constructor.
         InputFieldConfig inputConfig(
             "##chatinput",
-            ImVec2(inputWidth, inputHeight - Config::Font::DEFAULT_FONT_SIZE - 20),
+            ImVec2(inputWidth, m_inputHeight - Config::Font::DEFAULT_FONT_SIZE - 20),
             inputTextBuffer,
             focusInputField
         );
@@ -254,7 +330,7 @@ private:
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(
             screenPos,
-            ImVec2(screenPos.x + inputWidth, screenPos.y + inputHeight),
+            ImVec2(screenPos.x + inputWidth, screenPos.y + m_inputHeight),
             ImGui::ColorConvertFloat4ToU32(Config::InputField::INPUT_FIELD_BG_COLOR),
             Config::InputField::FRAME_ROUNDING
         );
@@ -283,9 +359,11 @@ private:
     bool openModelSelectionModal = false;
     std::string inputTextBuffer = std::string(Config::InputField::TEXT_SIZE, '\0');
     bool focusInputField = true;
+    float m_inputHeight = Config::INPUT_HEIGHT;
 
     // Child components.
     ModelManagerModal modelManagerModal;
+    RenameChatModalComponent renameChatModal;
     ClearChatModalComponent clearChatModal;
     ChatHistoryRenderer chatHistoryRenderer;
 };

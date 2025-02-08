@@ -16,13 +16,16 @@
 
 #include "nfd.h"
 
-#include <iostream>
-#include <chrono>
-#include <thread>
 #include <imgui.h>
 #include <imgui_impl_win32.h>
 #include <imgui_impl_opengl3.h>
 #include <curl/curl.h>
+#include <chrono>
+#include <thread>
+#include <memory>
+#include <vector>
+#include <exception>
+#include <iostream>
 
 class ScopedCleanup
 {
@@ -45,10 +48,10 @@ public:
     WindowStateTransitionManager(Window& window)
         : window(window)
         , transitionProgress(0.0f)
+        , easedProgress(0.0f)
         , isTransitioning(false)
         , targetActiveState(window.isActive())
-        , previousActiveState(window.isActive()) {
-    }
+        , previousActiveState(window.isActive()) {}
 
     void updateTransition()
     {
@@ -99,15 +102,15 @@ void InitializeImGui(Window& window)
     // Setup ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO& imguiIO = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
 
     // Enable power saving mode
-    imguiIO.ConfigFlags |= ImGuiConfigFlags_EnablePowerSavingMode;
+    io.ConfigFlags |= ImGuiConfigFlags_EnablePowerSavingMode;
 
-    // Set the rounding and border size for the window
+    // Set style
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowRounding = Config::WINDOW_CORNER_RADIUS;
-    style.WindowBorderSize = 0.0f;               // Disable ImGui's window border
+    style.WindowBorderSize = 0.0f; // Disable ImGui's window border
     ImGui::StyleColorsDark();
 
     // Initialize font manager
@@ -124,15 +127,7 @@ void InitializeGradientBackground(int display_w, int display_h)
     GradientBackground::setupFullScreenQuad();
 }
 
-//void renderPlayground(float& chatHistorySidebarWidth, float& modelPresetSidebarWidth)
-//{
-//    //renderChatHistorySidebar(chatHistorySidebarWidth);
-//    //renderModelPresetSidebar(modelPresetSidebarWidth);
-//    renderChatWindow(Config::INPUT_HEIGHT, chatHistorySidebarWidth, modelPresetSidebarWidth);
-//}
-
 void StartNewFrame() {
-    // Start the ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
@@ -155,113 +150,175 @@ void HandleException(const std::exception& e)
     ::MessageBoxA(nullptr, e.what(), "Unhandled Exception", MB_OK | MB_ICONERROR);
 }
 
-#ifdef DEBUG
-int main()
-#else
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
-#endif
-{
-    try 
+class ITab {
+public:
+    virtual ~ITab() = default;
+    virtual void render() = 0;
+    virtual void onActivate() = 0;
+    virtual void onDeactivate() = 0;
+};
+
+// Update ChatTab to implement the new methods
+class ChatTab : public ITab {
+public:
+    ChatTab()
+        : chatHistorySidebar(), modelPresetSidebar(), chatWindow()
     {
-        // Create the window
-        auto window = WindowFactory::createWindow();
+    }
+
+    void onActivate() override {
+        Model::ModelManager::getInstance().setStreamingCallback(
+            [](const std::string& partialOutput, const float tps, const int jobId) {
+                auto& chatManager = Chat::ChatManager::getInstance();
+                std::string chatName = chatManager.getChatNameByJobId(jobId);
+
+                auto chatOpt = chatManager.getChat(chatName);
+                if (chatOpt) {
+                    Chat::ChatHistory chat = chatOpt.value();
+                    if (!chat.messages.empty() && chat.messages.back().role == "assistant") {
+                        // Append to existing assistant message
+                        chat.messages.back().content = partialOutput;
+                        chat.messages.back().tps = tps;
+                        chatManager.updateChat(chatName, chat);
+                    }
+                    else {
+                        // Create new assistant message
+                        Chat::Message assistantMsg;
+                        assistantMsg.id = static_cast<int>(chat.messages.size()) + 1;
+                        assistantMsg.role = "assistant";
+                        assistantMsg.content = partialOutput;
+                        assistantMsg.tps = tps;
+                        chatManager.addMessage(chatName, assistantMsg);
+                    }
+                }
+            }
+        );
+    }
+
+    void onDeactivate() override {
+        Model::ModelManager::getInstance().setStreamingCallback(nullptr);
+    }
+
+    void render() override {
+        chatHistorySidebar.render();
+        modelPresetSidebar.render();
+        chatWindow.render(
+			chatHistorySidebar.getSidebarWidth(),
+			modelPresetSidebar.getSidebarWidth()
+        );
+    }
+
+private:
+    ChatHistorySidebar chatHistorySidebar;
+    ModelPresetSidebar modelPresetSidebar;
+    ChatWindow chatWindow;
+};
+
+// Update TabManager to handle tab activation/deactivation
+class TabManager {
+public:
+    TabManager() : activeTabIndex(0) {}
+
+    void addTab(std::unique_ptr<ITab> tab) {
+        if (tabs.empty()) {
+            // Activate the first tab when it's added
+            tab->onActivate();
+        }
+        tabs.push_back(std::move(tab));
+    }
+
+    void switchTab(size_t index) {
+        if (index < tabs.size() && index != activeTabIndex) {
+            // Deactivate current tab
+            if (activeTabIndex < tabs.size()) {
+                tabs[activeTabIndex]->onDeactivate();
+            }
+            // Activate new tab
+            activeTabIndex = index;
+            tabs[activeTabIndex]->onActivate();
+        }
+    }
+
+    void renderCurrentTab() {
+        if (!tabs.empty() && activeTabIndex < tabs.size()) {
+            tabs[activeTabIndex]->render();
+        }
+    }
+
+private:
+    std::vector<std::unique_ptr<ITab>> tabs;
+    size_t activeTabIndex;
+};
+
+class Application
+{
+public:
+    Application()
+    {
+        // Create and show the window
+        window = WindowFactory::createWindow();
         window->createWindow(Config::WINDOW_WIDTH, Config::WINDOW_HEIGHT, Config::WINDOW_TITLE);
         window->show();
 
-        // Create the OpenGL context
-        auto openglContext = GraphicContextFactory::createOpenGLContext();
+        // Create and initialize the OpenGL context
+        openglContext = GraphicContextFactory::createOpenGLContext();
         openglContext->initialize(window->getNativeHandle());
 
-        // Initialize cleanup using RAII
-        ScopedCleanup cleanup;
+        // Initialize cleanup (RAII)
+        cleanup = std::make_unique<ScopedCleanup>();
 
         // Initialize ImGui
         InitializeImGui(*window);
 
-        // Initialize the chat manager, preset manager, and model manager
+        // Initialize the chat, preset, and model managers
         Chat::initializeChatManager();
         Model::initializePresetManager();
         Model::initializeModelManager();
 
-		// TODO: encapsulate to have a cleaner code
-        Model::ModelManager::getInstance().setStreamingCallback(
-            [](const std::string& partialOutput, const float tps, const int jobId) {
-                // Grab the current chat by the tracked jobId:
-                auto& chatManager = Chat::ChatManager::getInstance();
-				std::string chatName = chatManager.getChatNameByJobId(jobId);
-
-                // Append partial output to the *last assistant message*,
-                // or create a new one if the last role isn't "assistant."
-                Chat::ChatHistory chat = chatManager.getChat(chatName).value();
-                if (!chat.messages.empty() && chat.messages.back().role == "assistant")
-                {
-                    // Append to the existing assistant message
-                    chat.messages.back().content = partialOutput;
-					chat.messages.back().tps = tps;
-					chatManager.updateChat(chatName, chat);
-                }
-                else
-                {
-                    // If, for some reason, we don't have an assistant message to update:
-                    // create a new message with role "assistant"
-                    Chat::Message assistantMsg;
-                    assistantMsg.id = static_cast<int>(chat.messages.size()) + 1;
-                    assistantMsg.role = "assistant";
-                    assistantMsg.content = partialOutput;
-					assistantMsg.tps = tps;
-					chatManager.addMessage(chatName, assistantMsg);
-                }
-            }
-        );
-
-        // Initialize NFD (Native File Dialog)
+        // Initialize Native File Dialog
         NFD_Init();
 
-        // Get initial window size
-        int display_w = window->getWidth();
-        int display_h = window->getHeight();
+        // Get the initial window dimensions
+        display_w = window->getWidth();
+        display_h = window->getHeight();
 
         // Initialize gradient background
         InitializeGradientBackground(display_w, display_h);
 
-        // Create window state transition manager
-        WindowStateTransitionManager transitionManager(*window);
+        // Create the window state transition manager
+        transitionManager = std::make_unique<WindowStateTransitionManager>(*window);
 
-        // Initialize sidebar widths
-        float chatHistorySidebarWidth = Config::ChatHistorySidebar::SIDEBAR_WIDTH;
-        float modelPresetSidebarWidth = Config::ModelPresetSidebar::SIDEBAR_WIDTH;
+        // Initialize the TabManager and add the ChatTab (other tabs can be added similarly)
+        tabManager = std::make_unique<TabManager>();
+        tabManager->addTab(std::make_unique<ChatTab>());
+    }
 
-        ChatHistorySidebar chatHistorySidebar;
-		ModelPresetSidebar modelPresetSidebar;
-		ChatWindow chatWindow;
-
-        // Enter the main loop
-        while (!window->shouldClose()) 
+    int run()
+    {
+        while (!window->shouldClose())
         {
             auto frameStartTime = std::chrono::high_resolution_clock::now();
 
             window->processEvents();
 
-            // Update window state transition
-            transitionManager.updateTransition();
+            // Update window state transitions
+            transitionManager->updateTransition();
 
             StartNewFrame();
 
-            // Render title bar
+            // Render the custom title bar
             titleBar(window->getNativeHandle());
 
-			chatHistorySidebar.render();
-			modelPresetSidebar.render();
-            chatWindow.render(Config::INPUT_HEIGHT, chatHistorySidebarWidth, modelPresetSidebarWidth);
+            // Render the currently active tab (chat tab in this example)
+            tabManager->renderCurrentTab();
 
-            // Render the ImGui frame
+            // Render ImGui
             ImGui::Render();
 
-            // Get updated window size
+            // Check for window resizing and update viewport/gradient texture accordingly
             int new_display_w = window->getWidth();
             int new_display_h = window->getHeight();
-
-            if (new_display_w != display_w || new_display_h != display_h) 
+            if (new_display_w != display_w || new_display_h != display_h)
             {
                 display_w = new_display_w;
                 display_h = new_display_h;
@@ -269,23 +326,50 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
                 glViewport(0, 0, display_w, display_h);
             }
 
+            // Render the gradient background with transition effects
             GradientBackground::renderGradientBackground(
                 display_w,
                 display_h,
-                transitionManager.getTransitionProgress(),
-                transitionManager.getEasedProgress()
+                transitionManager->getTransitionProgress(),
+                transitionManager->getEasedProgress()
             );
 
+            // Render the ImGui draw data using OpenGL
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+            // Swap the buffers
             openglContext->swapBuffers();
 
+            // Enforce the target frame rate
             EnforceFrameRate(frameStartTime);
         }
 
         return 0;
     }
-    catch (const std::exception& e) {
+
+private:
+    std::unique_ptr<Window> window;
+    std::unique_ptr<GraphicsContext> openglContext;
+    std::unique_ptr<ScopedCleanup> cleanup;
+    std::unique_ptr<WindowStateTransitionManager> transitionManager;
+    std::unique_ptr<TabManager> tabManager;
+    int display_w;
+    int display_h;
+};
+
+#ifdef DEBUG
+int main()
+#else
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
+#endif
+{
+    try
+    {
+        Application app;
+        return app.run();
+    }
+    catch (const std::exception& e)
+    {
         HandleException(e);
         return 1;
     }

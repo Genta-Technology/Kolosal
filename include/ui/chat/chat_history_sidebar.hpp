@@ -143,6 +143,10 @@ public:
         ImGui::End();
     }
 
+	float getSidebarWidth() const {
+		return m_sidebarWidth;
+	}
+
 private:
     float m_sidebarWidth;
     ChatHeaderComponent m_chatHeaderComponent;

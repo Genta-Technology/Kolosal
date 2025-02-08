@@ -26,10 +26,6 @@ public:
         updatePresetNames();
         int currentIndex = getCurrentPresetIndex();
 
-        // If no presets exist, show a placeholder.
-        if (m_presetNames.empty())
-            m_presetNames.push_back("Default Preset");
-
         const float comboWidth = m_sidebarWidth - 54;
         if (ComboBox::render("##modelpresets", m_presetNames.data(),
             static_cast<int>(m_presetNames.size()), currentIndex, comboWidth))
@@ -53,9 +49,9 @@ private:
 
     void renderPresetLabel() {
         LabelConfig presetLabel{
-            "##modelpresets",               // id
-            "Model Presets",                // label
-            ICON_CI_PACKAGE,                // icon
+            "##modelpresets_label",             // id
+            "Model Presets",                    // label
+            ICON_CI_PACKAGE,                    // icon
             ImVec2(Config::Icon::DEFAULT_FONT_SIZE, 0),
             0.0f,
             0.0f,
@@ -68,9 +64,15 @@ private:
     void updatePresetNames() {
         const auto& presets = Model::PresetManager::getInstance().getPresets();
         m_presetNameStorage.clear();
+
+        // Copy preset names and sort them alphabetically
         for (const auto& preset : presets) {
             m_presetNameStorage.push_back(preset.name);
         }
+        // Sort the names to match the sorted order used by getSortedPresetIndex
+        std::sort(m_presetNameStorage.begin(), m_presetNameStorage.end());
+
+        // Update m_presetNames with sorted names
         m_presetNames.clear();
         for (const auto& name : m_presetNameStorage) {
             m_presetNames.push_back(name.c_str());
@@ -80,17 +82,19 @@ private:
     int getCurrentPresetIndex() {
         auto currentPresetOpt = Model::PresetManager::getInstance().getCurrentPreset();
         if (currentPresetOpt) {
-            return static_cast<int>(
-                Model::PresetManager::getInstance().getSortedPresetIndex(
-                    currentPresetOpt->get().name
-                )
-                );
+            const std::string& currentName = currentPresetOpt->get().name;
+            // Find the index in the sorted m_presetNameStorage
+            auto it = std::lower_bound(m_presetNameStorage.begin(), m_presetNameStorage.end(), currentName);
+            if (it != m_presetNameStorage.end() && *it == currentName) {
+                return static_cast<int>(std::distance(m_presetNameStorage.begin(), it));
+            }
         }
         return 0;
     }
 
     void renderDeleteButton() {
-        const auto& presets = Model::PresetManager::getInstance().getPresets();
+        auto& manager = Model::PresetManager::getInstance();
+        const auto& presets = manager.getPresets();
         ImGui::SameLine();
         ButtonConfig deleteConfig;
         deleteConfig.id = "##delete";
@@ -101,9 +105,21 @@ private:
         deleteConfig.hoverColor = RGBAToImVec4(191, 88, 86, 255);
         deleteConfig.activeColor = RGBAToImVec4(165, 29, 45, 255);
         deleteConfig.onClick = [&]() {
-            if (presets.size() > 1 && Model::PresetManager::getInstance().getCurrentPreset()) {
-                const auto& name = Model::PresetManager::getInstance().getCurrentPreset()->get().name;
-                Model::PresetManager::getInstance().deletePreset(name).get();
+            if (presets.size() > 1 && manager.getCurrentPreset()) {
+                // Get the index of the current preset in the sorted list
+                int curIndex = static_cast<int>(manager.getSortedPresetIndex(manager.getCurrentPreset()->get().name));
+                std::string currentPresetName = manager.getCurrentPreset()->get().name;
+
+                // Delete the current preset.
+                if (manager.deletePreset(currentPresetName).get()) {
+                    // Get the updated preset list.
+                    const auto& updatedPresets = manager.getPresets();
+                    if (!updatedPresets.empty()) {
+                        // Pick the previous preset if possible, else the first preset.
+                        int newIndex = curIndex > 0 ? curIndex - 1 : 0;
+                        manager.switchPreset(updatedPresets[newIndex].name);
+                    }
+                }
             }
             };
         deleteConfig.state = (presets.size() <= 1) ? ButtonState::DISABLED : ButtonState::NORMAL;
@@ -226,15 +242,15 @@ public:
     void render(bool& showDialog, std::string& newPresetName) {
         // Always render the modal so that it stays open if already open.
         ModalConfig config{
-            "Save Preset As",         // Title
-            "Save As New Preset",     // Identifier
-            ImVec2(300, 140),
+            "Save Preset As",           // Title
+            "Save As New Preset",       // Identifier
+            ImVec2(300, 98),
             [&]() {
                 // If no new preset name is provided, default to the current preset name.
                 if (newPresetName.empty() && Model::PresetManager::getInstance().getCurrentPreset()) {
                     newPresetName = Model::PresetManager::getInstance().getCurrentPreset()->get().name;
                 }
-                // Render the input field.
+                // Set up the input field configuration
                 InputFieldConfig inputConfig(
                     "##newpresetname",
                     ImVec2(ImGui::GetWindowSize().x - 32.0f, 0),
@@ -244,24 +260,27 @@ public:
                 inputConfig.placeholderText = "Enter new preset name...";
                 inputConfig.flags = ImGuiInputTextFlags_EnterReturnsTrue;
                 inputConfig.frameRounding = 5.0f;
-                InputField::render(inputConfig);
 
-                ImGui::Spacing();
-                // Render a confirm button.
-                if (ImGui::Button("Confirm", ImVec2(ImGui::GetWindowSize().x - 32.0f, 0))) {
-                    if (!newPresetName.empty() &&
-                        Model::PresetManager::getInstance().copyCurrentPresetAs(newPresetName).get())
+                // Process the input when the user hits Enter.
+                inputConfig.processInput = [&](const std::string& input) {
+                    if (!input.empty() &&
+                        Model::PresetManager::getInstance().copyCurrentPresetAs(input).get())
                     {
-                        Model::PresetManager::getInstance().switchPreset(newPresetName);
+                        Model::PresetManager::getInstance().switchPreset(input);
                         showDialog = false;
                         newPresetName.clear();
+						ImGui::CloseCurrentPopup();
                     }
-                }
+                };
+
+                // Render the input field.
+                InputField::render(inputConfig);
             },
             showDialog // Initial open flag passed in.
         };
-        config.padding = ImVec2(16.0f, 8.0f);
 
+        // Set modal padding
+        config.padding = ImVec2(16.0f, 8.0f);
         ModalWindow::render(config);
 
         // If the popup is no longer open, ensure showDialog remains false.
@@ -363,6 +382,10 @@ public:
 
         m_saveAsDialogComponent.render(m_showSaveAsDialog, m_newPresetName);
     }
+
+	float getSidebarWidth() const {
+		return m_sidebarWidth;
+	}
 
 private:
     float m_sidebarWidth;
