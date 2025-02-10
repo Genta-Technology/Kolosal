@@ -328,6 +328,53 @@ namespace Chat
             return true;
         }
 
+        void deleteMessage(const std::string& chatName, const Message& message) {
+            // Lock the mutex to ensure thread-safe access.
+            std::unique_lock<std::shared_mutex> lock(m_mutex);
+
+            // Find the chat by its name.
+            auto chatIt = std::find_if(m_chats.begin(), m_chats.end(),
+                [&chatName](const auto& chat) { return chat.name == chatName; });
+
+            if (chatIt != m_chats.end()) {
+                // Search for the message with the matching id.
+                auto& messages = chatIt->messages;
+                auto msgIt = std::find_if(messages.begin(), messages.end(),
+                    [&message](const Message& m) { return m.id == message.id; });
+
+                // If the message was found, erase it from the chat.
+                if (msgIt != messages.end()) {
+                    messages.erase(msgIt);
+                    chatIt->lastModified = static_cast<int>(std::time(nullptr));
+                }
+            }
+        }
+
+        void deleteMessage(const std::string& chatName, int index) {
+            // Lock the mutex to ensure thread-safe access.
+            std::unique_lock<std::shared_mutex> lock(m_mutex);
+
+            // Locate the chat by its name.
+            auto chatIt = std::find_if(m_chats.begin(), m_chats.end(),
+                [&chatName](const auto& chat) { return chat.name == chatName; });
+
+            if (chatIt != m_chats.end()) {
+                // Check if the index is valid.
+                if (index >= 0 && index < static_cast<int>(chatIt->messages.size())) {
+                    // Remove the message at the given index.
+                    chatIt->messages.erase(chatIt->messages.begin() + index);
+                    // Update the last modified timestamp.
+                    chatIt->lastModified = static_cast<int>(std::time(nullptr));
+                }
+                else {
+                    std::cerr << "[ChatManager] Invalid message index (" << index << ") for chat: " << chatName << "\n";
+                }
+            }
+            else {
+                std::cerr << "[ChatManager] Chat not found: " << chatName << "\n";
+            }
+        }
+
         void addMessage(const std::string& chatName, const Message& message) 
         {
             std::unique_lock<std::shared_mutex> lock(m_mutex);

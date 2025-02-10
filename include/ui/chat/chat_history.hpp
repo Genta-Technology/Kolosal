@@ -197,6 +197,90 @@ private:
         ImGui::EndGroup();
     }
 
+    void regenerateResponse(int index) {
+        Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+        Chat::ChatManager& chatManager = Chat::ChatManager::getInstance();
+
+        // Stop current generation if running.
+        if (modelManager.isCurrentlyGenerating()) {
+            modelManager.stopJob(chatManager.getCurrentJobId());
+
+            while (true)
+            {
+                if (!modelManager.isCurrentlyGenerating())
+                    break;
+            }
+        }
+
+        auto currentChatOpt = chatManager.getCurrentChat();
+        if (!currentChatOpt.has_value()) {
+            std::cerr << "[ChatSection] No chat selected. Cannot regenerate response.\n";
+            return;
+        }
+
+        if (!modelManager.getCurrentModelName().has_value()) {
+            std::cerr << "[ChatSection] No model selected. Cannot regenerate response.\n";
+            return;
+        }
+
+        auto& currentChat = currentChatOpt.value();
+
+        // Validate the provided index.
+        if (index < 0 || index >= static_cast<int>(currentChat.messages.size())) {
+            std::cerr << "[ChatSection] Invalid chat index (" << index << "). Cannot regenerate response.\n";
+            return;
+        }
+
+        int userMessageIndex = -1;
+        if (currentChat.messages[index].role == "user") {
+            userMessageIndex = index;
+
+            // Find the first assistant response after this user message.
+            int targetAssistantIndex = -1;
+            for (int i = index + 1; i < static_cast<int>(currentChat.messages.size()); i++) {
+                if (currentChat.messages[i].role == "assistant") {
+                    targetAssistantIndex = i;
+                    break;
+                }
+            }
+            if (targetAssistantIndex == -1) {
+                std::cerr << "[ChatSection] No assistant response found after user message at index " << index << ".\n";
+                return;
+            }
+
+            // Delete all messages from the first assistant response (targetAssistantIndex) to the end.
+            // Deleting in reverse order avoids index shifting issues.
+            for (int i = static_cast<int>(currentChat.messages.size()) - 1; i >= targetAssistantIndex; i--) {
+                chatManager.deleteMessage(currentChat.name, i);
+            }
+        }
+        else if (currentChat.messages[index].role == "assistant") {
+            if (index - 1 < 0 || currentChat.messages[index - 1].role != "user") {
+                std::cerr << "[ChatSection] Could not find an associated user message for assistant at index " << index << ".\n";
+                return;
+            }
+            userMessageIndex = index - 1;
+
+            // Delete all messages starting from this assistant response to the end.
+            for (int i = static_cast<int>(currentChat.messages.size()) - 1; i >= index; i--) {
+                chatManager.deleteMessage(currentChat.name, i);
+            }
+        }
+        else {
+            std::cerr << "[ChatSection] Message at index " << index << " is neither a user nor an assistant message. Cannot regenerate response.\n";
+            return;
+        }
+
+        ChatCompletionParameters completionParams = modelManager.buildChatCompletionParameters(
+            chatManager.getCurrentChat().value()
+        );
+
+        int jobId = modelManager.startChatCompletionJob(completionParams);
+        if (!chatManager.setCurrentJobId(jobId)) {
+            std::cerr << "[ChatSection] Failed to set the current job ID.\n";
+        }
+    }
+
     void renderMetadata(const Chat::Message& msg, int index, float bubbleWidth, float bubblePadding)
     {
         ImGui::PushStyleColor(ImGuiCol_Text, timestampColor);
@@ -225,9 +309,9 @@ private:
         {
             ButtonConfig regenBtn = regenerateButtonBase;
             regenBtn.id = "##regen" + std::to_string(index);
-            //regenBtn.onClick = [index]() {
-            //
-            //};
+            regenBtn.onClick = [this, index]() {
+                regenerateResponse(index - 1);
+            };
             helperButtons.push_back(regenBtn);
         }
 

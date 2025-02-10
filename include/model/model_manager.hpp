@@ -1,5 +1,6 @@
 #pragma once
 
+#include "preset_manager.hpp"
 #include "model_persistence.hpp"
 
 #include <types.h>
@@ -176,6 +177,94 @@ namespace Model
         //--------------------------------------------------------------------------------------------
 		// Inference Engine
 		//--------------------------------------------------------------------------------------------
+
+        ChatCompletionParameters buildChatCompletionParameters(
+            const Chat::ChatHistory& currentChat,
+            const std::string& userInput
+        ) {
+            ChatCompletionParameters completionParams;
+            auto& presetManager = Model::PresetManager::getInstance();
+            auto& modelManager = Model::ModelManager::getInstance();
+            auto& chatManager = Chat::ChatManager::getInstance();
+
+            auto currentPresetOpt = presetManager.getCurrentPreset();
+            if (!currentPresetOpt.has_value()) {
+                std::cerr << "[ChatSection] No preset available. Using default values.\n";
+            }
+            const auto& currentPreset = currentPresetOpt.value().get();
+
+            // Add the system prompt as the first message.
+            completionParams.messages.push_back({ "system", currentPreset.systemPrompt.c_str() });
+
+            // Append all previous messages.
+            for (const auto& msg : currentChat.messages) {
+                completionParams.messages.push_back({ msg.role.c_str(), msg.content.c_str() });
+            }
+
+            // Append the new user message.
+            completionParams.messages.push_back({ "user", userInput.c_str() });
+
+            // Copy over additional parameters.
+            completionParams.randomSeed = currentPreset.random_seed;
+            completionParams.maxNewTokens = static_cast<int>(currentPreset.max_new_tokens);
+            completionParams.minLength = static_cast<int>(currentPreset.min_length);
+            completionParams.temperature = currentPreset.temperature;
+            completionParams.topP = currentPreset.top_p;
+            completionParams.streaming = true;
+
+            // Set the kvCacheFilePath using the current model and variant.
+            auto kvCachePathOpt = chatManager.getCurrentKvChatPath(
+                modelManager.getCurrentModelName().value(),
+                modelManager.getCurrentVariantType()
+            );
+            if (kvCachePathOpt.has_value()) {
+                completionParams.kvCacheFilePath = kvCachePathOpt.value().string();
+            }
+
+            return completionParams;
+        }
+
+        ChatCompletionParameters buildChatCompletionParameters(
+            const Chat::ChatHistory& currentChat
+        ) {
+            ChatCompletionParameters completionParams;
+            auto& presetManager = Model::PresetManager::getInstance();
+            auto& modelManager = Model::ModelManager::getInstance();
+            auto& chatManager = Chat::ChatManager::getInstance();
+
+            auto currentPresetOpt = presetManager.getCurrentPreset();
+            if (!currentPresetOpt.has_value()) {
+                std::cerr << "[ChatSection] No preset available. Using default values.\n";
+            }
+            const auto& currentPreset = currentPresetOpt.value().get();
+
+            // Add the system prompt as the first message.
+            completionParams.messages.push_back({ "system", currentPreset.systemPrompt.c_str() });
+
+            // Append all previous messages.
+            for (const auto& msg : currentChat.messages) {
+                completionParams.messages.push_back({ msg.role.c_str(), msg.content.c_str() });
+            }
+
+            // Copy over additional parameters.
+            completionParams.randomSeed = currentPreset.random_seed;
+            completionParams.maxNewTokens = static_cast<int>(currentPreset.max_new_tokens);
+            completionParams.minLength = static_cast<int>(currentPreset.min_length);
+            completionParams.temperature = currentPreset.temperature;
+            completionParams.topP = currentPreset.top_p;
+            completionParams.streaming = true;
+
+            // Set the kvCacheFilePath using the current model and variant.
+            auto kvCachePathOpt = chatManager.getCurrentKvChatPath(
+                modelManager.getCurrentModelName().value(),
+                modelManager.getCurrentVariantType()
+            );
+            if (kvCachePathOpt.has_value()) {
+                completionParams.kvCacheFilePath = kvCachePathOpt.value().string();
+            }
+
+            return completionParams;
+        }
 
         void setStreamingCallback(std::function<void(const std::string&, const float, const int)> callback)
         {
