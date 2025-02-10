@@ -1163,6 +1163,7 @@ namespace Model
         std::string                                     m_currentVariantType;
         size_t                                          m_currentModelIndex;
         std::vector<std::future<void>>                  m_downloadFutures;
+        std::future<bool>                               m_engineLoadFuture;
         std::unordered_map<std::string, std::string>    m_modelVariantMap;
         bool                                            m_modelLoaded = false;
 		bool                                            m_modelGenerationInProgress = false;

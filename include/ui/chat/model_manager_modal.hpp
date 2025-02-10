@@ -19,65 +19,78 @@ namespace ModelManagerConstants {
 
 class DeleteModelModalComponent {
 public:
-	DeleteModelModalComponent(int index, const std::string& variant)
-		: m_index(index), m_variant(variant)
-	{
+    DeleteModelModalComponent() {
         ButtonConfig cancelButton;
         cancelButton.id = "##cancelDeleteModel";
-		cancelButton.label = "Cancel";
-		cancelButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-		cancelButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
-		cancelButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
-		cancelButton.textColor = RGBAToImVec4(255, 255, 255, 255);
-		cancelButton.size = ImVec2(130, 0);
-		cancelButton.onClick = []() { ImGui::CloseCurrentPopup(); };
+        cancelButton.label = "Cancel";
+        cancelButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+        cancelButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
+        cancelButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
+        cancelButton.textColor = RGBAToImVec4(255, 255, 255, 255);
+        cancelButton.size = ImVec2(130, 0);
+        cancelButton.onClick = []() { ImGui::CloseCurrentPopup(); };
 
-		ButtonConfig confirmButton;
-		confirmButton.id = "##confirmDeleteModel";
-		confirmButton.label = "Confirm";
-		confirmButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
-		confirmButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
-		confirmButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
-		confirmButton.size = ImVec2(130, 0);
-		confirmButton.onClick = [index, variant]() {
-			Model::ModelManager::getInstance().deleteDownloadedModel(index, variant);
-			ImGui::CloseCurrentPopup();
-			};
+        ButtonConfig confirmButton;
+        confirmButton.id = "##confirmDeleteModel";
+        confirmButton.label = "Confirm";
+        confirmButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
+        confirmButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
+        confirmButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
+        confirmButton.size = ImVec2(130, 0);
+        confirmButton.onClick = [this]() {
+            if (m_index != -1 && !m_variant.empty()) {
+                Model::ModelManager::getInstance().deleteDownloadedModel(m_index, m_variant);
+                ImGui::CloseCurrentPopup();
+            }
+            };
 
-		buttons.push_back(cancelButton);
-		buttons.push_back(confirmButton);
-	}
+        buttons.push_back(cancelButton);
+        buttons.push_back(confirmButton);
+    }
+
+    void setModel(int index, const std::string& variant) {
+        m_index = index;
+        m_variant = variant;
+    }
 
     void render(bool& openModal) {
+        if (m_index == -1 || m_variant.empty()) {
+            openModal = false;
+            return;
+        }
+
         ModalConfig config{
-            "Confirm Delete Model", // Title
-            "Confirm Delete Model", // Identifier
-            ImVec2(300, 96),        // Size
+            "Confirm Delete Model",
+            "Confirm Delete Model###DeleteModelModal",
+            ImVec2(300, 96),
             [this]() {
                 Button::renderGroup(buttons, 16, ImGui::GetCursorPosY() + 8);
             },
-            openModal // External open flag.
+            openModal
         };
         config.padding = ImVec2(16.0f, 8.0f);
         ModalWindow::render(config);
-        if (!ImGui::IsPopupOpen(config.id.c_str()))
+
+        if (!ImGui::IsPopupOpen(config.id.c_str())) {
             openModal = false;
+            m_index = -1;
+            m_variant.clear();
+        }
     }
 
 private:
-	std::string m_variant;
-	int m_index;
-
-    // widget configs
+    int m_index = -1;
+    std::string m_variant;
     std::vector<ButtonConfig> buttons;
 };
 
 class ModelCardRenderer {
 public:
-    ModelCardRenderer(int index, const Model::ModelData& modelData)
-        : m_index(index), m_model(modelData)
+    ModelCardRenderer(int index, const Model::ModelData& modelData,
+        std::function<void(int, const std::string&)> onDeleteRequested)
+        : m_index(index), m_model(modelData), m_onDeleteRequested(onDeleteRequested)
     {
-		selectButton.id = "##select" + std::to_string(m_index);
+        selectButton.id = "##select" + std::to_string(m_index);
         selectButton.size = ImVec2(ModelManagerConstants::cardWidth - 18, 0);
 
         deleteButton.id = "##delete" + std::to_string(m_index);
@@ -86,6 +99,10 @@ public:
         deleteButton.hoverColor = RGBAToImVec4(220, 70, 70, 255);
         deleteButton.activeColor = RGBAToImVec4(200, 50, 50, 255);
         deleteButton.icon = ICON_CI_TRASH;
+        deleteButton.onClick = [this]() {
+            std::string currentVariant = Model::ModelManager::getInstance().getCurrentVariantForModel(m_model.name);
+            m_onDeleteRequested(m_index, currentVariant);
+            };
 
         authorLabel.id = "##modelAuthor" + std::to_string(m_index);
         authorLabel.label = m_model.author;
@@ -103,11 +120,9 @@ public:
     }
 
     void render() {
-        // Retrieve the current variant from the model manager.
         auto& manager = Model::ModelManager::getInstance();
         std::string currentVariant = manager.getCurrentVariantForModel(m_model.name);
 
-        // Begin a group with custom background and rounding.
         ImGui::BeginGroup();
         ImGui::PushStyleColor(ImGuiCol_ChildBg, RGBAToImVec4(26, 26, 26, 255));
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
@@ -119,34 +134,15 @@ public:
         ImGui::Spacing();
         renderVariantOptions(currentVariant);
 
-        // Position the extra button row near the bottom of the card.
         ImGui::SetCursorPosY(ModelManagerConstants::cardHeight - 35);
 
-        // Determine state: selected and downloaded.
         bool isSelected = (m_model.name == manager.getCurrentModelName() &&
             currentVariant == manager.getCurrentVariantType());
-        bool isDownloaded = Model::ModelManager::getInstance().isModelDownloaded(m_index, currentVariant);
+        bool isDownloaded = manager.isModelDownloaded(m_index, currentVariant);
 
-        if (!isDownloaded)
-        {
-            // Render Download button.
-            selectButton.label = "Download";
-            selectButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
-            selectButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
-            selectButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
-            selectButton.icon = ICON_CI_CLOUD_DOWNLOAD;
-            selectButton.borderSize = 1.0f;
-            selectButton.onClick = [this, currentVariant]() {
-                // Commit the current variant before downloading.
-                std::string variant = Model::ModelManager::getInstance().getCurrentVariantForModel(m_model.name);
-                Model::ModelManager::getInstance().setPreferredVariant(m_model.name, variant);
-                Model::ModelManager::getInstance().downloadModel(m_index, variant);
-                };
-
-            // If download is already in progress, change to a Cancel button.
-            double progress = Model::ModelManager::getInstance().getModelDownloadProgress(m_index, currentVariant);
-            if (progress > 0.0)
-            {
+        if (!isDownloaded) {
+            double progress = manager.getModelDownloadProgress(m_index, currentVariant);
+            if (progress > 0.0) {
                 selectButton.label = "Cancel";
                 selectButton.backgroundColor = RGBAToImVec4(200, 50, 50, 255);
                 selectButton.hoverColor = RGBAToImVec4(220, 70, 70, 255);
@@ -156,29 +152,32 @@ public:
                     Model::ModelManager::getInstance().cancelDownload(m_index, currentVariant);
                     };
 
-                // Move cursor up a bit before drawing progress bar.
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
-
-				// Render progress bar.
-                {
-                    float fraction = static_cast<float>(progress) / 100.0f;
-                    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
-                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-                    ImGui::ProgressBar(fraction, ImVec2(ModelManagerConstants::cardWidth - 18, 6), "");
-                    ImGui::PopStyleVar();
-                    ImGui::PopStyleColor();
-
-					ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
-                }
+                float fraction = static_cast<float>(progress) / 100.0f;
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+                ImGui::ProgressBar(fraction, ImVec2(ModelManagerConstants::cardWidth - 18, 6), "");
+                ImGui::PopStyleVar();
+                ImGui::PopStyleColor();
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
+            }
+            else {
+                selectButton.label = "Download";
+                selectButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
+                selectButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
+                selectButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
+                selectButton.icon = ICON_CI_CLOUD_DOWNLOAD;
+                selectButton.borderSize = 1.0f;
+                selectButton.onClick = [this, currentVariant]() {
+                    Model::ModelManager::getInstance().setPreferredVariant(m_model.name, currentVariant);
+                    Model::ModelManager::getInstance().downloadModel(m_index, currentVariant);
+                    };
             }
         }
-        else
-        {
-            // Render Select button if model is already downloaded.
+        else {
             selectButton.label = isSelected ? "selected" : "select";
             selectButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-            if (isSelected)
-            {
+            if (isSelected) {
                 selectButton.icon = ICON_CI_PASS;
                 selectButton.borderColor = RGBAToImVec4(172, 131, 255, 255 / 4);
                 selectButton.borderSize = 1.0f;
@@ -188,27 +187,18 @@ public:
                 std::string variant = Model::ModelManager::getInstance().getCurrentVariantForModel(m_model.name);
                 Model::ModelManager::getInstance().switchModel(m_model.name, variant);
                 };
-            // Reduce width to leave space for a delete button.
             selectButton.size = ImVec2(ModelManagerConstants::cardWidth - 18 - 5 - 24, 0);
         }
+
         Button::render(selectButton);
 
-        // Render Delete button if model is downloaded.
-        static bool openModelDeleteModal = false;
-        if (isDownloaded)
-        {
+        if (isDownloaded) {
             ImGui::SameLine();
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2);
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 24 - 2);
-
-            deleteButton.onClick = []() { openModelDeleteModal = true; };
             Button::render(deleteButton);
         }
 
-		DeleteModelModalComponent deleteModelModal(m_index, currentVariant);
-		deleteModelModal.render(openModelDeleteModal);
-
-        // End Child and Group.
         ImGui::EndChild();
         if (ImGui::IsItemHovered() || isSelected) {
             ImVec2 min = ImGui::GetItemRectMin();
@@ -225,43 +215,36 @@ public:
 private:
     int m_index;
     const Model::ModelData& m_model;
+    std::function<void(int, const std::string&)> m_onDeleteRequested;
 
-    // Render model author and model name.
     void renderHeader() {
         Label::render(authorLabel);
         Label::render(nameLabel);
     }
 
-    // Render all variant-selection buttons.
     void renderVariantOptions(const std::string& currentVariant) {
-        // Helper lambda to render a variant button with its label.
-        auto renderVariant = [this, &currentVariant](const std::string& variant,
-            const std::string& labelText) {
-                ButtonConfig btnConfig;
-                btnConfig.id = "##" + variant + std::to_string(m_index);
-                btnConfig.icon = (currentVariant == variant) ? ICON_CI_CHECK : ICON_CI_CLOSE;
-                if (currentVariant != variant) {
-                    btnConfig.textColor = RGBAToImVec4(34, 34, 34, 255);
-                }
-                btnConfig.fontSize = FontsManager::SM;
-                btnConfig.size = ImVec2(24, 0);
-                btnConfig.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-                btnConfig.onClick = [variant, this]() {
-                    Model::ModelManager::getInstance().setPreferredVariant(m_model.name, variant);
-                    };
-                Button::render(btnConfig);
+        auto renderVariant = [this, &currentVariant](const std::string& variant, const std::string& label) {
+            ButtonConfig btnConfig;
+            btnConfig.id = "##" + variant + std::to_string(m_index);
+            btnConfig.icon = (currentVariant == variant) ? ICON_CI_CHECK : ICON_CI_CLOSE;
+            btnConfig.textColor = (currentVariant != variant) ? RGBAToImVec4(34, 34, 34, 255) : ImVec4(1, 1, 1, 1);
+            btnConfig.fontSize = FontsManager::SM;
+            btnConfig.size = ImVec2(24, 0);
+            btnConfig.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+            btnConfig.onClick = [variant, this]() {
+                Model::ModelManager::getInstance().setPreferredVariant(m_model.name, variant);
+                };
+            Button::render(btnConfig);
 
-                // Add a small spacing between button and label.
-                ImGui::SameLine(0.0f, 4.0f);
-
-                LabelConfig variantLabel;
-                variantLabel.id = "##" + variant + "Label" + std::to_string(m_index);
-                variantLabel.label = labelText;
-                variantLabel.size = ImVec2(0, 0);
-                variantLabel.fontType = FontsManager::REGULAR;
-                variantLabel.fontSize = FontsManager::SM;
-                variantLabel.alignment = Alignment::LEFT;
-                Label::render(variantLabel);
+            ImGui::SameLine(0.0f, 4.0f);
+            LabelConfig variantLabel;
+            variantLabel.id = "##" + variant + "Label" + std::to_string(m_index);
+            variantLabel.label = label;
+            variantLabel.size = ImVec2(0, 0);
+            variantLabel.fontType = FontsManager::REGULAR;
+            variantLabel.fontSize = FontsManager::SM;
+            variantLabel.alignment = Alignment::LEFT;
+            Label::render(variantLabel);
             };
 
         renderVariant("Full Precision", "Use Full Precision");
@@ -271,30 +254,27 @@ private:
         renderVariant("4-bit Quantized", "Use 4-bit quantization");
     }
 
-    // Button configs
     ButtonConfig deleteButton;
-	ButtonConfig selectButton;
-	ButtonConfig variantButton;
-
-	// Label configs
+    ButtonConfig selectButton;
     LabelConfig nameLabel;
-	LabelConfig authorLabel;
-	LabelConfig variantLabel;
+    LabelConfig authorLabel;
 };
 
+// TODO: Fix the nested modal
+// when i tried to make the delete modal rendered on top of the model modal, it simply
+// either didn't show up at all, or the model modal closed, and the entire application
+// freezed. I tried to fix it, but I couldn't find a solution. I'm leaving it as is for now.
+// Time wasted: 18 hours.
 class ModelManagerModal {
 public:
-    // The render method follows the same pattern as SaveAsDialogComponent.
-    // The external boolean (showDialog) controls whether the modal is open.
+    ModelManagerModal() = default;
+
     void render(bool& showDialog) {
-        // Get the current window size (or fallback to main viewport).
         ImVec2 windowSize = ImGui::GetWindowSize();
-        if (windowSize.x == 0)
-            windowSize = ImGui::GetMainViewport()->Size;
+        if (windowSize.x == 0) windowSize = ImGui::GetMainViewport()->Size;
         const float targetWidth = windowSize.x;
         float availableWidth = targetWidth - (2 * ModelManagerConstants::padding);
 
-        // Calculate how many cards fit in one row.
         int numCards = static_cast<int>(availableWidth / (ModelManagerConstants::cardWidth + ModelManagerConstants::cardSpacing));
         float modalWidth = (numCards * (ModelManagerConstants::cardWidth + ModelManagerConstants::cardSpacing)) + (2 * ModelManagerConstants::padding);
         if (targetWidth - modalWidth > (ModelManagerConstants::cardWidth + ModelManagerConstants::cardSpacing) * 0.5f) {
@@ -303,40 +283,56 @@ public:
         }
         ImVec2 modalSize = ImVec2(modalWidth, windowSize.y * ModelManagerConstants::modalVerticalScale);
 
-        // Lambda that renders the grid of model cards.
-        auto renderCards = [numCards](void) {
+        auto renderCards = [numCards, this]() {
             auto& manager = Model::ModelManager::getInstance();
-            const std::vector<Model::ModelData>& models = manager.getModels();
+            const auto& models = manager.getModels();
             for (size_t i = 0; i < models.size(); ++i) {
-                // Start a new row.
                 if (i % numCards == 0) {
                     ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding,
                         ImGui::GetCursorPosY() + (i > 0 ? ModelManagerConstants::cardSpacing : 0)));
                 }
-                ModelCardRenderer card(static_cast<int>(i), models[i]);
+                ModelCardRenderer card(static_cast<int>(i), models[i],
+                    [this](int index, const std::string& variant) {
+                        m_deleteModal.setModel(index, variant);
+                        m_deleteModalOpen = true;
+                    });
                 card.render();
-                // Add horizontal spacing if this is not the last card in the row.
                 if ((i + 1) % numCards != 0 && i < models.size() - 1) {
                     ImGui::SameLine(0.0f, ModelManagerConstants::cardSpacing);
                 }
             }
             };
 
-        // Set up the modal configuration.
         ModalConfig config{
-            "Model Manager",     // Title
-            "Model Manager",     // Identifier
+            "Model Manager",
+            "Model Manager",
             modalSize,
-            renderCards,         // Content renderer (grid of cards)
-            showDialog           // External open flag.
+            renderCards,
+            showDialog
         };
         config.padding = ImVec2(ModelManagerConstants::padding, 8.0f);
-
-        // Render the modal.
         ModalWindow::render(config);
 
-        // If the popup is no longer open, reset the open flag.
-        if (!ImGui::IsPopupOpen(config.id.c_str()))
+        // Render the delete modal if it’s open.
+        if (m_deleteModalOpen) {
+            m_deleteModal.render(m_deleteModalOpen);
+        }
+
+        if (m_wasDeleteModalOpen && !m_deleteModalOpen) {
+            showDialog = true;
+            ImGui::OpenPopup(config.id.c_str());
+        }
+        m_wasDeleteModalOpen = m_deleteModalOpen;
+
+        if (!ImGui::IsPopupOpen(config.id.c_str())) {
             showDialog = false;
+        }
     }
+
+private:
+    DeleteModelModalComponent m_deleteModal;
+    bool m_deleteModalOpen = false;
+
+    // This flag tracks if the delete modal was open on the previous frame.
+    bool m_wasDeleteModalOpen = false;
 };

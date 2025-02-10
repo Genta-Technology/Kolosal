@@ -13,6 +13,7 @@
 #include "config.hpp"
 #include "common.hpp"
 #include "ui/fonts.hpp"
+#include <imgui_internal.h>
 
 enum ButtonState
 {
