@@ -32,6 +32,12 @@ public:
 		copyButtonBase.id = "##copy";
 		copyButtonBase.icon = ICON_CI_COPY;
 		copyButtonBase.size = ImVec2(Config::Button::WIDTH, 0);
+        copyButtonBase.tooltip = "Copy Text";
+
+        regenerateButtonBase.id = "##regen";
+        regenerateButtonBase.icon = ICON_CI_DEBUG_RERUN;
+        regenerateButtonBase.size = ImVec2(Config::Button::WIDTH, 0);
+        regenerateButtonBase.tooltip = "Regenerate Response";
 
 		timestampColor = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
 		thinkTextColor = ImVec4(0.7f, 0.7f, 0.7f, 0.7f);
@@ -209,8 +215,21 @@ private:
         ImGui::SameLine();
         ImGui::SetCursorPosX(
             ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x -
+            (msg.role == "assistant" ? 2 : 1) *
             Config::Button::WIDTH - bubblePadding
         );
+
+        std::vector<ButtonConfig> helperButtons;
+
+        if (msg.role == "assistant")
+        {
+            ButtonConfig regenBtn = regenerateButtonBase;
+            regenBtn.id = "##regen" + std::to_string(index);
+            //regenBtn.onClick = [index]() {
+            //
+            //};
+            helperButtons.push_back(regenBtn);
+        }
 
         ButtonConfig copyBtn = copyButtonBase;
         copyBtn.id = "##copy" + std::to_string(index);
@@ -219,7 +238,9 @@ private:
                 ImGui::SetClipboardText(chat->messages[index].content.c_str());
             }
             };
-        Button::render(copyBtn);
+        helperButtons.push_back(copyBtn);
+
+        Button::renderGroup(helperButtons, ImGui::GetCursorPosX(), ImGui::GetCursorPosY());
 
         ImGui::PopStyleColor();
     }
@@ -264,6 +285,8 @@ private:
 
     ButtonConfig thinkButtonBase;
     ButtonConfig copyButtonBase;
+    ButtonConfig regenerateButtonBase;
+
     ImVec4 timestampColor;
     ImVec4 thinkTextColor;
     ImVec4 bubbleBgColorUser;
