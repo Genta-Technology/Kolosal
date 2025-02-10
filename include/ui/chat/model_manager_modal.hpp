@@ -157,9 +157,19 @@ public:
                     };
 
                 // Move cursor up a bit before drawing progress bar.
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 24);
-                ImGui::ProgressBar(static_cast<float>(progress) / 100.0f,
-                    ImVec2(ModelManagerConstants::cardWidth - 18, 0));
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
+
+				// Render progress bar.
+                {
+                    float fraction = static_cast<float>(progress) / 100.0f;
+                    ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
+                    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+                    ImGui::ProgressBar(fraction, ImVec2(ModelManagerConstants::cardWidth - 18, 6), "");
+                    ImGui::PopStyleVar();
+                    ImGui::PopStyleColor();
+
+					ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
+                }
             }
         }
         else
@@ -169,8 +179,6 @@ public:
             selectButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
             if (isSelected)
             {
-                ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
-
                 selectButton.icon = ICON_CI_PASS;
                 selectButton.borderColor = RGBAToImVec4(172, 131, 255, 255 / 4);
                 selectButton.borderSize = 1.0f;
