@@ -306,6 +306,8 @@ namespace Model
                 return -1;
             }
 
+            m_jobIds.push_back(jobId);
+
             std::thread([this, jobId]() {
                 // Poll while job is running or until the engine says it's done
 				this->setModelGenerationInProgress(true);
@@ -331,6 +333,11 @@ namespace Model
                 }
 
 				this->setModelGenerationInProgress(false);
+
+                {
+                    // remove job id from m_jobIds
+					m_jobIds.erase(std::remove(m_jobIds.begin(), m_jobIds.end(), jobId), m_jobIds.end());
+                }
 
                 // Reset jobid tracking on chat manager to -1
                 {
@@ -366,6 +373,8 @@ namespace Model
                 return -1;
             }
 
+            m_jobIds.push_back(jobId);
+
             std::thread([this, jobId]() {
                 // Poll while job is running or until the engine says it's done
 				this->setModelGenerationInProgress(true);
@@ -391,6 +400,11 @@ namespace Model
                 }
 
 				this->setModelGenerationInProgress(false);
+
+				{
+					// remove job id from m_jobIds
+					m_jobIds.erase(std::remove(m_jobIds.begin(), m_jobIds.end(), jobId), m_jobIds.end());
+				}
 
 				// save the chat history
 				{
