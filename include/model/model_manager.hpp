@@ -183,6 +183,18 @@ namespace Model
             m_streamingCallback = std::move(callback);
         }
 
+        bool stopJob(int jobId)
+        {
+            std::shared_lock<std::shared_mutex> lock(m_mutex);
+            if (!m_inferenceEngine)
+            {
+                std::cerr << "[ModelManager] Inference engine is not initialized.\n";
+                return false;
+            }
+            m_inferenceEngine->stopJob(jobId);
+            return true;
+        }
+
         int startCompletionJob(const CompletionParameters& params)
         {
             {
@@ -207,6 +219,7 @@ namespace Model
 
             std::thread([this, jobId]() {
                 // Poll while job is running or until the engine says it's done
+				this->setModelGenerationInProgress(true);
                 while (true)
                 {
                     if (this->m_inferenceEngine->hasJobError(jobId)) break;
@@ -227,6 +240,8 @@ namespace Model
                     // Sleep briefly to avoid busy-waiting
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
+
+				this->setModelGenerationInProgress(false);
 
                 // Reset jobid tracking on chat manager to -1
                 {
@@ -264,6 +279,8 @@ namespace Model
 
             std::thread([this, jobId]() {
                 // Poll while job is running or until the engine says it's done
+				this->setModelGenerationInProgress(true);
+
                 while (true)
                 {
                     if (this->m_inferenceEngine->hasJobError(jobId)) break;
@@ -283,6 +300,8 @@ namespace Model
                     // Sleep briefly to avoid busy-waiting
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }
+
+				this->setModelGenerationInProgress(false);
 
 				// save the chat history
 				{
@@ -393,6 +412,19 @@ namespace Model
             m_modelLoaded = false;
         }
 
+		bool isCurrentlyGenerating() const
+		{
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			return m_modelGenerationInProgress;
+		}
+
+		bool setModelGenerationInProgress(bool inProgress)
+		{
+			std::unique_lock<std::shared_mutex> lock(m_mutex);
+			m_modelGenerationInProgress = inProgress;
+			return true;
+		}
+
     private:
         explicit ModelManager(std::unique_ptr<IModelPersistence> persistence)
             : m_persistence(std::move(persistence))
@@ -402,6 +434,7 @@ namespace Model
             , m_createInferenceEnginePtr(nullptr)
 			, m_inferenceEngine(nullptr)
 			, m_modelLoaded(false)
+            , m_modelGenerationInProgress(false)
         {
             loadModelsAsync();
 
@@ -1020,6 +1053,7 @@ namespace Model
         std::vector<std::future<void>>                  m_downloadFutures;
         std::unordered_map<std::string, std::string>    m_modelVariantMap;
         bool                                            m_modelLoaded = false;
+		bool                                            m_modelGenerationInProgress = false;
 
 #ifdef _WIN32
         HMODULE m_inferenceLibHandle = nullptr;

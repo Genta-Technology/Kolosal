@@ -7,3 +7,6 @@
 [submodule "external/ImGuiColorTextEdit"]
 	path = external/ImGuiColorTextEdit
 	url = https://github.com/BalazsJako/ImGuiColorTextEdit
+[submodule "external/imspinner"]
+	path = external/imspinner
+	url = https://github.com/dalerank/imspinner

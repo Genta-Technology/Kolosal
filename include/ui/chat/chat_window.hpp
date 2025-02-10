@@ -180,6 +180,12 @@ public:
         clearChatButtonConfig.tooltip = "Clear Chat";
         clearChatButtonConfig.onClick = [this]() { clearChatModal.open(); };
 
+        sendButtonConfig.id = "##sendButton";
+        sendButtonConfig.icon = ICON_CI_SEND;
+        sendButtonConfig.size = ImVec2(24, 0);
+        sendButtonConfig.alignment = Alignment::CENTER;
+        sendButtonConfig.tooltip = "Send Message";
+
         inputPlaceholderText = "Type a message and press Enter to send (Ctrl+Enter or Shift+Enter for new line)";
     }
 
@@ -320,10 +326,89 @@ private:
 
         // Set additional configuration parameters.
         inputConfig.placeholderText = inputPlaceholderText;
-        inputConfig.flags = ImGuiInputTextFlags_EnterReturnsTrue |
-            ImGuiInputTextFlags_CtrlEnterForNewLine |
+        inputConfig.flags = ImGuiInputTextFlags_CtrlEnterForNewLine |
             ImGuiInputTextFlags_ShiftEnterForNewLine;
-        inputConfig.processInput = processInput;
+
+        sendButtonConfig.state = ButtonState::NORMAL;
+        if (!Model::ModelManager::getInstance().isCurrentlyGenerating()) 
+        {
+            inputConfig.flags = ImGuiInputTextFlags_EnterReturnsTrue |
+                                ImGuiInputTextFlags_CtrlEnterForNewLine |
+                                ImGuiInputTextFlags_ShiftEnterForNewLine;
+            inputConfig.processInput = processInput;
+
+            sendButtonConfig.icon = ICON_CI_SEND;
+            sendButtonConfig.tooltip = "Start generation";
+            sendButtonConfig.onClick = [&, this]() {
+                auto& chatManager = Chat::ChatManager::getInstance();
+                auto currentChat = chatManager.getCurrentChat();
+
+                if (!currentChat.has_value()) {
+                    std::cerr << "[ChatSection] No chat selected. Cannot send message.\n";
+                    return;
+                }
+
+                if (!Model::ModelManager::getInstance().getCurrentModelName().has_value()) {
+                    std::cerr << "[ChatSection] No model selected. Cannot send message.\n";
+                    return;
+                }
+
+                // Append the user message.
+                Chat::Message userMessage;
+                userMessage.id = static_cast<int>(currentChat.value().messages.size()) + 1;
+                userMessage.role = "user";
+                userMessage.content = inputTextBuffer;
+                chatManager.addMessageToCurrentChat(userMessage);
+
+                // Build the completion parameters.
+                Model::PresetManager& presetManager = Model::PresetManager::getInstance();
+                Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+
+                ChatCompletionParameters completionParams;
+                completionParams.messages.push_back(
+                    { "system", presetManager.getCurrentPreset().value().get().systemPrompt.c_str() });
+                for (const auto& msg : currentChat.value().messages) {
+                    completionParams.messages.push_back({ msg.role.c_str(), msg.content.c_str() });
+                }
+                completionParams.messages.push_back({ "user", inputTextBuffer.c_str() });
+
+                const auto& currentPreset = presetManager.getCurrentPreset().value().get();
+                completionParams.randomSeed = currentPreset.random_seed;
+                completionParams.maxNewTokens = static_cast<int>(currentPreset.max_new_tokens);
+                completionParams.minLength = static_cast<int>(currentPreset.min_length);
+                completionParams.temperature = currentPreset.temperature;
+                completionParams.topP = currentPreset.top_p;
+                completionParams.streaming = true;
+                completionParams.kvCacheFilePath = chatManager.getCurrentKvChatPath(
+                    modelManager.getCurrentModelName().value(),
+                    modelManager.getCurrentVariantType()
+                ).value().string();
+
+                int jobId = modelManager.startChatCompletionJob(completionParams);
+                if (!chatManager.setCurrentJobId(jobId)) {
+                    std::cerr << "[ChatSection] Failed to set the current job ID.\n";
+                }
+                };
+
+            if (strlen(inputTextBuffer.data()) == 0)
+            {
+                sendButtonConfig.state = ButtonState::DISABLED;
+            }
+        }
+        else
+        {
+            inputConfig.flags = ImGuiInputTextFlags_CtrlEnterForNewLine |
+                                ImGuiInputTextFlags_ShiftEnterForNewLine;
+            inputConfig.processInput = nullptr;
+
+            sendButtonConfig.icon = ICON_CI_DEBUG_STOP;
+            sendButtonConfig.tooltip = "Stop generation";
+            sendButtonConfig.onClick = []() {
+                Model::ModelManager::getInstance().stopJob(
+                    Chat::ChatManager::getInstance().getCurrentJobId()
+                );
+            };
+        }
 
         // Draw a background rectangle for the input field.
         ImVec2 screenPos = ImGui::GetCursorScreenPos();
@@ -341,6 +426,12 @@ private:
         // Position and render the chat feature buttons.
         ImVec2 cursorPos = ImGui::GetCursorPos();
         renderChatFeatureButtons(cursorPos.x + 10, cursorPos.y);
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x + openModelManagerConfig.size.x + clearChatButtonConfig.size.x);
+
+        Button::render(sendButtonConfig);
+
         ImGui::EndGroup();
 
         // Ensure the text buffer remains at a fixed size.
@@ -352,6 +443,7 @@ private:
     ButtonConfig renameButtonConfig;
     ButtonConfig openModelManagerConfig;
     ButtonConfig clearChatButtonConfig;
+    ButtonConfig sendButtonConfig;
     std::string inputPlaceholderText;
 
     // State variables.
