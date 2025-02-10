@@ -552,6 +552,7 @@ namespace Model
 
         ~ModelManager()
         {
+            stopAllJobs();
             cancelAllDownloads();
 
             if (m_inferenceEngine && m_destroyInferenceEnginePtr) {
@@ -1115,6 +1116,14 @@ namespace Model
             return true;
         }
 
+        void stopAllJobs()
+        {
+            for (auto jobId : m_jobIds)
+            {
+                stopJob(jobId);
+            }
+        }
+
         void cancelAllDownloads() {
             std::unique_lock<std::shared_mutex> lock(m_mutex);
             for (auto& model : m_models) {
@@ -1143,6 +1152,7 @@ namespace Model
         std::unordered_map<std::string, std::string>    m_modelVariantMap;
         bool                                            m_modelLoaded = false;
 		bool                                            m_modelGenerationInProgress = false;
+        std::vector<int>                                m_jobIds;
 
 #ifdef _WIN32
         HMODULE m_inferenceLibHandle = nullptr;
