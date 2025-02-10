@@ -262,179 +262,180 @@ private:
         modelManagerModal.render(openModelSelectionModal);
     }
 
-    // Render the input field and then place the chat feature buttons in its vicinity.
-    void renderInputField(const float inputWidth) {
-        // Lambda to process the user's input.
-        auto processInput = [this](const std::string& input) {
-            auto& chatManager = Chat::ChatManager::getInstance();
-            auto currentChat = chatManager.getCurrentChat();
+    void handleUserMessage(const std::string& message) {
+        auto& chatManager = Chat::ChatManager::getInstance();
+        auto currentChatOpt = chatManager.getCurrentChat();
+        if (!currentChatOpt.has_value()) {
+            std::cerr << "[ChatSection] No chat selected. Cannot send message.\n";
+            return;
+        }
 
-            if (!currentChat.has_value()) {
-                std::cerr << "[ChatSection] No chat selected. Cannot send message.\n";
-                return;
-            }
+        if (!Model::ModelManager::getInstance().getCurrentModelName().has_value()) {
+            std::cerr << "[ChatSection] No model selected. Cannot send message.\n";
+            return;
+        }
 
-            if (!Model::ModelManager::getInstance().getCurrentModelName().has_value()) {
-                std::cerr << "[ChatSection] No model selected. Cannot send message.\n";
-                return;
-            }
+        auto& currentChat = currentChatOpt.value();
 
-            // Append the user message.
-            Chat::Message userMessage;
-            userMessage.id = static_cast<int>(currentChat.value().messages.size()) + 1;
-            userMessage.role = "user";
-            userMessage.content = input;
-            chatManager.addMessageToCurrentChat(userMessage);
+        // Append the user message.
+        Chat::Message userMessage;
+        userMessage.id = static_cast<int>(currentChat.messages.size()) + 1;
+        userMessage.role = "user";
+        userMessage.content = message;
+        chatManager.addMessageToCurrentChat(userMessage);
 
-            // Build the completion parameters.
-            Model::PresetManager& presetManager = Model::PresetManager::getInstance();
-            Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+        // Build the completion parameters.
+        ChatCompletionParameters completionParams = buildChatCompletionParameters(currentChat, message);
 
-            ChatCompletionParameters completionParams;
-            completionParams.messages.push_back(
-                { "system", presetManager.getCurrentPreset().value().get().systemPrompt.c_str() });
-            for (const auto& msg : currentChat.value().messages) {
-                completionParams.messages.push_back({ msg.role.c_str(), msg.content.c_str() });
-            }
-            completionParams.messages.push_back({ "user", input.c_str() });
+        auto& modelManager = Model::ModelManager::getInstance();
+        int jobId = modelManager.startChatCompletionJob(completionParams);
+        if (!chatManager.setCurrentJobId(jobId)) {
+            std::cerr << "[ChatSection] Failed to set the current job ID.\n";
+        }
+    }
 
-            const auto& currentPreset = presetManager.getCurrentPreset().value().get();
-            completionParams.randomSeed = currentPreset.random_seed;
-            completionParams.maxNewTokens = static_cast<int>(currentPreset.max_new_tokens);
-            completionParams.minLength = static_cast<int>(currentPreset.min_length);
-            completionParams.temperature = currentPreset.temperature;
-            completionParams.topP = currentPreset.top_p;
-            completionParams.streaming = true;
-            completionParams.kvCacheFilePath = chatManager.getCurrentKvChatPath(
-                modelManager.getCurrentModelName().value(),
-                modelManager.getCurrentVariantType()
-            ).value().string();
+    ChatCompletionParameters buildChatCompletionParameters(
+        const Chat::ChatHistory& currentChat,
+        const std::string& userInput
+    ) {
+        ChatCompletionParameters completionParams;
+        auto& presetManager = Model::PresetManager::getInstance();
+        auto& modelManager = Model::ModelManager::getInstance();
+        auto& chatManager = Chat::ChatManager::getInstance();
 
-            int jobId = modelManager.startChatCompletionJob(completionParams);
-            if (!chatManager.setCurrentJobId(jobId)) {
-                std::cerr << "[ChatSection] Failed to set the current job ID.\n";
-            }
-            };
+        auto currentPresetOpt = presetManager.getCurrentPreset();
+        if (!currentPresetOpt.has_value()) {
+            std::cerr << "[ChatSection] No preset available. Using default values.\n";
+            // Optionally set default values here.
+        }
+        const auto& currentPreset = currentPresetOpt.value().get();
 
-        // Construct InputFieldConfig using its proper constructor.
-        InputFieldConfig inputConfig(
+        // Add the system prompt as the first message.
+        completionParams.messages.push_back({ "system", currentPreset.systemPrompt.c_str() });
+
+        // Append all previous messages.
+        for (const auto& msg : currentChat.messages) {
+            completionParams.messages.push_back({ msg.role.c_str(), msg.content.c_str() });
+        }
+
+        // Append the new user message.
+        completionParams.messages.push_back({ "user", userInput.c_str() });
+
+        // Copy over additional parameters.
+        completionParams.randomSeed = currentPreset.random_seed;
+        completionParams.maxNewTokens = static_cast<int>(currentPreset.max_new_tokens);
+        completionParams.minLength = static_cast<int>(currentPreset.min_length);
+        completionParams.temperature = currentPreset.temperature;
+        completionParams.topP = currentPreset.top_p;
+        completionParams.streaming = true;
+
+        // Set the kvCacheFilePath using the current model and variant.
+        auto kvCachePathOpt = chatManager.getCurrentKvChatPath(
+            modelManager.getCurrentModelName().value(),
+            modelManager.getCurrentVariantType()
+        );
+        if (kvCachePathOpt.has_value()) {
+            completionParams.kvCacheFilePath = kvCachePathOpt.value().string();
+        }
+
+        return completionParams;
+    }
+
+    InputFieldConfig createInputFieldConfig(
+        const float inputWidth,
+        std::function<void(const std::string&)> processInput
+    ) {
+        InputFieldConfig config(
             "##chatinput",
             ImVec2(inputWidth, m_inputHeight - Config::Font::DEFAULT_FONT_SIZE - 20),
             inputTextBuffer,
             focusInputField
         );
+        config.placeholderText = inputPlaceholderText;
+        // Default flags (may be adjusted later based on generation state).
+        config.flags = ImGuiInputTextFlags_CtrlEnterForNewLine | ImGuiInputTextFlags_ShiftEnterForNewLine;
+        config.processInput = processInput;
+        return config;
+    }
 
-        // Set additional configuration parameters.
-        inputConfig.placeholderText = inputPlaceholderText;
-        inputConfig.flags = ImGuiInputTextFlags_CtrlEnterForNewLine |
-            ImGuiInputTextFlags_ShiftEnterForNewLine;
+    void configureSendButton(InputFieldConfig& inputConfig) {
+        auto& modelManager = Model::ModelManager::getInstance();
 
-        sendButtonConfig.state = ButtonState::NORMAL;
-        if (!Model::ModelManager::getInstance().isCurrentlyGenerating()) 
-        {
+        if (!modelManager.isCurrentlyGenerating()) {
+            // Enable the input field to process an Enter key.
             inputConfig.flags = ImGuiInputTextFlags_EnterReturnsTrue |
-                                ImGuiInputTextFlags_CtrlEnterForNewLine |
-                                ImGuiInputTextFlags_ShiftEnterForNewLine;
-            inputConfig.processInput = processInput;
-
-            sendButtonConfig.icon = ICON_CI_SEND;
-            sendButtonConfig.tooltip = "Start generation";
-            sendButtonConfig.onClick = [&, this]() {
-                auto& chatManager = Chat::ChatManager::getInstance();
-                auto currentChat = chatManager.getCurrentChat();
-
-                if (!currentChat.has_value()) {
-                    std::cerr << "[ChatSection] No chat selected. Cannot send message.\n";
-                    return;
-                }
-
-                if (!Model::ModelManager::getInstance().getCurrentModelName().has_value()) {
-                    std::cerr << "[ChatSection] No model selected. Cannot send message.\n";
-                    return;
-                }
-
-                // Append the user message.
-                Chat::Message userMessage;
-                userMessage.id = static_cast<int>(currentChat.value().messages.size()) + 1;
-                userMessage.role = "user";
-                userMessage.content = inputTextBuffer;
-                chatManager.addMessageToCurrentChat(userMessage);
-
-                // Build the completion parameters.
-                Model::PresetManager& presetManager = Model::PresetManager::getInstance();
-                Model::ModelManager& modelManager = Model::ModelManager::getInstance();
-
-                ChatCompletionParameters completionParams;
-                completionParams.messages.push_back(
-                    { "system", presetManager.getCurrentPreset().value().get().systemPrompt.c_str() });
-                for (const auto& msg : currentChat.value().messages) {
-                    completionParams.messages.push_back({ msg.role.c_str(), msg.content.c_str() });
-                }
-                completionParams.messages.push_back({ "user", inputTextBuffer.c_str() });
-
-                const auto& currentPreset = presetManager.getCurrentPreset().value().get();
-                completionParams.randomSeed = currentPreset.random_seed;
-                completionParams.maxNewTokens = static_cast<int>(currentPreset.max_new_tokens);
-                completionParams.minLength = static_cast<int>(currentPreset.min_length);
-                completionParams.temperature = currentPreset.temperature;
-                completionParams.topP = currentPreset.top_p;
-                completionParams.streaming = true;
-                completionParams.kvCacheFilePath = chatManager.getCurrentKvChatPath(
-                    modelManager.getCurrentModelName().value(),
-                    modelManager.getCurrentVariantType()
-                ).value().string();
-
-                int jobId = modelManager.startChatCompletionJob(completionParams);
-                if (!chatManager.setCurrentJobId(jobId)) {
-                    std::cerr << "[ChatSection] Failed to set the current job ID.\n";
-                }
+                ImGuiInputTextFlags_CtrlEnterForNewLine |
+                ImGuiInputTextFlags_ShiftEnterForNewLine;
+            inputConfig.processInput = [this](const std::string& input) {
+                handleUserMessage(input);
                 };
 
-            if (strlen(inputTextBuffer.data()) == 0)
-            {
-                sendButtonConfig.state = ButtonState::DISABLED;
-            }
+            // Configure the send button for starting generation.
+            sendButtonConfig.icon = ICON_CI_SEND;
+            sendButtonConfig.tooltip = "Start generation";
+            sendButtonConfig.onClick = [this]() {
+                handleUserMessage(inputTextBuffer);
+                };
+
+            sendButtonConfig.state = (strlen(inputTextBuffer.data()) == 0)
+                ? ButtonState::DISABLED
+                : ButtonState::NORMAL;
         }
-        else
-        {
+        else {
+            // When a job is running, disable input processing.
             inputConfig.flags = ImGuiInputTextFlags_CtrlEnterForNewLine |
-                                ImGuiInputTextFlags_ShiftEnterForNewLine;
+                ImGuiInputTextFlags_ShiftEnterForNewLine;
             inputConfig.processInput = nullptr;
 
+            // Configure the send button for stopping generation.
             sendButtonConfig.icon = ICON_CI_DEBUG_STOP;
             sendButtonConfig.tooltip = "Stop generation";
             sendButtonConfig.onClick = []() {
                 Model::ModelManager::getInstance().stopJob(
                     Chat::ChatManager::getInstance().getCurrentJobId()
                 );
-            };
+                };
+            sendButtonConfig.state = ButtonState::NORMAL;
         }
+    }
 
-        // Draw a background rectangle for the input field.
+    void drawInputFieldBackground(const float width, const float height) {
         ImVec2 screenPos = ImGui::GetCursorScreenPos();
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(
             screenPos,
-            ImVec2(screenPos.x + inputWidth, screenPos.y + m_inputHeight),
+            ImVec2(screenPos.x + width, screenPos.y + height),
             ImGui::ColorConvertFloat4ToU32(Config::InputField::INPUT_FIELD_BG_COLOR),
             Config::InputField::FRAME_ROUNDING
         );
+    }
+
+    void renderInputField(const float inputWidth) {
+        auto processInput = [this](const std::string& input) {
+            handleUserMessage(input);
+            };
+
+        InputFieldConfig inputConfig = createInputFieldConfig(inputWidth, processInput);
+
+        configureSendButton(inputConfig);
+
+        drawInputFieldBackground(inputWidth, m_inputHeight);
 
         ImGui::BeginGroup();
         InputField::renderMultiline(inputConfig);
 
-        // Position and render the chat feature buttons.
         ImVec2 cursorPos = ImGui::GetCursorPos();
         renderChatFeatureButtons(cursorPos.x + 10, cursorPos.y);
 
         ImGui::SameLine();
-        ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x + openModelManagerConfig.size.x + clearChatButtonConfig.size.x);
-
+        ImGui::SetCursorPosX(
+            ImGui::GetContentRegionAvail().x +
+            openModelManagerConfig.size.x +
+            clearChatButtonConfig.size.x
+        );
         Button::render(sendButtonConfig);
-
         ImGui::EndGroup();
 
-        // Ensure the text buffer remains at a fixed size.
         inputTextBuffer.resize(Config::InputField::TEXT_SIZE, '\0');
     }
 
