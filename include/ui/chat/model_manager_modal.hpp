@@ -154,11 +154,7 @@ public:
 
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
                 float fraction = static_cast<float>(progress) / 100.0f;
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
-                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
 				ProgressBar::render(fraction, ImVec2(ModelManagerConstants::cardWidth - 18, 6));
-                ImGui::PopStyleVar();
-                ImGui::PopStyleColor();
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
             }
             else {
@@ -214,11 +210,7 @@ public:
             // Add progress bar if in loading-selected state
             if (isLoadingSelected) {
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
-                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
-                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
                 ProgressBar::render(0, ImVec2(ModelManagerConstants::cardWidth - 18, 6));
-                ImGui::PopStyleVar();
-                ImGui::PopStyleColor();
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
             }
         }

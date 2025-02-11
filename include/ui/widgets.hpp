@@ -1016,25 +1016,6 @@ namespace ModalWindow
 
 namespace ProgressBar
 {
-    void render(float fraction, const ImVec2& size)
-    {
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
-        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-        
-        if (fraction <= 0.0F)
-        {
-			IndeterminateProgressBar(size);
-        }
-        else
-        {
-            ImGui::ProgressBar(fraction, size, "");
-        }
-        ImGui::PopStyleVar();
-        ImGui::PopStyleColor();
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
-    }
-
     void IndeterminateProgressBar(const ImVec2& size_arg)
     {
         using namespace ImGui;
@@ -1061,6 +1042,23 @@ namespace ProgressBar
         RenderFrame(bb.Min, bb.Max, GetColorU32(ImGuiCol_FrameBg), true, style.FrameRounding);
         bb.Expand(ImVec2(-style.FrameBorderSize, -style.FrameBorderSize));
         RenderRectFilledRangeH(window->DrawList, bb, GetColorU32(ImGuiCol_PlotHistogram), t0, t1, style.FrameRounding);
+    }
+
+    void render(float fraction, const ImVec2& size)
+    {
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+        
+        if (fraction <= 0.0F)
+        {
+			IndeterminateProgressBar(size);
+        }
+        else
+        {
+            ImGui::ProgressBar(fraction, size, "");
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
     }
 }
 
