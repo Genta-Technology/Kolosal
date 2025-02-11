@@ -156,7 +156,7 @@ public:
                 float fraction = static_cast<float>(progress) / 100.0f;
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
                 ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-                ImGui::ProgressBar(fraction, ImVec2(ModelManagerConstants::cardWidth - 18, 6), "");
+				ProgressBar::render(fraction, ImVec2(ModelManagerConstants::cardWidth - 18, 6));
                 ImGui::PopStyleVar();
                 ImGui::PopStyleColor();
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
@@ -216,7 +216,7 @@ public:
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
                 ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
                 ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
-                ProgressBar::render(ImVec2(ModelManagerConstants::cardWidth - 18, 6));
+                ProgressBar::render(0, ImVec2(ModelManagerConstants::cardWidth - 18, 6));
                 ImGui::PopStyleVar();
                 ImGui::PopStyleColor();
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);

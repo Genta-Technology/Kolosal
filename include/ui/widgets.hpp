@@ -1016,7 +1016,26 @@ namespace ModalWindow
 
 namespace ProgressBar
 {
-    void render(const ImVec2& size_arg)
+    void render(float fraction, const ImVec2& size)
+    {
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+        
+        if (fraction <= 0.0F)
+        {
+			IndeterminateProgressBar(size);
+        }
+        else
+        {
+            ImGui::ProgressBar(fraction, size, "");
+        }
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor();
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
+    }
+
+    void IndeterminateProgressBar(const ImVec2& size_arg)
     {
         using namespace ImGui;
 
