@@ -58,51 +58,80 @@ namespace Model
             std::unique_lock<std::shared_mutex> lock(m_mutex);
 
             auto it = m_modelNameToIndex.find(modelName);
-            if (it == m_modelNameToIndex.end())
-            {
+            if (it == m_modelNameToIndex.end()) {
                 return false; // Model not found
             }
 
-            // Update state with the new model/variant.
+            // Update state with the new model/variant
             m_currentModelName = modelName;
             m_currentVariantType = variantType;
             m_currentModelIndex = it->second;
             setPreferredVariant(modelName, variantType);
 
-            // Get the desired variant.
+            // Get the desired variant
             ModelVariant* variant = getVariantLocked(m_currentModelIndex, m_currentVariantType);
-            if (variant)
-            {
-                // If the model variant is not downloaded, trigger its download.
-                if (!variant->isDownloaded && variant->downloadProgress == 0.0)
-                {
-                    startDownloadAsyncLocked(m_currentModelIndex, m_currentVariantType);
-                }
-                else
-                {
-                    // Update the variant's lastSelected time and save model data.
-                    variant->lastSelected = static_cast<int>(std::time(nullptr));
-                    m_persistence->saveModelData(m_models[m_currentModelIndex]);
-
-                    // Release the lock before loading the model to avoid potential deadlocks.
-                    lock.unlock();
-
-                    // Try to load the model into the inference engine.
-                    if (!loadModelIntoEngine())
-                    {
-                        std::cerr << "[ModelManager] Failed to load model into inference engine.\n";
-
-                        // Reacquire lock and reset state to default (no model loaded).
-                        std::unique_lock<std::shared_mutex> restoreLock(m_mutex);
-                        resetModelState();
-                        return false;
-                    }
-                    else
-                    {
-                        m_modelLoaded = true;
-                    }
-                }
+            if (!variant) {
+                return false;
             }
+
+            if (!variant->isDownloaded && variant->downloadProgress == 0.0) {
+                startDownloadAsyncLocked(m_currentModelIndex, m_currentVariantType);
+                return true;
+            }
+
+            // Handle already downloaded case
+            variant->lastSelected = static_cast<int>(std::time(nullptr));
+            m_persistence->saveModelData(m_models[m_currentModelIndex]);
+
+            // Prevent concurrent model loading
+            if (m_loadInProgress) {
+                std::cerr << "[ModelManager] Already loading a model, cannot switch now\n";
+                return false;
+            }
+
+            m_loadInProgress = true;
+
+            // Release lock before async operations
+            lock.unlock();
+
+            // Start async loading process
+            auto loadFuture = loadModelIntoEngineAsync();
+
+            // Handle load completion
+            m_loadFutures.emplace_back(std::async(std::launch::async,
+                [this, loadFuture = std::move(loadFuture)]() mutable {
+                    bool success = false;
+                    try {
+                        success = loadFuture.get();
+                    }
+                    catch (const std::exception& e) {
+                        std::cerr << "[ModelManager] Model load error: " << e.what() << "\n";
+                    }
+
+                    {
+                        std::unique_lock<std::shared_mutex> lock(m_mutex);
+                        m_loadInProgress = false;
+
+                        if (success) {
+                            m_modelLoaded = true;
+                            std::cout << "[ModelManager] Successfully switched models\n";
+                        }
+                        else {
+                            resetModelState();
+                            std::cerr << "[ModelManager] Failed to load model\n";
+                        }
+                    }
+
+                    // Cleanup completed futures
+                    m_loadFutures.erase(
+                        std::remove_if(m_loadFutures.begin(), m_loadFutures.end(),
+                            [](const std::future<void>& f) {
+                                return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+                            }),
+                        m_loadFutures.end()
+                    );
+                }));
+
             return true;
         }
 
@@ -528,6 +557,18 @@ namespace Model
 			return true;
 		}
 
+		bool isModelLoaded() const
+		{
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			return m_modelLoaded;
+		}
+
+		bool isLoadInProgress() const
+		{
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			return m_loadInProgress;
+		}
+
     private:
         explicit ModelManager(std::unique_ptr<IModelPersistence> persistence)
             : m_persistence(std::move(persistence))
@@ -539,35 +580,17 @@ namespace Model
 			, m_modelLoaded(false)
             , m_modelGenerationInProgress(false)
         {
-            loadModelsAsync();
-
-			std::string backendName = "InferenceEngineLib.dll";
-            if (useVulkanBackend())
-            {
-				backendName = "InferenceEngineLibVulkan.dll";
-            }
-
-#ifdef DEBUG
-			std::cout << "[ModelManager] Using backend: " << backendName << std::endl;
-#endif
-
-            if (!loadInferenceEngineDynamically(backendName.c_str())) {
-                std::cerr << "[ModelManager] Failed to load inference engine for backend: "
-                    << backendName << std::endl;
-                return;
-            }
-
-            if (!loadModelIntoEngine())
-            {
-                std::cerr << "[ModelManager] Failed to load model into inference engine.\n";
-				resetModelState();
-            }
+            startAsyncInitialization();
         }
 
         ~ModelManager()
         {
             stopAllJobs();
             cancelAllDownloads();
+
+            if (m_initializationFuture.valid()) {
+                m_initializationFuture.wait();
+            }
 
             if (m_inferenceEngine && m_destroyInferenceEnginePtr) {
                 m_destroyInferenceEnginePtr(m_inferenceEngine);
@@ -587,130 +610,181 @@ namespace Model
                     future.wait();
                 }
             }
+
+            // Wait for any remaining loads
+            for (auto& future : m_loadFutures) {
+                if (future.valid()) {
+                    future.wait();
+                }
+            }
         }
 
-        void loadModelsAsync()
-        {
-            std::async(std::launch::async, [this]() {
-                // Load all models from persistence.
-                auto loadedModels = m_persistence->loadAllModels().get();
+        void startAsyncInitialization() {
+            m_initializationFuture = std::async(std::launch::async, [this]() {
+#ifdef DEBUG
+                std::cout << "[ModelManager] Initializing model manager" << std::endl;
+#endif
 
-                // Merge any duplicate models by name.
-                // (If duplicate files exist, we merge by choosing the variant with the higher lastSelected value.)
-                std::unordered_map<std::string, ModelData> mergedModels;
-                for (auto& model : loadedModels)
-                {
-                    auto it = mergedModels.find(model.name);
-                    if (it == mergedModels.end())
-                    {
-                        mergedModels[model.name] = model;
-                    }
-                    else
-                    {
-                        // For each variant, update if the new one was used more recently.
-                        if (model.fullPrecision.lastSelected > it->second.fullPrecision.lastSelected)
-                            it->second.fullPrecision = model.fullPrecision;
-                        if (model.quantized8Bit.lastSelected > it->second.quantized8Bit.lastSelected)
-                            it->second.quantized8Bit = model.quantized8Bit;
-                        if (model.quantized4Bit.lastSelected > it->second.quantized4Bit.lastSelected)
-                            it->second.quantized4Bit = model.quantized4Bit;
-                    }
+                // Run model loading and Vulkan check in parallel
+                auto modelsFuture = std::async(std::launch::async, &ModelManager::loadModels, this);
+                auto vulkanFuture = std::async(std::launch::async, &ModelManager::useVulkanBackend, this);
+
+                modelsFuture.get();
+                bool useVulkan = vulkanFuture.get();
+
+                std::string backendName = "InferenceEngineLib.dll";
+                if (useVulkan) {
+                    backendName = "InferenceEngineLibVulkan.dll";
                 }
 
-                // Rebuild the models vector.
-                std::vector<ModelData> models;
-                for (auto& pair : mergedModels)
-                {
-                    models.push_back(pair.second);
+#ifdef DEBUG
+                std::cout << "[ModelManager] Using backend: " << backendName << std::endl;
+#endif
+
+                if (!loadInferenceEngineDynamically(backendName.c_str())) {
+                    std::cerr << "[ModelManager] Failed to load inference engine for backend: "
+                        << backendName << std::endl;
+                    return;
                 }
 
-                // Check and fix each variant’s download status.
-                for (auto& model : models)
-                {
-                    checkAndFixDownloadStatus(model.fullPrecision);
-                    checkAndFixDownloadStatus(model.quantized8Bit);
-                    checkAndFixDownloadStatus(model.quantized4Bit);
-                }
-
-                // Update internal state (including the variant map) under lock.
                 {
                     std::unique_lock<std::shared_mutex> lock(m_mutex);
-                    m_models = std::move(models);
-                    m_modelNameToIndex.clear();
-                    m_modelVariantMap.clear();
-
-                    // For each model, choose the "best" variant based on lastSelected,
-                    // but prioritize the downloaded state and the desired order:
-                    // first check 8-bit Quantized, then 4-bit Quantized, and lastly Full Precision.
-                    for (size_t i = 0; i < m_models.size(); ++i)
-                    {
-                        m_modelNameToIndex[m_models[i].name] = i;
-                        int bestEffectiveValue = -1;
-                        std::string bestVariant;
-
-                        // Helper lambda to calculate effective value.
-                        auto checkVariant = [&](const ModelVariant& variant) {
-                            int effectiveValue = variant.lastSelected;
-                            if (variant.isDownloaded)
-                            {
-                                effectiveValue += 1000000;  // boost for downloaded variants
-                            }
-                            if (effectiveValue > bestEffectiveValue)
-                            {
-                                bestEffectiveValue = effectiveValue;
-                                bestVariant = variant.type;
-                            }
-                            };
-
-                        // Check in the desired order: 8-bit, then 4-bit, then full precision.
-                        checkVariant(m_models[i].quantized8Bit);
-                        checkVariant(m_models[i].quantized4Bit);
-                        checkVariant(m_models[i].fullPrecision);
-
-                        // If no variant was ever selected, default to "8-bit Quantized".
-                        if (bestVariant.empty())
-                        {
-                            bestVariant = "8-bit Quantized";
-                        }
-                        m_modelVariantMap[m_models[i].name] = bestVariant;
-                    }
+                    m_loadInProgress = true;
                 }
 
-                // Determine the overall current model selection (for loading into the engine).
-                int maxLastSelected = -1;
-                size_t selectedModelIndex = 0;
-                std::string selectedVariantType;
-                for (size_t i = 0; i < m_models.size(); ++i)
-                {
-                    const auto& model = m_models[i];
-                    // Order is arbitrary; adjust as needed.
-                    const ModelVariant* variants[] = { &model.quantized8Bit, &model.quantized4Bit, &model.fullPrecision };
-                    for (const ModelVariant* variant : variants)
-                    {
-                        if (variant->isDownloaded && variant->lastSelected > maxLastSelected)
-                        {
-                            maxLastSelected = variant->lastSelected;
-                            selectedModelIndex = i;
-                            selectedVariantType = variant->type;
-                        }
-                    }
+                // Start async model loading
+                auto modelLoadFuture = loadModelIntoEngineAsync();
+                if (!modelLoadFuture.get()) { // Wait for async load to complete
+                    resetModelState();
                 }
+
                 {
                     std::unique_lock<std::shared_mutex> lock(m_mutex);
-                    if (maxLastSelected >= 0)
-                    {
-                        m_currentModelName = m_models[selectedModelIndex].name;
-                        m_currentModelIndex = selectedModelIndex;
-                        m_currentVariantType = selectedVariantType;
-                    }
-                    else
-                    {
-                        m_currentModelName = std::nullopt;
-                        m_currentVariantType.clear();
-                        m_currentModelIndex = 0;
-                    }
+                    m_loadInProgress = false;
                 }
                 });
+        }
+
+        void loadModels()
+        {
+            // Load all models from persistence.
+            auto loadedModels = m_persistence->loadAllModels().get();
+
+            // Merge any duplicate models by name.
+            // (If duplicate files exist, we merge by choosing the variant with the higher lastSelected value.)
+            std::unordered_map<std::string, ModelData> mergedModels;
+            for (auto& model : loadedModels)
+            {
+                auto it = mergedModels.find(model.name);
+                if (it == mergedModels.end())
+                {
+                    mergedModels[model.name] = model;
+                }
+                else
+                {
+                    // For each variant, update if the new one was used more recently.
+                    if (model.fullPrecision.lastSelected > it->second.fullPrecision.lastSelected)
+                        it->second.fullPrecision = model.fullPrecision;
+                    if (model.quantized8Bit.lastSelected > it->second.quantized8Bit.lastSelected)
+                        it->second.quantized8Bit = model.quantized8Bit;
+                    if (model.quantized4Bit.lastSelected > it->second.quantized4Bit.lastSelected)
+                        it->second.quantized4Bit = model.quantized4Bit;
+                }
+            }
+
+            // Rebuild the models vector.
+            std::vector<ModelData> models;
+            for (auto& pair : mergedModels)
+            {
+                models.push_back(pair.second);
+            }
+
+            // Check and fix each variant’s download status.
+            for (auto& model : models)
+            {
+                checkAndFixDownloadStatus(model.fullPrecision);
+                checkAndFixDownloadStatus(model.quantized8Bit);
+                checkAndFixDownloadStatus(model.quantized4Bit);
+            }
+
+            // Update internal state (including the variant map) under lock.
+            {
+                std::unique_lock<std::shared_mutex> lock(m_mutex);
+                m_models = std::move(models);
+                m_modelNameToIndex.clear();
+                m_modelVariantMap.clear();
+
+                // For each model, choose the "best" variant based on lastSelected,
+                // but prioritize the downloaded state and the desired order:
+                // first check 8-bit Quantized, then 4-bit Quantized, and lastly Full Precision.
+                for (size_t i = 0; i < m_models.size(); ++i)
+                {
+                    m_modelNameToIndex[m_models[i].name] = i;
+                    int bestEffectiveValue = -1;
+                    std::string bestVariant;
+
+                    // Helper lambda to calculate effective value.
+                    auto checkVariant = [&](const ModelVariant& variant) {
+                        int effectiveValue = variant.lastSelected;
+                        if (variant.isDownloaded)
+                        {
+                            effectiveValue += 1000000;  // boost for downloaded variants
+                        }
+                        if (effectiveValue > bestEffectiveValue)
+                        {
+                            bestEffectiveValue = effectiveValue;
+                            bestVariant = variant.type;
+                        }
+                        };
+
+                    // Check in the desired order: 8-bit, then 4-bit, then full precision.
+                    checkVariant(m_models[i].quantized8Bit);
+                    checkVariant(m_models[i].quantized4Bit);
+                    checkVariant(m_models[i].fullPrecision);
+
+                    // If no variant was ever selected, default to "8-bit Quantized".
+                    if (bestVariant.empty())
+                    {
+                        bestVariant = "8-bit Quantized";
+                    }
+                    m_modelVariantMap[m_models[i].name] = bestVariant;
+                }
+            }
+
+            // Determine the overall current model selection (for loading into the engine).
+            int maxLastSelected = -1;
+            size_t selectedModelIndex = 0;
+            std::string selectedVariantType;
+            for (size_t i = 0; i < m_models.size(); ++i)
+            {
+                const auto& model = m_models[i];
+                // Order is arbitrary; adjust as needed.
+                const ModelVariant* variants[] = { &model.quantized8Bit, &model.quantized4Bit, &model.fullPrecision };
+                for (const ModelVariant* variant : variants)
+                {
+                    if (variant->isDownloaded && variant->lastSelected > maxLastSelected)
+                    {
+                        maxLastSelected = variant->lastSelected;
+                        selectedModelIndex = i;
+                        selectedVariantType = variant->type;
+                    }
+                }
+            }
+            {
+                std::unique_lock<std::shared_mutex> lock(m_mutex);
+                if (maxLastSelected >= 0)
+                {
+                    m_currentModelName = m_models[selectedModelIndex].name;
+                    m_currentModelIndex = selectedModelIndex;
+                    m_currentVariantType = selectedVariantType;
+                }
+                else
+                {
+                    m_currentModelName = std::nullopt;
+                    m_currentVariantType.clear();
+                    m_currentModelIndex = 0;
+                }
+            }
         }
 
         void checkAndFixDownloadStatus(ModelVariant& variant) 
@@ -789,7 +863,9 @@ namespace Model
                         {
                             // Unlock before loading the model.
                             lock.unlock();
-                            if (!loadModelIntoEngine())
+
+                            auto loadFuture = loadModelIntoEngineAsync();
+                            if (!loadFuture.get())
                             {
                                 std::unique_lock<std::shared_mutex> restoreLock(m_mutex);
                                 resetModelState();
@@ -1029,7 +1105,6 @@ namespace Model
             if (!m_createInferenceEnginePtr) {
                 std::cerr << "[ModelManager] Failed to get the address of createInferenceEngine from "
                     << backendName << std::endl;
-                // Optionally FreeLibrary here if you want to clean up immediately
                 return false;
             }
 
@@ -1055,79 +1130,51 @@ namespace Model
             return true;
         }
 
-        bool loadModelIntoEngine()
-        {
-            std::unique_lock<std::shared_mutex> lock(m_mutex);
+        std::future<bool> ModelManager::loadModelIntoEngineAsync() {
+            // Capture needed data under lock
+            std::optional<std::string> modelDir;
+            {
+                std::unique_lock<std::shared_mutex> lock(m_mutex);
 
-            // Check if we have a selected model
-            if (!m_currentModelName.has_value()) {
-                std::cerr << "[ModelManager] No current model selected.\n";
-				m_modelLoaded = false;
-                return false;
+                if (!m_currentModelName) {
+                    std::cerr << "[ModelManager] No model selected\n";
+                    m_modelLoaded = false;
+                    return std::async(std::launch::deferred, [] { return false; });
+                }
+
+                ModelVariant* variant = getVariantLocked(m_currentModelIndex, m_currentVariantType);
+                if (!variant || !variant->isDownloaded || !std::filesystem::exists(variant->path)) {
+                    m_modelLoaded = false;
+                    return std::async(std::launch::deferred, [] { return false; });
+                }
+
+                modelDir = std::filesystem::absolute(
+                    variant->path.substr(0, variant->path.find_last_of("/\\"))
+                ).string();
             }
 
-            // Retrieve the current variant
-            ModelVariant* variant = getVariantLocked(m_currentModelIndex, m_currentVariantType);
-            if (!variant) {
-                std::cerr << "[ModelManager] Variant not found for current model.\n";
-                m_modelLoaded = false;
-                return false;
-            }
+            // Launch heavy loading in async task
+            return std::async(std::launch::async, [this, modelDir]() {
+                try {
+                    bool success = m_inferenceEngine->loadModel(modelDir->c_str());
 
-            // Check if downloaded
-            if (!variant->isDownloaded) {
-                std::cerr << "[ModelManager] Variant is not downloaded. Cannot load.\n";
-                m_modelLoaded = false;
-                return false;
-            }
+                    {
+                        std::unique_lock<std::shared_mutex> lock(m_mutex);
+                        m_modelLoaded = success;
+                    }
 
-            // Check if the file actually exists
-            std::string modelPath = variant->path;
-            if (!std::filesystem::exists(modelPath)) {
-                std::cerr << "[ModelManager] Model file not found at: " << modelPath << "\n";
-                m_modelLoaded = false;
-                return false;
-            }
-
-            // Make sure we have a valid function pointer
-            if (!m_createInferenceEnginePtr) {
-                std::cerr << "[ModelManager] No valid getInferenceEngine function pointer.\n";
-                m_modelLoaded = false;
-                return false;
-            }
-
-			// Get the model path directory instead of the full path file
-			std::string modelDir = modelPath.substr(0, modelPath.find_last_of("/\\"));
-			// Convert to absolute path
-			modelDir = std::filesystem::absolute(modelDir).string();
-
-			// Load the model into the inference engine
-            try {
-                if (!m_inferenceEngine->loadModel(modelDir.c_str()))
-                {
-                    std::cerr << "[ModelManager] Failed to load model into InferenceEngine: "
-                        << modelDir << std::endl;
+                    if (success) {
+                        std::cout << "[ModelManager] Loaded model: " << *modelDir << "\n";
+                    }
+                    return success;
+                }
+                catch (const std::exception& e) {
+                    std::cerr << "[ModelManager] Load failed: " << e.what() << "\n";
+                    std::unique_lock<std::shared_mutex> lock(m_mutex);
                     m_modelLoaded = false;
                     return false;
                 }
-            }
-            catch (const std::bad_alloc& e) {
-                std::cerr << "[ModelManager] Memory allocation error during model load: " << e.what() << std::endl;
-                m_modelLoaded = false;
-                return false;
-            }
-            catch (const std::exception& e) {
-                std::cerr << "[ModelManager] Exception during model load: " << e.what() << std::endl;
-                m_modelLoaded = false;
-                return false;
-            }
-
-            std::cout << "[ModelManager] Successfully loaded model into InferenceEngine: "
-                << modelDir << std::endl;
-
-			m_modelLoaded = true;
-
-            return true;
+                });
         }
 
         void stopAllJobs()
@@ -1164,6 +1211,9 @@ namespace Model
         size_t                                          m_currentModelIndex;
         std::vector<std::future<void>>                  m_downloadFutures;
         std::future<bool>                               m_engineLoadFuture;
+        std::future<void>                               m_initializationFuture;
+        std::vector<std::future<void>>                  m_loadFutures;
+        std::atomic<bool>                               m_loadInProgress{ false };
         std::unordered_map<std::string, std::string>    m_modelVariantMap;
         bool                                            m_modelLoaded = false;
 		bool                                            m_modelGenerationInProgress = false;

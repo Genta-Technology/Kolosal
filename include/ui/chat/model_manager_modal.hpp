@@ -61,7 +61,7 @@ public:
 
         ModalConfig config{
             "Confirm Delete Model",
-            "Confirm Delete Model###DeleteModelModal",
+            "Confirm Delete Model",
             ImVec2(300, 96),
             [this]() {
                 Button::renderGroup(buttons, 16, ImGui::GetCursorPosY() + 8);
@@ -175,19 +175,52 @@ public:
             }
         }
         else {
-            selectButton.label = isSelected ? "selected" : "select";
+            bool isLoadingSelected = isSelected && Model::ModelManager::getInstance().isLoadInProgress();
+
+            // Configure button label and base state
+            if (isLoadingSelected) {
+                selectButton.label = "loading model...";
+                selectButton.state = ButtonState::DISABLED;
+                selectButton.icon = ""; // Clear any existing icon
+                selectButton.borderSize = 0.0f; // Remove border
+            }
+            else {
+                selectButton.label = isSelected ? "selected" : "select";
+            }
+
+            // Base styling (applies to all states)
             selectButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-            if (isSelected) {
+
+            // Selected state styling (only if not loading)
+            if (isSelected && !isLoadingSelected) {
                 selectButton.icon = ICON_CI_PASS;
                 selectButton.borderColor = RGBAToImVec4(172, 131, 255, 255 / 4);
                 selectButton.borderSize = 1.0f;
                 selectButton.state = ButtonState::ACTIVE;
             }
+
+            // Disabled state for non-selected loading
+            if (!isSelected && Model::ModelManager::getInstance().isLoadInProgress()) {
+                selectButton.state = ButtonState::DISABLED;
+            }
+
+            // Common properties
             selectButton.onClick = [this]() {
                 std::string variant = Model::ModelManager::getInstance().getCurrentVariantForModel(m_model.name);
                 Model::ModelManager::getInstance().switchModel(m_model.name, variant);
                 };
             selectButton.size = ImVec2(ModelManagerConstants::cardWidth - 18 - 5 - 24, 0);
+
+            // Add progress bar if in loading-selected state
+            if (isLoadingSelected) {
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, IM_COL32(172, 131, 255, 255 / 2));
+                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f);
+                ProgressBar::render(ImVec2(ModelManagerConstants::cardWidth - 18, 6));
+                ImGui::PopStyleVar();
+                ImGui::PopStyleColor();
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
+            }
         }
 
         Button::render(selectButton);
@@ -196,6 +229,12 @@ public:
             ImGui::SameLine();
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2);
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 24 - 2);
+
+            if (isSelected && Model::ModelManager::getInstance().isLoadInProgress())
+				deleteButton.state = ButtonState::DISABLED;
+			else
+				deleteButton.state = ButtonState::NORMAL;
+
             Button::render(deleteButton);
         }
 

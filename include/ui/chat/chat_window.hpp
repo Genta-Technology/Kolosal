@@ -251,9 +251,14 @@ public:
 private:
     // Render the row of buttons that allow the user to switch models or clear chat.
     void renderChatFeatureButtons(float baseX, float baseY) {
+		Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+
         // Update the open-model manager button’s label dynamically.
         openModelManagerConfig.label =
-            Model::ModelManager::getInstance().getCurrentModelName().value_or("Select Model");
+            modelManager.getCurrentModelName().value_or("Select Model");
+
+        if (!modelManager.isModelLoaded())
+			openModelManagerConfig.label = "Loading Model...";
 
         std::vector<ButtonConfig> buttons = { openModelManagerConfig, clearChatButtonConfig };
         Button::renderGroup(buttons, baseX, baseY);
@@ -351,6 +356,15 @@ private:
                 };
             sendButtonConfig.state = ButtonState::NORMAL;
         }
+
+		// Disable the send button and input processing if no model is loaded.
+		if (!modelManager.isModelLoaded()) {
+            inputConfig.flags = ImGuiInputTextFlags_CtrlEnterForNewLine |
+                ImGuiInputTextFlags_ShiftEnterForNewLine;
+            inputConfig.processInput = nullptr;
+
+			sendButtonConfig.state = ButtonState::DISABLED;
+		}
     }
 
     void drawInputFieldBackground(const float width, const float height) {
