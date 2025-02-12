@@ -449,6 +449,7 @@ namespace Model
             std::thread([this, jobId]() {
                 // Poll while job is running or until the engine says it's done
 				this->setModelGenerationInProgress(true);
+                auto& chatManager = Chat::ChatManager::getInstance();
 
                 while (true)
                 {
@@ -479,8 +480,7 @@ namespace Model
 
 				// save the chat history
 				{
-					auto& chatManager = Chat::ChatManager::getInstance();
-					auto chatName = chatManager.getChatNameByJobId(jobId);
+                    auto chatName = chatManager.getChatNameByJobId(jobId);
                     if (!chatManager.saveChat(chatName))
                     {
                         std::cerr << "[ModelManager] Failed to save chat: " << chatName << std::endl;
@@ -489,7 +489,7 @@ namespace Model
 
                 // Reset jobid tracking on chat manager to -1
                 {
-                    if (!Chat::ChatManager::getInstance().removeJobId(jobId))
+                    if (!chatManager.removeJobId(jobId))
                     {
                         std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
                     }

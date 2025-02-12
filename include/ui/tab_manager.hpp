@@ -28,8 +28,10 @@ public:
     }
 
     void onActivate() override {
-        Model::ModelManager::getInstance().setStreamingCallback(
-            [](const std::string& partialOutput, const float tps, const int jobId) {
+		Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+
+        modelManager.setStreamingCallback(
+            [&modelManager](const std::string& partialOutput, const float tps, const int jobId) {
                 auto& chatManager = Chat::ChatManager::getInstance();
                 std::string chatName = chatManager.getChatNameByJobId(jobId);
 
@@ -49,6 +51,8 @@ public:
                         assistantMsg.role = "assistant";
                         assistantMsg.content = partialOutput;
                         assistantMsg.tps = tps;
+						assistantMsg.modelName = modelManager.getCurrentModelName().value_or("idk") + " | " 
+                            + modelManager.getCurrentVariantType();
                         chatManager.addMessage(chatName, assistantMsg);
                     }
                 }

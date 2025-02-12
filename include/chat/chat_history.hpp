@@ -22,6 +22,7 @@ namespace Chat
         bool isDisliked;
         std::string role;
         std::string content;
+        std::string modelName;
         float tps;
         std::chrono::system_clock::time_point timestamp;
 
@@ -29,6 +30,7 @@ namespace Chat
             int id = 0,
             const std::string& role = "user",
             const std::string& content = "",
+			const std::string& modelName = "",
 			const float tps = 0.0f,
             bool isLiked = false,
             bool isDisliked = false,
@@ -41,7 +43,8 @@ namespace Chat
                 : throw std::invalid_argument("Invalid role: " + role))
             , content(content)
 			, tps(tps)
-            , timestamp(timestamp) {
+            , timestamp(timestamp)
+            , modelName(modelName){
         }
     };
 
@@ -54,7 +57,8 @@ namespace Chat
             {"role", msg.role},
             {"content", msg.content},
             {"timestamp", timePointToString(msg.timestamp)},
-			{"tps", msg.tps}
+			{"tps", msg.tps},
+			{"modelName", msg.modelName}
         };
     }
 
@@ -67,6 +71,7 @@ namespace Chat
         msg.content     = j.at("content").get<std::string>();
         msg.timestamp   = stringToTimePoint(j.at("timestamp").get<std::string>());
         msg.tps         = j.value("tps", 0.0f);
+        msg.modelName   = j.value("modelName", "");
     }
 
     struct ChatHistory

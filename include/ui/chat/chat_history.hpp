@@ -24,7 +24,7 @@ public:
 		thinkButtonBase.id = "##think";
 		thinkButtonBase.icon = ICON_CI_CHEVRON_DOWN;
 		thinkButtonBase.label = "Thoughts";
-		thinkButtonBase.size = ImVec2(100, 0);
+		thinkButtonBase.size = ImVec2(80, 0);
 		thinkButtonBase.alignment = Alignment::LEFT;
 		thinkButtonBase.backgroundColor = ImVec4(0.2f, 0.2f, 0.2f, 0.4f);
 		thinkButtonBase.textColor = ImVec4(0.9f, 0.9f, 0.9f, 0.9f);
@@ -158,6 +158,7 @@ private:
                 thinkBtn.id = "##" + uniqueID;
                 thinkBtn.icon = showThink ? ICON_CI_CHEVRON_DOWN : ICON_CI_CHEVRON_RIGHT;
                 thinkBtn.onClick = [&showThink] { showThink = !showThink; };
+				thinkBtn.fontSize = FontsManager::SM;
 
                 ImGui::NewLine();
                 Button::render(thinkBtn);
@@ -200,6 +201,12 @@ private:
     void regenerateResponse(int index) {
         Model::ModelManager& modelManager = Model::ModelManager::getInstance();
         Chat::ChatManager& chatManager = Chat::ChatManager::getInstance();
+
+        if (!modelManager.isModelLoaded())
+		{
+			std::cerr << "[ChatSection] No model loaded. Cannot regenerate response.\n";
+			return;
+		}
 
         // Stop current generation if running.
         if (modelManager.isCurrentlyGenerating()) {
@@ -312,6 +319,13 @@ private:
             regenBtn.onClick = [this, index]() {
                 regenerateResponse(index - 1);
             };
+
+            if (!Model::ModelManager::getInstance().isModelLoaded())
+            {
+				regenBtn.state = ButtonState::DISABLED;
+				regenBtn.tooltip = "No model loaded";
+            }
+
             helperButtons.push_back(regenBtn);
         }
 
@@ -357,6 +371,24 @@ private:
             ImGui::EndChild();
         }
         else {
+            if (!msg.modelName.empty())
+            {
+                // get width of the button based on the msg.modelName
+                float modelNameWidth = ImGui::CalcTextSize(msg.modelName.c_str()).x;
+
+                ButtonConfig modelNameConfig;
+                modelNameConfig.id = "##modelNameMessage" + std::to_string(index);
+                modelNameConfig.label = msg.modelName;
+                modelNameConfig.icon = ICON_CI_SPARKLE;
+                modelNameConfig.size = ImVec2(modelNameWidth, 0);
+                modelNameConfig.fontSize = FontsManager::SM;
+                modelNameConfig.alignment = Alignment::LEFT;
+                modelNameConfig.state = ButtonState::DISABLED;
+                modelNameConfig.tooltip = msg.modelName;
+                Button::render(modelNameConfig);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 12);
+            }
+
             renderMessageContent(msg, bubbleWidth, bubblePadding);
             ImGui::Spacing();
             renderMetadata(msg, index, bubbleWidth, bubblePadding);

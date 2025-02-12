@@ -388,6 +388,37 @@ namespace Chat
             }
         }
 
+        void setMessageModelName(const std::string& chatName, const int& _index, const std::string& modelName)
+        {
+            std::unique_lock<std::shared_mutex> lock(m_mutex);
+            auto it = std::find_if(m_chats.begin(), m_chats.end(),
+                [&chatName](const auto& chat) { return chat.name == chatName; });
+
+			int index = _index;
+
+            if (_index == -1)
+            {
+				index = it->messages.size() - 1;
+            }
+
+            if (it != m_chats.end())
+            {
+                if (index >= 0 && index < static_cast<int>(it->messages.size()))
+                {
+                    it->messages[index].modelName = modelName;
+                    it->lastModified = static_cast<int>(std::time(nullptr));
+                }
+                else
+                {
+                    std::cerr << "[ChatManager] Invalid message index (" << index << ") for chat: " << chatName << "\n";
+                }
+            }
+            else
+            {
+                std::cerr << "[ChatManager] Chat not found: " << chatName << "\n";
+            }
+        }
+
         // Thread-safe getters
         std::vector<ChatHistory> getChats() const
         {
