@@ -13,6 +13,8 @@ public:
     MarkdownRenderer() = default;
     ~MarkdownRenderer() override = default;
 
+    int chatCounter = 0;
+
 protected:
     // Override how fonts are selected
     ImFont* get_font() const override
@@ -107,7 +109,7 @@ protected:
 			CodeBlock block;
 			block.lang = std::string(d->lang.text, d->lang.size);
 			block.content = "";
-			block.render_id = m_code_id++;
+            block.render_id = chatCounter + (m_code_id++);
             m_code_stack.push_back(block);
 
             ImGui::PushFont(FontsManager::GetInstance().GetMarkdownFont(
@@ -132,6 +134,10 @@ protected:
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 24);
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, Config::InputField::INPUT_FIELD_BG_COLOR);
                 ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+
+#ifdef DEBUG
+                ImGui::TextUnformatted(std::to_string(block.render_id).c_str());
+#endif
 
                 // Use stable ID for child window
                 ImGui::BeginChild(ImGui::GetID(("##code_content_" + std::to_string(block.render_id)).c_str()),
@@ -208,16 +214,23 @@ protected:
 	}
 };
 
-inline void RenderMarkdown(const char* text)
-{
-    static MarkdownRenderer s_renderer;
-	s_renderer.max_code_id = Chat::ChatManager::getInstance().getCurrentChat().value().messages.size();
+std::unordered_map<int, MarkdownRenderer> g_markdownRenderers;
 
+inline void RenderMarkdown(const char* text, int id)
+{
     if (!text || !*text)
         return;
 
-    // This calls the underlying md4c-based parser (from imgui_md) and renders to ImGui
-    s_renderer.print(text, text + std::strlen(text));
+	// if id in g_markdownRenderers, use it, otherwise create a new one
+	if (g_markdownRenderers.find(id) == g_markdownRenderers.end())
+	{
+		MarkdownRenderer renderer;
+		renderer.chatCounter = id * 100;
+		g_markdownRenderers[id] = renderer;
+	}
+
+	MarkdownRenderer& renderer = g_markdownRenderers[id];
+	renderer.print(text, text + std::strlen(text));
 }
 
 inline float ApproxMarkdownHeight(const char* text, float width)

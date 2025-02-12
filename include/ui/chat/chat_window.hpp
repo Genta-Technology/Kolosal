@@ -257,8 +257,10 @@ private:
         openModelManagerConfig.label =
             modelManager.getCurrentModelName().value_or("Select Model");
 
-        if (!modelManager.isModelLoaded())
-			openModelManagerConfig.label = "Loading Model...";
+        if (modelManager.isLoadInProgress())
+        {
+            openModelManagerConfig.label = "Loading Model...";
+        }
 
         std::vector<ButtonConfig> buttons = { openModelManagerConfig, clearChatButtonConfig };
         Button::renderGroup(buttons, baseX, baseY);

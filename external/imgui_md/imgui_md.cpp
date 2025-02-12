@@ -754,11 +754,8 @@ int imgui_md::span(MD_SPANTYPE type, void* d, bool e)
 
 int imgui_md::print(const char* str, const char* str_end)
 {
-	if (m_code_id >= max_code_id) 
-	{
-		m_code_id = 0;
-		m_code_stack.clear();
-	}
+	m_code_id = 0;
+	m_code_stack.clear();
 	if (str >= str_end)return 0;
 	return md_parse(str, (MD_SIZE)(str_end - str), &m_md, this);
 }

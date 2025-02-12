@@ -190,7 +190,7 @@ private:
                 }
             }
             else {
-                RenderMarkdown(text.c_str());
+                RenderMarkdown(text.c_str(), msg.id);
             }
         }
 
