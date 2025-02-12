@@ -36,6 +36,8 @@ public:
 
 	bool loadModel(const char* engineDir, const int mainGpuId = -1);
 
+	bool unloadModel();
+
 	/**
 	 * @brief Submits a completion job and returns the job ID.
 	 * @param params The parameters for the completion job.

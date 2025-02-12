@@ -52,6 +52,48 @@ namespace Model
             m_currentModelIndex = 0;
         }
 
+        bool unloadModel()
+        {
+			std::unique_lock<std::shared_mutex> lock(m_mutex);
+
+            if (!m_modelLoaded)
+            {
+                return false;
+            }
+
+			if (!m_inferenceEngine)
+			{
+				return false;
+			}
+
+			m_unloadInProgress = true;
+
+			lock.unlock();
+
+			// Start async unloading process
+			auto unloadFuture = unloadModelAsync();
+
+			// Handle unload completion
+            m_unloadFutures.emplace_back(std::async(std::launch::async,
+                [this, unloadFuture = std::move(unloadFuture)]() mutable {
+					if (unloadFuture.get())
+					{
+						std::cout << "[ModelManager] Successfully unloaded model\n";
+					}
+					else
+					{
+						std::cerr << "[ModelManager] Failed to unload model\n";
+					}
+
+                    {
+                        std::unique_lock<std::shared_mutex> lock(m_mutex);
+                        m_modelLoaded = false;
+                        m_unloadInProgress = false;
+                        resetModelState();
+                    }
+                }));
+        }
+
         // Switch to a specific model variant. If not downloaded, trigger download.
         bool switchModel(const std::string& modelName, const std::string& variantType)
         {
@@ -90,13 +132,13 @@ namespace Model
             }
 
             m_loadInProgress = true;
-
+            
             // Release lock before async operations
             lock.unlock();
 
             // Start async loading process
             auto loadFuture = loadModelIntoEngineAsync();
-
+            
             // Handle load completion
             m_loadFutures.emplace_back(std::async(std::launch::async,
                 [this, loadFuture = std::move(loadFuture)]() mutable {
@@ -347,7 +389,7 @@ namespace Model
                     CompletionResult partial = this->m_inferenceEngine->getJobResult(jobId);
 
                     if (!partial.text.empty()) {
-                        // Call the user’s callback
+                        // Call the userï¿½s callback
                         // (hold shared lock if needed to be thread-safe)
                         std::shared_lock<std::shared_mutex> lock(m_mutex);
                         if (m_streamingCallback) {
@@ -415,7 +457,7 @@ namespace Model
                     CompletionResult partial = this->m_inferenceEngine->getJobResult(jobId);
 
                     if (!partial.text.empty()) {
-                        // Call the user’s callback
+                        // Call the userï¿½s callback
                         std::shared_lock<std::shared_mutex> lock(m_mutex);
                         if (m_streamingCallback) {
                             m_streamingCallback(partial.text, partial.tps, jobId);
@@ -530,8 +572,14 @@ namespace Model
             if (!variant)
                 return false;
 
-            // Call the persistence layer to delete the file.
             lock.unlock();
+
+            if (modelIndex == m_currentModelIndex && variantType == m_currentVariantType)
+            {
+				unloadModel();
+            }
+
+            // Call the persistence layer to delete the file.
             auto fut = m_persistence->deleteModelVariant(m_models[modelIndex], *variant);
             fut.get(); // Wait for deletion to complete.
             return true;
@@ -567,6 +615,12 @@ namespace Model
 		{
 			std::shared_lock<std::shared_mutex> lock(m_mutex);
 			return m_loadInProgress;
+		}
+
+		bool isUnloadInProgress() const
+		{
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			return m_unloadInProgress;
 		}
 
     private:
@@ -699,7 +753,7 @@ namespace Model
                 models.push_back(pair.second);
             }
 
-            // Check and fix each variant’s download status.
+            // Check and fix each variantï¿½s download status.
             for (auto& model : models)
             {
                 checkAndFixDownloadStatus(model.fullPrecision);
@@ -1177,6 +1231,46 @@ namespace Model
                 });
         }
 
+        std::future<bool> ModelManager::unloadModelAsync() {
+            // Capture current loaded state under lock
+            bool isLoaded;
+            {
+                std::unique_lock<std::shared_mutex> lock(m_mutex);
+                isLoaded = m_modelLoaded;
+
+                if (!isLoaded) {
+                    std::cerr << "[ModelManager] No model loaded to unload\n";
+                    return std::async(std::launch::deferred, [] { return false; });
+                }
+            }
+
+            // Launch heavy unloading in async task
+            return std::async(std::launch::async, [this]() {
+                try {
+                    bool success = m_inferenceEngine->unloadModel();
+
+                    {
+                        std::unique_lock<std::shared_mutex> lock(m_mutex);
+                        m_modelLoaded = !success; // False if unload succeeded, true otherwise
+                    }
+
+                    if (success) {
+                        std::cout << "[ModelManager] Successfully unloaded model\n";
+                    }
+                    else {
+                        std::cerr << "[ModelManager] Unload operation failed\n";
+                    }
+                    return success;
+                }
+                catch (const std::exception& e) {
+                    std::cerr << "[ModelManager] Unload failed: " << e.what() << "\n";
+                    std::unique_lock<std::shared_mutex> lock(m_mutex);
+                    m_modelLoaded = false; // Assume unloaded on exception
+                    return false;
+                }
+                });
+        }
+
         void stopAllJobs()
         {
             for (auto jobId : m_jobIds)
@@ -1188,7 +1282,7 @@ namespace Model
         void cancelAllDownloads() {
             std::unique_lock<std::shared_mutex> lock(m_mutex);
             for (auto& model : m_models) {
-                // For each variant, if it’s still in progress (i.e. download progress is between 0 and 100)
+                // For each variant, if itï¿½s still in progress (i.e. download progress is between 0 and 100)
                 // set the cancel flag.
                 if (model.fullPrecision.downloadProgress > 0.0 && model.fullPrecision.downloadProgress < 100.0) {
                     model.fullPrecision.cancelDownload = true;
@@ -1213,10 +1307,12 @@ namespace Model
         std::future<bool>                               m_engineLoadFuture;
         std::future<void>                               m_initializationFuture;
         std::vector<std::future<void>>                  m_loadFutures;
+        std::vector<std::future<void>>                  m_unloadFutures;
+		std::atomic<bool>                               m_unloadInProgress{ false };
         std::atomic<bool>                               m_loadInProgress{ false };
         std::unordered_map<std::string, std::string>    m_modelVariantMap;
-        bool                                            m_modelLoaded = false;
-		bool                                            m_modelGenerationInProgress = false;
+        std::atomic<bool>                               m_modelLoaded{ false };
+		std::atomic<bool>                               m_modelGenerationInProgress{ false };
         std::vector<int>                                m_jobIds;
 
 #ifdef _WIN32

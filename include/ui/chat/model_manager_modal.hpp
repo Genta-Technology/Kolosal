@@ -172,28 +172,21 @@ public:
         }
         else {
             bool isLoadingSelected = isSelected && Model::ModelManager::getInstance().isLoadInProgress();
+			bool isUnloading = isSelected && Model::ModelManager::getInstance().isUnloadInProgress();
 
             // Configure button label and base state
-            if (isLoadingSelected) {
-                selectButton.label = "loading model...";
+            if (isLoadingSelected || isUnloading) {
+                selectButton.label = isLoadingSelected ? "Loading Model..." : "Unloading Model...";
                 selectButton.state = ButtonState::DISABLED;
                 selectButton.icon = ""; // Clear any existing icon
                 selectButton.borderSize = 0.0f; // Remove border
             }
             else {
-                selectButton.label = isSelected ? "selected" : "select";
+                selectButton.label = isSelected ? "Selected" : "Select";
             }
 
             // Base styling (applies to all states)
             selectButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
-
-            // Selected state styling (only if not loading)
-            if (isSelected && !isLoadingSelected) {
-                selectButton.icon = ICON_CI_PASS;
-                selectButton.borderColor = RGBAToImVec4(172, 131, 255, 255 / 4);
-                selectButton.borderSize = 1.0f;
-                selectButton.state = ButtonState::ACTIVE;
-            }
 
             // Disabled state for non-selected loading
             if (!isSelected && Model::ModelManager::getInstance().isLoadInProgress()) {
@@ -207,8 +200,20 @@ public:
                 };
             selectButton.size = ImVec2(ModelManagerConstants::cardWidth - 18 - 5 - 24, 0);
 
+            // Selected state styling (only if not loading)
+            if (isSelected && !isLoadingSelected) {
+                selectButton.icon = ICON_CI_DEBUG_DISCONNECT;
+                selectButton.borderColor = RGBAToImVec4(172, 131, 255, 255 / 4);
+                selectButton.borderSize = 1.0f;
+                selectButton.state = ButtonState::NORMAL;
+				selectButton.tooltip = "Click to unload model from memory";
+                selectButton.onClick = [this]() {
+                    Model::ModelManager::getInstance().unloadModel();
+                    };
+            }
+
             // Add progress bar if in loading-selected state
-            if (isLoadingSelected) {
+            if (isLoadingSelected || isUnloading) {
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
                 ProgressBar::render(0, ImVec2(ModelManagerConstants::cardWidth - 18, 6));
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
