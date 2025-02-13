@@ -51,6 +51,8 @@ struct imgui_md
 public:
 	static float ComputeMarkdownHeight(const char* markdown, float width);
 
+	int max_code_id;
+
 protected:
 
 	virtual void BLOCK_DOC(bool);

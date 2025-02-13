@@ -1,6 +1,6 @@
 ## Kolosal AI
 
-https://github.com/user-attachments/assets/99ef34c8-f8b7-4e8f-b11a-ec923c09570e
+https://github.com/user-attachments/assets/589cfb48-f806-493d-842b-3b6953b64e79
 
 **Kolosal AI** is an open-source desktop application designed to simplify the training and inference of large language models on your own device. It supports any CPU with **AVX2** instructions and also works with **AMD** and **NVIDIA** GPUs. Built to be lightweight (only ~20 MB compiled), **Kolosal AI** runs smoothly on most edge devices, enabling on-premise or on-edge AI solutions without heavy cloud dependencies.
 
