@@ -39,7 +39,7 @@ namespace Model
             float top_k = 50.0f,
             int random_seed = 42,
             float min_length = 0.0f,
-            float max_new_tokens = 2048.0f)
+            float max_new_tokens = 0.0f)
             : id(id)
             , lastModified(lastModified)
             , name(name)

@@ -247,7 +247,7 @@ namespace Model
                 50.0f,
                 42,
                 0.0f,
-                2048.0f };
+                0.0f };
 
             size_t newIndex = m_presets.size();
             m_presets.push_back(defaultPreset);
