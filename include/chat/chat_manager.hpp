@@ -270,7 +270,7 @@ namespace Chat
             return newName;
         }
 
-        bool deleteChat(const std::string& name, const std::string& modelName, const std::string& modelVariant) 
+        bool deleteChat(const std::string& name) 
         {
             std::unique_lock<std::shared_mutex> lock(m_mutex);
 

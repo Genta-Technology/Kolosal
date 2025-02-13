@@ -105,9 +105,7 @@ private:
         ButtonConfig config = m_baseDeleteButtonConfig;
         config.id = "##delete" + std::to_string(chat.id);
         config.onClick = [chatName = chat.name]() {
-            Model::ModelManager& modelManager = Model::ModelManager::getInstance();
-            Chat::ChatManager::getInstance().deleteChat(chatName, 
-                modelManager.getCurrentModelName().value(), modelManager.getCurrentVariantType());
+            Chat::ChatManager::getInstance().deleteChat(chatName);
             };
 
         Button::render(config);
