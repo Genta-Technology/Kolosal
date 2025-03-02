@@ -27,42 +27,9 @@ public:
     {
     }
 
-    void onActivate() override {
-		Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+    void onActivate() override { }
 
-        modelManager.setStreamingCallback(
-            [&modelManager](const std::string& partialOutput, const float tps, const int jobId) {
-                auto& chatManager = Chat::ChatManager::getInstance();
-                std::string chatName = chatManager.getChatNameByJobId(jobId);
-
-                auto chatOpt = chatManager.getChat(chatName);
-                if (chatOpt) {
-                    Chat::ChatHistory chat = chatOpt.value();
-                    if (!chat.messages.empty() && chat.messages.back().role == "assistant") {
-                        // Append to existing assistant message
-                        chat.messages.back().content = partialOutput;
-                        chat.messages.back().tps = tps;
-                        chatManager.updateChat(chatName, chat);
-                    }
-                    else {
-                        // Create new assistant message
-                        Chat::Message assistantMsg;
-                        assistantMsg.id = static_cast<int>(chat.messages.size()) + 1;
-                        assistantMsg.role = "assistant";
-                        assistantMsg.content = partialOutput;
-                        assistantMsg.tps = tps;
-						assistantMsg.modelName = modelManager.getCurrentModelName().value_or("idk") + " | " 
-                            + modelManager.getCurrentVariantType();
-                        chatManager.addMessage(chatName, assistantMsg);
-                    }
-                }
-            }
-        );
-    }
-
-    void onDeactivate() override {
-        Model::ModelManager::getInstance().setStreamingCallback(nullptr);
-    }
+    void onDeactivate() override { }
 
     void render() override {
         chatHistorySidebar.render();

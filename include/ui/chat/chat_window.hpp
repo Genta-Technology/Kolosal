@@ -249,6 +249,36 @@ public:
     }
 
 private:
+    static void chatStreamingCallback(const std::string& partialOutput, const float tps, const int jobId, const bool isFinished) {
+        auto& chatManager = Chat::ChatManager::getInstance();
+        auto& modelManager = Model::ModelManager::getInstance();
+        std::string chatName = chatManager.getChatNameByJobId(jobId);
+
+        if (isFinished) modelManager.setModelGenerationInProgress(false);
+
+        auto chatOpt = chatManager.getChat(chatName);
+        if (chatOpt) {
+            Chat::ChatHistory chat = chatOpt.value();
+            if (!chat.messages.empty() && chat.messages.back().role == "assistant") {
+                // Append to existing assistant message
+                chat.messages.back().content = partialOutput;
+                chat.messages.back().tps = tps;
+                chatManager.updateChat(chatName, chat);
+            }
+            else {
+                // Create new assistant message
+                Chat::Message assistantMsg;
+                assistantMsg.id = static_cast<int>(chat.messages.size()) + 1;
+                assistantMsg.role = "assistant";
+                assistantMsg.content = partialOutput;
+                assistantMsg.tps = tps;
+                assistantMsg.modelName = modelManager.getCurrentModelName().value_or("idk") + " | "
+                    + modelManager.getCurrentVariantType();
+                chatManager.addMessage(chatName, assistantMsg);
+            }
+        }
+    }
+
     // Render the row of buttons that allow the user to switch models or clear chat.
     void renderChatFeatureButtons(float baseX, float baseY) {
 		Model::ModelManager& modelManager = Model::ModelManager::getInstance();
@@ -296,10 +326,12 @@ private:
             buildChatCompletionParameters(currentChat, message);
 
         auto& modelManager = Model::ModelManager::getInstance();
-        int jobId = modelManager.startChatCompletionJob(completionParams);
+        int jobId = modelManager.startChatCompletionJob(completionParams, chatStreamingCallback);
         if (!chatManager.setCurrentJobId(jobId)) {
             std::cerr << "[ChatSection] Failed to set the current job ID.\n";
         }
+
+        modelManager.setModelGenerationInProgress(true);
     }
 
     InputFieldConfig createInputFieldConfig(

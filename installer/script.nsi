@@ -18,13 +18,13 @@ Var DefaultChatDir
 ;-----------------------------------
 ; Embed version info (metadata)
 ;-----------------------------------
-VIProductVersion "0.1.1.0"
+VIProductVersion "0.1.5.1"
 VIAddVersionKey "ProductName" "Kolosal AI Installer"
 VIAddVersionKey "CompanyName" "Genta Technology"
 VIAddVersionKey "FileDescription" "Kolosal AI Installer"
 VIAddVersionKey "LegalCopyright" "Copyright (C) 2025"
-VIAddVersionKey "FileVersion" "0.1.1.0"
-VIAddVersionKey "ProductVersion" "0.1.1.0"
+VIAddVersionKey "FileVersion" "0.1.5.1"
+VIAddVersionKey "ProductVersion" "0.1.5.1"
 VIAddVersionKey "OriginalFilename" "KolosalAI_Installer.exe"
 VIAddVersionKey "Comments" "Installer for Kolosal AI"
 VIAddVersionKey "Publisher" "Genta Technology"
@@ -105,6 +105,9 @@ FunctionEnd
 ; Installation Section
 ;-----------------------------------
 Section "Kolosal AI" SecKolosalAI
+  ; Force overwrite of existing files so that EXE and DLL files are always replaced
+  SetOverwrite on
+  
   SetOutPath "$INSTDIR"
   
   ; Set write permissions
