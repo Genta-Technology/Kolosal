@@ -17,7 +17,7 @@ class IInferenceEngine {
 public:
     virtual ~IInferenceEngine() = default;
 
-    virtual bool loadModel(const char* engineDir, const int mainGpuId = -1) = 0;
+    virtual bool loadModel(const char* engineDir, const int mainGpuId = -1, const int maxBatch = 1) = 0;
     virtual bool unloadModel() = 0;
     virtual int submitCompletionsJob(const CompletionParameters& params) = 0;
     virtual int submitChatCompletionsJob(const ChatCompletionParameters& params) = 0;

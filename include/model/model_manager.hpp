@@ -575,8 +575,6 @@ namespace Model
 
                     if (isFinished) break;
 
-                    std::cout << isFinished << std::endl;
-
                     // Sleep briefly to avoid busy-waiting
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 }

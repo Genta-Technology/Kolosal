@@ -10,3 +10,7 @@
 [submodule "external/imspinner"]
 	path = external/imspinner
 	url = https://github.com/dalerank/imspinner
+[submodule "kolosal-server"]
+	path = kolosal-server
+	url = https://github.com/genta-technology/kolosal-server
+	branch = dev

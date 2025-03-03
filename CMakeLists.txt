@@ -165,6 +165,9 @@ else()
     )
 endif()
 
+# ==== Kolosal Server Shared Library ====
+add_subdirectory(${CMAKE_SOURCE_DIR}/kolosal-server)
+
 # ==== Main Executable ====
 if (DEBUG)
     add_executable(KolosalDesktop
@@ -178,7 +181,11 @@ else()
     )
 endif()
 
-target_link_libraries(KolosalDesktop PRIVATE kolosal_lib)
+# Link both the engine (kolosal_lib) and the Kolosal server shared library.
+target_link_libraries(KolosalDesktop PRIVATE 
+    kolosal_lib
+    kolosal_server
+)
 
 # ==== Post-Build Commands ====
 # Copy fonts
