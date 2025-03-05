@@ -14,6 +14,7 @@
 #include "chat/chat_manager.hpp"
 #include "model/preset_manager.hpp"
 #include "model/model_manager.hpp"
+#include "model/model_loader_config_manager.hpp"
 
 #include "nfd.h"
 
@@ -156,9 +157,15 @@ class Application
 public:
     Application()
     {
+        // Initialize the TabManager and add the ChatTab (other tabs can be added similarly)
+        tabManager = std::make_unique<TabManager>();
+        tabManager->addTab(std::make_unique<ChatTab>());
+        tabManager->addTab(std::make_unique<ServerTab>());
+
         // Create and show the window
         window = WindowFactory::createWindow();
-        window->createWindow(Config::WINDOW_WIDTH, Config::WINDOW_HEIGHT, Config::WINDOW_TITLE);
+        window->createWindow(Config::WINDOW_WIDTH, Config::WINDOW_HEIGHT, Config::WINDOW_TITLE,
+            tabManager->getTabCount() * 24.0f + (tabManager->getTabCount() - 2) * 10.0f + 6.0f + 12.0f);
         window->show();
 
         // Create and initialize the OpenGL context
@@ -175,6 +182,7 @@ public:
         Chat::initializeChatManager();
         Model::initializePresetManager();
         Model::initializeModelManager();
+		Model::initializeModelLoaderConfigManager("model_loader_config.json");
 
         // Initialize Native File Dialog
         NFD_Init();
@@ -188,10 +196,6 @@ public:
 
         // Create the window state transition manager
         transitionManager = std::make_unique<WindowStateTransitionManager>(*window);
-
-        // Initialize the TabManager and add the ChatTab (other tabs can be added similarly)
-        tabManager = std::make_unique<TabManager>();
-        tabManager->addTab(std::make_unique<ChatTab>());
     }
 
     int run()
@@ -208,7 +212,7 @@ public:
             StartNewFrame();
 
             // Render the custom title bar
-            titleBar(window->getNativeHandle());
+            titleBar(window->getNativeHandle(), *tabManager);
 
             // Render the currently active tab (chat tab in this example)
             tabManager->renderCurrentTab();

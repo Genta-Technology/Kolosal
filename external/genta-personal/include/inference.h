@@ -34,7 +34,7 @@ class INFERENCE_API InferenceEngine : public IInferenceEngine
 public:
 	explicit InferenceEngine();
 
-	bool loadModel(const char* engineDir, const int mainGpuId = -1, const int maxBatch = 1);
+	bool loadModel(const char* engineDir, const LoadingParameters lParams, const int mainGpuId = -1);
 
 	bool unloadModel();
 

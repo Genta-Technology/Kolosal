@@ -39,11 +39,12 @@ public:
         }
     }
 
-    void createWindow(int width, int height, const std::string& title) override
+    void createWindow(int width, int height, const std::string& title, const float tabButtonWidths) override
     {
         this->width = width;
         this->height = height;
         this->title = title;
+        this->tabButtonWidths = tabButtonWidths;
 
         hwnd = create_window(&Win32Window::WndProc, hInstance, this);
         if (!hwnd) {
@@ -169,6 +170,7 @@ private:
     int height;
     std::string title;
     bool should_close;
+    float tabButtonWidths;
 
     // Borderless window specific
     bool borderless;
@@ -311,7 +313,8 @@ private:
         }
 
         if ((cursor.y >= window.top && cursor.y < window.top + Config::TITLE_BAR_HEIGHT) &&
-            (cursor.x <= window.right - 45 * 3)) {
+            ((cursor.x <= window.right - 45 * 3 && cursor.x >= window.left + /* logo width */ 40 + /* gap between logo and tab buttons */ 16 + this->tabButtonWidths) ||
+                cursor.x <= window.left + /* logo width */ 40 + /* gap between logo and tab buttons */ 16)) {
             return HTCAPTION;
         }
 

@@ -292,6 +292,11 @@ private:
             openModelManagerConfig.label = "Loading Model...";
         }
 
+        if (modelManager.isModelLoaded())
+        {
+			openModelManagerConfig.icon = ICON_CI_SPARKLE_FILLED;
+        }
+
         std::vector<ButtonConfig> buttons = { openModelManagerConfig, clearChatButtonConfig };
         Button::renderGroup(buttons, baseX, baseY);
 

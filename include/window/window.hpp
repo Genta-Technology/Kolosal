@@ -5,7 +5,7 @@
 class Window {
 public:
     virtual ~Window() = default;
-    virtual void createWindow(int width, int height, const std::string& title) = 0;
+    virtual void createWindow(int width, int height, const std::string& title, const float tabButtonWidths) = 0;
     virtual void show() = 0;
     virtual void processEvents() = 0;
     virtual bool shouldClose() = 0;

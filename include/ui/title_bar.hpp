@@ -7,6 +7,9 @@
 #include "stb_image.h"
 #include "resource.h"
 
+#include "tab_manager.hpp"
+#include "widgets.hpp"
+
 GLuint LoadTextureFromFile(const char* filename)
 {
     int width, height, channels;
@@ -38,14 +41,14 @@ GLuint LoadTextureFromFile(const char* filename)
     return texture;
 }
 
-void titleBar(void* handler)
+void titleBar(void* handler, TabManager& tabManager)
 {
 #ifdef _WIN32
-	// Cast the HWND
-	HWND hwnd = static_cast<HWND>(handler);
+    // Cast the HWND
+    HWND hwnd = static_cast<HWND>(handler);
 #else
-	// Cast the XID
-	XID xid = static_cast<XID>(handler);
+    // Cast the XID
+    XID xid = static_cast<XID>(handler);
 #endif
 
     ImGuiIO& io = ImGui::GetIO();
@@ -81,6 +84,56 @@ void titleBar(void* handler)
             ImGui::Image((ImTextureID)(uintptr_t)logoTexture, ImVec2(logoWidth, logoWidth)); // Adjust size as needed
             ImGui::SameLine();
         }
+    }
+
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 16.0f);
+
+    // Render a button for each available tab
+    {
+        std::vector<ButtonConfig> buttonConfigs;
+
+        for (size_t i = 0; i < tabManager.getTabCount(); ++i)
+        {
+            ButtonConfig tabButtonConfig;
+            tabButtonConfig.id = "##" + (std::string)tabManager.getTab(i)->getTitle();
+            tabButtonConfig.icon = tabManager.getTab(i)->getIcon();
+            tabButtonConfig.size = ImVec2(24, 0);
+            tabButtonConfig.onClick = [i, &tabManager]() { tabManager.switchTab(i); };
+            tabButtonConfig.tooltip = tabManager.getTab(i)->getTitle();
+            if (tabManager.getCurrentActiveTabIndex() == i)
+            {
+                tabButtonConfig.state = ButtonState::ACTIVE;
+            }
+            else
+            {
+                tabButtonConfig.textColor = ImVec4(0.7f, 0.7f, 0.7f, 0.7f);
+            }
+
+            buttonConfigs.push_back(tabButtonConfig);
+        }
+
+        // Calculate background dimensions
+        float buttonHeight = 16.0f;
+        float totalWidth = buttonConfigs.size() * 24.0f + (buttonConfigs.size() - 2) * 10.0f + 6.0f;
+        float padding = 6.0f;
+
+        // Calculate background position and size
+        ImVec2 pos = ImVec2(ImGui::GetCursorPosX(), ImGui::GetCursorPosY());
+        ImVec2 size = ImVec2(totalWidth + padding * 2, buttonHeight + padding * 2);
+
+        // Draw the background
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddRectFilled(
+            ImVec2(pos.x - padding, pos.y - padding),
+            ImVec2(pos.x + size.x, pos.y + size.y),
+            ImGui::ColorConvertFloat4ToU32(ImVec4(0.3f, 0.3f, 0.3f, 0.3f)),
+            8.0f
+        );
+
+        // Render the buttons
+        Button::renderGroup(buttonConfigs, pos.x, pos.y);
+
+        ImGui::SameLine();
     }
 
     // Title Bar Buttons

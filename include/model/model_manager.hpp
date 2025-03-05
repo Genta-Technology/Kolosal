@@ -2,6 +2,7 @@
 
 #include "preset_manager.hpp"
 #include "model_persistence.hpp"
+#include "model_loader_config_manager.hpp"
 
 #include <types.h>
 #include <inference_interface.h>
@@ -1315,7 +1316,8 @@ namespace Model
             // Launch heavy loading in async task
             return std::async(std::launch::async, [this, modelDir]() {
                 try {
-                    bool success = m_inferenceEngine->loadModel(modelDir->c_str());
+                    bool success = m_inferenceEngine->loadModel(modelDir->c_str(),
+                        ModelLoaderConfigManager::getInstance().getConfig());
 
                     {
                         std::unique_lock<std::shared_mutex> lock(m_mutex);

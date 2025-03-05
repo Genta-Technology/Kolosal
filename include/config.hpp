@@ -88,6 +88,13 @@ namespace Config
         constexpr float MAX_SIDEBAR_WIDTH = 400.0F;
     } // namespace ModelSettings
 
+	namespace DeploymentSettingsSidebar
+	{
+		constexpr float SIDEBAR_WIDTH = 200.0F;
+		constexpr float MIN_SIDEBAR_WIDTH = 200.0F;
+		constexpr float MAX_SIDEBAR_WIDTH = 400.0F;
+	} // namespace DeploymentSettingsSidebar
+
     namespace Color
     {
         constexpr ImVec4 TRANSPARENT_COL = ImVec4(0.0F, 0.0F, 0.0F, 0.0F);
