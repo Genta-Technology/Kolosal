@@ -286,6 +286,8 @@ private:
         // Update the open-model manager button’s label dynamically.
         openModelManagerConfig.label =
             modelManager.getCurrentModelName().value_or("Select Model");
+		openModelManagerConfig.tooltip =
+			modelManager.getCurrentModelName().value_or("Select Model");
 
         if (modelManager.isLoadInProgress())
         {

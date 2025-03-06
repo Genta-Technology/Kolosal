@@ -20,23 +20,18 @@ namespace Model
          * @param configFilePath Path to the configuration file (optional on first call)
          * @return Reference to the singleton instance
          */
-        static ModelLoaderConfigManager& getInstance(const std::string& configFilePath = "") {
-            if (instance_ == nullptr) {
-                if (configFilePath.empty()) {
-                    instance_ = new ModelLoaderConfigManager("model_config.json");
-                }
-                else {
-                    instance_ = new ModelLoaderConfigManager(configFilePath);
-                }
-            }
-            else if (!configFilePath.empty() && configFilePath != instance_->configFilePath_) {
+        static ModelLoaderConfigManager& getInstance(const std::string& configFilePath = "")
+        {
+            static ModelLoaderConfigManager instance(configFilePath.empty() ? "model_config.json" : configFilePath);
+
+            if (!configFilePath.empty() && configFilePath != instance.configFilePath_) {
                 // Log a warning that the config file path is being ignored after initialization
                 std::cerr << "Warning: Config file path '" << configFilePath
                     << "' is ignored as the instance is already initialized with '"
-                    << instance_->configFilePath_ << "'" << std::endl;
+                    << instance.configFilePath_ << "'" << std::endl;
             }
 
-            return *instance_;
+            return instance;
         }
 
         // Delete copy constructor and assignment operator
@@ -107,9 +102,6 @@ namespace Model
         LoadingParameters config_;
         std::string configFilePath_;
         ModelLoaderConfigPersistence persistence_;
-
-        // Singleton instance
-        static ModelLoaderConfigManager* instance_;
     };
 
 	inline void initializeModelLoaderConfigManager(const std::string& configFilePath = "") {

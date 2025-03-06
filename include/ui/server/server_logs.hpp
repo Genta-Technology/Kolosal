@@ -2,6 +2,8 @@
 
 #include "imgui.h"
 #include "ui/widgets.hpp"
+#include "ui/chat/model_manager_modal.hpp"
+#include "model/model_manager.hpp"
 
 #include <IconsCodicons.h>
 
@@ -13,6 +15,7 @@ public:
 
     void render(const float sidebarWidth) {
         ImGuiIO& io = ImGui::GetIO();
+		Model::ModelManager& modelManager = Model::ModelManager::getInstance();
 
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
@@ -25,8 +28,6 @@ public:
         ImGui::PopStyleVar();
 
         {
-			std::vector<ButtonConfig> buttons;
-
             ButtonConfig startServerButtonConfig;
             startServerButtonConfig.id = "##server_start_server_button";
             startServerButtonConfig.label = "Start Server";
@@ -34,17 +35,36 @@ public:
             startServerButtonConfig.tooltip = "Start the server";
             startServerButtonConfig.size = ImVec2(128, 0);
             startServerButtonConfig.alignment = Alignment::LEFT;
-			buttons.push_back(startServerButtonConfig);
 
 			ButtonConfig selectModelButtonConfig;
 			selectModelButtonConfig.id = "##server_select_model_button";
-			selectModelButtonConfig.label = "Select Model";
+			selectModelButtonConfig.label = 
+                modelManager.getCurrentModelName().value_or("Select Model");
+			selectModelButtonConfig.tooltip = 
+                modelManager.getCurrentModelName().value_or("Select Model");
 			selectModelButtonConfig.icon = ICON_CI_SPARKLE;
 			selectModelButtonConfig.size = ImVec2(128, 0);
             selectModelButtonConfig.alignment = Alignment::LEFT;
-			buttons.push_back(selectModelButtonConfig);
+			selectModelButtonConfig.onClick = [this]() {
+				m_modelManagerModalOpen = true;
+				};
+
+            if (modelManager.isLoadInProgress())
+            {
+                selectModelButtonConfig.label = "Loading Model...";
+            }
+
+            if (modelManager.isModelLoaded())
+            {
+                selectModelButtonConfig.icon = ICON_CI_SPARKLE_FILLED;
+            }
+
+			std::vector<ButtonConfig> buttons = { 
+                startServerButtonConfig, selectModelButtonConfig };
 
 			Button::renderGroup(buttons, ImGui::GetCursorPosX(), ImGui::GetCursorPosY());
+
+            m_modelManagerModal.render(m_modelManagerModalOpen);
         }
 
 		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 12);
@@ -69,4 +89,7 @@ public:
 private:
     bool m_isLogFocused = false;
 	std::string m_logBuffer;
+
+	ModelManagerModal m_modelManagerModal;
+	bool m_modelManagerModalOpen = false;
 };

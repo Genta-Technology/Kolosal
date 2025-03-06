@@ -33,52 +33,58 @@ public:
     void render() {
         auto& configManager = Model::ModelLoaderConfigManager::getInstance();
 
-        // Context Size Section
-        ImGui::Spacing(); ImGui::Spacing();
-        Label::render(m_contextSizeLabel);
-        ImGui::Spacing(); ImGui::Spacing();
-
         const float sliderWidth = m_sidebarWidth - 30;
 
-        // n_ctx slider (context size)
-        int n_ctx = configManager.getContextSize();
-        Slider::render("##n_ctx", *(float*)&n_ctx, 1024.0f, 16384.0f, sliderWidth, "%.0f");
-        if (n_ctx != configManager.getContextSize()) {
-            configManager.setContextSize(n_ctx);
+        // n_ctx slider (context size) - using float for slider then converting back to int
+        {
+            int n_ctx = configManager.getContextSize();
+            float n_ctx_float = static_cast<float>(n_ctx);
+            Slider::render("##n_ctx", n_ctx_float, 1024.0f, 16384.0f, sliderWidth, "%.0f");
+            int new_n_ctx = static_cast<int>(n_ctx_float);
+            if (new_n_ctx != n_ctx) {
+                configManager.setContextSize(new_n_ctx);
+                configManager.saveConfig(); // Auto-save on change
+            }
         }
 
-        // n_keep slider (keep size)
-        int n_keep = configManager.getKeepSize();
-        Slider::render("##n_keep", *(float*)&n_keep, 0.0f, (float)n_ctx, sliderWidth, "%.0f");
-        if (n_keep != configManager.getKeepSize()) {
-            configManager.setKeepSize(n_keep);
+        // n_keep slider (keep size) - using float for slider then converting back to int
+        {
+            int n_keep = configManager.getKeepSize();
+            float n_keep_float = static_cast<float>(n_keep);
+            Slider::render("##n_keep", n_keep_float, 0.0f, static_cast<float>(configManager.getContextSize()), sliderWidth, "%.0f");
+            int new_n_keep = static_cast<int>(n_keep_float);
+            if (new_n_keep != n_keep) {
+                configManager.setKeepSize(new_n_keep);
+                configManager.saveConfig(); // Auto-save on change
+            }
         }
 
-        // GPU Section
-        ImGui::Spacing(); ImGui::Spacing();
-        Label::render(m_gpuLayersLabel);
-        ImGui::Spacing(); ImGui::Spacing();
-
-        // n_gpu_layers slider
-        int n_gpu_layers = configManager.getGpuLayers();
-        Slider::render("##n_gpu_layers", *(float*)&n_gpu_layers, 0.0f, 100.0f, sliderWidth, "%.0f");
-        if (n_gpu_layers != configManager.getGpuLayers()) {
-            configManager.setGpuLayers(n_gpu_layers);
+        // n_gpu_layers slider - using float for slider then converting back to int
+        {
+            int n_gpu_layers = configManager.getGpuLayers();
+            float n_gpu_layers_float = static_cast<float>(n_gpu_layers);
+            Slider::render("##n_gpu_layers", n_gpu_layers_float, 0.0f, 100.0f, sliderWidth, "%.0f");
+            int new_n_gpu_layers = static_cast<int>(n_gpu_layers_float);
+            if (new_n_gpu_layers != n_gpu_layers) {
+                configManager.setGpuLayers(new_n_gpu_layers);
+                configManager.saveConfig(); // Auto-save on change
+            }
         }
-
-        // System Settings Section
-        ImGui::Spacing(); ImGui::Spacing();
-        Label::render(m_systemSettingsLabel);
-        ImGui::Spacing(); ImGui::Spacing();
 
         // use_mlock checkbox
         renderCheckbox("Memory Lock", "##use_mlock", configManager.getUseMlock(),
-            [&configManager](bool value) { configManager.setUseMlock(value); },
+            [&configManager](bool value) { 
+                configManager.setUseMlock(value); 
+                configManager.saveConfig();
+            },
             "Locks memory to prevent swapping to disk");
 
         // use_mmap checkbox
         renderCheckbox("Memory Map", "##use_mmap", configManager.getUseMmap(),
-            [&configManager](bool value) { configManager.setUseMmap(value); },
+            [&configManager](bool value) { 
+                configManager.setUseMmap(value); 
+                configManager.saveConfig();
+            },
             "Use memory mapping for model weights");
 
         // n_parallel input
@@ -87,26 +93,24 @@ public:
         IntInputField::render("##n_parallel", n_parallel, sliderWidth);
         if (n_parallel != configManager.getParallelCount()) {
             configManager.setParallelCount(n_parallel);
+            configManager.saveConfig();
         }
-
-        // Optimization Settings Section
-        ImGui::Spacing(); ImGui::Spacing();
-        Label::render(m_optimizationLabel);
-        ImGui::Spacing(); ImGui::Spacing();
 
         // cont_batching checkbox
         renderCheckbox("Continuous Batching", "##cont_batching", configManager.getContinuousBatching(),
-            [&configManager](bool value) { configManager.setContinuousBatching(value); },
+            [&configManager](bool value) { 
+                configManager.setContinuousBatching(value); 
+                configManager.saveConfig(); 
+            },
             "Enable continuous batching for better performance");
 
         // warmup checkbox
         renderCheckbox("Warmup", "##warmup", configManager.getWarmup(),
-            [&configManager](bool value) { configManager.setWarmup(value); },
+            [&configManager](bool value) { 
+                configManager.setWarmup(value); 
+                configManager.saveConfig(); 
+            },
             "Run model warmup at initialization");
-
-        // Save and Reset Buttons
-        ImGui::Spacing(); ImGui::Spacing(); ImGui::Spacing();
-        renderSaveButtons();
     }
 
 private:
@@ -128,6 +132,7 @@ private:
 
     void renderCheckbox(const std::string& label, const std::string& id, bool value, std::function<void(bool)> onChange, const std::string& tooltip = "") {
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5.0f);
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 8.0f);
 
         ButtonConfig btnConfig;
         btnConfig.id = id;
@@ -154,37 +159,11 @@ private:
         labelConfig.fontType = FontsManager::REGULAR;
         labelConfig.fontSize = FontsManager::MD;
         labelConfig.alignment = Alignment::LEFT;
+
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 8.0f);
         Label::render(labelConfig);
 
         ImGui::Spacing();
-    }
-
-    void renderSaveButtons() {
-        auto& configManager = Model::ModelLoaderConfigManager::getInstance();
-
-        ButtonConfig saveConfig;
-        saveConfig.id = "##save_config";
-        saveConfig.label = "Save Configuration";
-        saveConfig.size = ImVec2(m_sidebarWidth / 2 - 15, 0);
-        saveConfig.onClick = [&]() {
-            configManager.saveConfig();
-            };
-        saveConfig.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
-        saveConfig.hoverColor = RGBAToImVec4(53, 132, 228, 255);
-        saveConfig.activeColor = RGBAToImVec4(26, 95, 180, 255);
-
-        ButtonConfig resetConfig;
-        resetConfig.id = "##reset_config";
-        resetConfig.label = "Reset";
-        resetConfig.size = ImVec2(m_sidebarWidth / 2 - 15, 0);
-        resetConfig.onClick = [&]() {
-            configManager.loadConfig();
-            };
-        resetConfig.backgroundColor = RGBAToImVec4(180, 26, 26, 255);
-        resetConfig.hoverColor = RGBAToImVec4(228, 53, 53, 255);
-        resetConfig.activeColor = RGBAToImVec4(180, 26, 26, 255);
-
-        Button::renderGroup({ saveConfig, resetConfig }, 9, ImGui::GetCursorPosY(), 10);
     }
 };
 
@@ -200,7 +179,7 @@ public:
         const float sidebarHeight = io.DisplaySize.y - Config::TITLE_BAR_HEIGHT;
 
         // Right sidebar window
-        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - m_width, Config::TITLE_BAR_HEIGHT), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - m_width, Config::TITLE_BAR_HEIGHT + 40), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(m_width, sidebarHeight), ImGuiCond_Always);
         ImGui::SetNextWindowSizeConstraints(
             ImVec2(Config::DeploymentSettingsSidebar::MIN_SIDEBAR_WIDTH, sidebarHeight),
@@ -212,12 +191,8 @@ public:
         // Update the current sidebar width
         m_width = ImGui::GetWindowSize().x;
 
-        // Render header
-        renderHeader();
-        ImGui::Separator();
-
         // Render scrollable content area
-        ImGui::BeginChild("##deployment_settings_content", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+        ImGui::BeginChild("##deployment_settings_content", ImVec2(0, 0), false, false);
 
         // Render model loader settings component
         m_modelLoaderSettingsComponent.render();
@@ -232,32 +207,4 @@ public:
 private:
     float m_width = 0.0F;
     ModelLoaderSettingsComponent m_modelLoaderSettingsComponent;
-
-    void renderHeader() {
-        LabelConfig titleLabel;
-        titleLabel.id = "##deployment_settings_title";
-        titleLabel.label = "Deployment Settings";
-        titleLabel.icon = ICON_CI_ROCKET;
-        titleLabel.size = ImVec2(Config::Icon::DEFAULT_FONT_SIZE, 0);
-        titleLabel.fontType = FontsManager::BOLD;
-        titleLabel.fontSize = FontsManager::LG;
-        titleLabel.alignment = Alignment::LEFT;
-
-        ImGui::Spacing();
-        Label::render(titleLabel);
-        ImGui::Spacing();
-
-        // Display current datetime
-        LabelConfig datetimeLabel;
-        datetimeLabel.id = "##deployment_settings_datetime";
-        datetimeLabel.label = "2025-03-04 18:57:13 UTC | rifkybujana";
-        datetimeLabel.size = ImVec2(0, 0);
-        datetimeLabel.fontType = FontsManager::REGULAR;
-        datetimeLabel.fontSize = FontsManager::SM;
-        datetimeLabel.color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
-
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5.0f);
-        Label::render(datetimeLabel);
-        ImGui::Spacing();
-    }
 };
