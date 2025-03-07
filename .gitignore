@@ -25,3 +25,5 @@ out/*
 
 # debugging files
 *.pdb
+
+**/**/__pycache__/*

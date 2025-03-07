@@ -124,6 +124,7 @@ target_include_directories(kolosal_lib PUBLIC
     ${EXTERNAL_DIR}/imspinner
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/assets
+    ${CMAKE_SOURCE_DIR}/kolosal-server/include
     ${CURL_INCLUDE_DIR}
 )
 
