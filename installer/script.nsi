@@ -18,13 +18,13 @@ Var DefaultChatDir
 ;-----------------------------------
 ; Embed version info (metadata)
 ;-----------------------------------
-VIProductVersion "0.1.5.1"
+VIProductVersion "0.1.6.0"
 VIAddVersionKey "ProductName" "Kolosal AI Installer"
 VIAddVersionKey "CompanyName" "Genta Technology"
 VIAddVersionKey "FileDescription" "Kolosal AI Installer"
 VIAddVersionKey "LegalCopyright" "Copyright (C) 2025"
-VIAddVersionKey "FileVersion" "0.1.5.1"
-VIAddVersionKey "ProductVersion" "0.1.5.1"
+VIAddVersionKey "FileVersion" "0.1.6.0"
+VIAddVersionKey "ProductVersion" "0.1.6.0"
 VIAddVersionKey "OriginalFilename" "KolosalAI_Installer.exe"
 VIAddVersionKey "Comments" "Installer for Kolosal AI"
 VIAddVersionKey "Publisher" "Genta Technology"
