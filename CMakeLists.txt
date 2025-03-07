@@ -227,6 +227,15 @@ add_custom_command(
     "${EXTERNAL_DIR}/curl/bin" "$<TARGET_FILE_DIR:KolosalDesktop>"
 )
 
+# Copy Kolosal Server DLL
+add_custom_command(
+    TARGET KolosalDesktop POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:kolosal_server>"
+        "$<TARGET_FILE_DIR:KolosalDesktop>"
+    COMMENT "Copying Kolosal Server DLL to output directory"
+)
+
 # Copy Inference Engine DLLs
 add_custom_command(
     TARGET KolosalDesktop POST_BUILD

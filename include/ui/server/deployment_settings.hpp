@@ -32,6 +32,7 @@ public:
 
     void render() {
         auto& configManager = Model::ModelLoaderConfigManager::getInstance();
+        auto& serverState = ServerStateManager::getInstance();
 
         const float sliderWidth = m_sidebarWidth - 30;
 
@@ -44,6 +45,7 @@ public:
             if (new_n_ctx != n_ctx) {
                 configManager.setContextSize(new_n_ctx);
                 configManager.saveConfig(); // Auto-save on change
+                serverState.setModelParamsChanged(true); // Mark params as changed
             }
         }
 
@@ -56,6 +58,7 @@ public:
             if (new_n_keep != n_keep) {
                 configManager.setKeepSize(new_n_keep);
                 configManager.saveConfig(); // Auto-save on change
+                serverState.setModelParamsChanged(true); // Mark params as changed
             }
         }
 
@@ -68,22 +71,25 @@ public:
             if (new_n_gpu_layers != n_gpu_layers) {
                 configManager.setGpuLayers(new_n_gpu_layers);
                 configManager.saveConfig(); // Auto-save on change
+                serverState.setModelParamsChanged(true); // Mark params as changed
             }
         }
 
         // use_mlock checkbox
         renderCheckbox("Memory Lock", "##use_mlock", configManager.getUseMlock(),
-            [&configManager](bool value) { 
-                configManager.setUseMlock(value); 
+            [&configManager, &serverState](bool value) {
+                configManager.setUseMlock(value);
                 configManager.saveConfig();
+                serverState.setModelParamsChanged(true); // Mark params as changed
             },
             "Locks memory to prevent swapping to disk");
 
         // use_mmap checkbox
         renderCheckbox("Memory Map", "##use_mmap", configManager.getUseMmap(),
-            [&configManager](bool value) { 
-                configManager.setUseMmap(value); 
+            [&configManager, &serverState](bool value) {
+                configManager.setUseMmap(value);
                 configManager.saveConfig();
+                serverState.setModelParamsChanged(true); // Mark params as changed
             },
             "Use memory mapping for model weights");
 
@@ -94,21 +100,24 @@ public:
         if (n_parallel != configManager.getParallelCount()) {
             configManager.setParallelCount(n_parallel);
             configManager.saveConfig();
+            serverState.setModelParamsChanged(true); // Mark params as changed
         }
 
         // cont_batching checkbox
         renderCheckbox("Continuous Batching", "##cont_batching", configManager.getContinuousBatching(),
-            [&configManager](bool value) { 
-                configManager.setContinuousBatching(value); 
-                configManager.saveConfig(); 
+            [&configManager, &serverState](bool value) {
+                configManager.setContinuousBatching(value);
+                configManager.saveConfig();
+                serverState.setModelParamsChanged(true); // Mark params as changed
             },
             "Enable continuous batching for better performance");
 
         // warmup checkbox
         renderCheckbox("Warmup", "##warmup", configManager.getWarmup(),
-            [&configManager](bool value) { 
-                configManager.setWarmup(value); 
-                configManager.saveConfig(); 
+            [&configManager, &serverState](bool value) {
+                configManager.setWarmup(value);
+                configManager.saveConfig();
+                serverState.setModelParamsChanged(true); // Mark params as changed
             },
             "Run model warmup at initialization");
     }
@@ -167,11 +176,73 @@ private:
     }
 };
 
+class ServerSettingsComponent {
+public:
+    ServerSettingsComponent(float& sidebarWidth)
+        : m_sidebarWidth(sidebarWidth)
+    {
+        m_serverSettingsLabel = createLabel("Server Settings", ICON_CI_SERVER);
+    }
+
+    void render() {
+        auto& serverState = ServerStateManager::getInstance();
+        const float sliderWidth = m_sidebarWidth - 30;
+
+        // Server status indicator
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 5.0f);
+        ImGui::TextUnformatted("Status:");
+        ImGui::SameLine();
+
+        if (serverState.isServerRunning()) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
+            ImGui::TextUnformatted("Running");
+        }
+        else {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
+            ImGui::TextUnformatted("Stopped");
+        }
+        ImGui::PopStyleColor();
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        int port = serverState.getServerPort();
+
+        // Make the port input read-only if server is running
+        ImGui::BeginDisabled(serverState.isServerRunning());
+
+        IntInputField::render("##server_port", port, sliderWidth);
+        if (port != serverState.getServerPort() && port > 0 && port <= 65535) {
+            serverState.setServerPort(port);
+        }
+
+        ImGui::EndDisabled();
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+    }
+
+private:
+    float& m_sidebarWidth;
+    LabelConfig m_serverSettingsLabel;
+
+    LabelConfig createLabel(const std::string& text, const std::string& icon) {
+        LabelConfig label;
+        label.id = "##" + text + "_label";
+        label.label = text;
+        label.icon = icon;
+        label.size = ImVec2(Config::Icon::DEFAULT_FONT_SIZE, 0);
+        label.fontType = FontsManager::BOLD;
+        return label;
+    }
+};
+
 class DeploymentSettingsSidebar {
 public:
     DeploymentSettingsSidebar() :
         m_width(Config::DeploymentSettingsSidebar::SIDEBAR_WIDTH),
-        m_modelLoaderSettingsComponent(m_width) {
+        m_modelLoaderSettingsComponent(m_width),
+        m_serverSettingsComponent(m_width) {
     }
 
     void render() {
@@ -194,6 +265,9 @@ public:
         // Render scrollable content area
         ImGui::BeginChild("##deployment_settings_content", ImVec2(0, 0), false, false);
 
+        // Render server settings component first
+        m_serverSettingsComponent.render();
+
         // Render model loader settings component
         m_modelLoaderSettingsComponent.render();
 
@@ -207,4 +281,5 @@ public:
 private:
     float m_width = 0.0F;
     ModelLoaderSettingsComponent m_modelLoaderSettingsComponent;
+    ServerSettingsComponent m_serverSettingsComponent;
 };

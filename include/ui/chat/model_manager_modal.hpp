@@ -270,6 +270,7 @@ private:
             btnConfig.onClick = [variant, this]() {
                 Model::ModelManager::getInstance().setPreferredVariant(m_model.name, variant);
                 };
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4);
             Button::render(btnConfig);
 
             ImGui::SameLine(0.0f, 4.0f);
@@ -280,6 +281,7 @@ private:
             variantLabel.fontType = FontsManager::REGULAR;
             variantLabel.fontSize = FontsManager::SM;
             variantLabel.alignment = Alignment::LEFT;
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 6);
             Label::render(variantLabel);
             };
 

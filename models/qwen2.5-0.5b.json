@@ -1,9 +1,9 @@
 {
-  "name": "Qwen 2.5 0.5B",
+  "name": "Qwen2.5 0.5B",
   "author": "Alibaba",
   "fullPrecision": {
     "type": "Full Precision",
-    "path": "models/qwen2.5-0.5b/int4/Qwen2.5-0.5B-Instruct-f16.gguf",
+    "path": "models/qwen2.5-0.5b/fp16/Qwen2.5-0.5B-Instruct-f16.gguf",
     "downloadLink": "https://huggingface.co/kolosal/qwen2.5-0.5b/resolve/main/Qwen2.5-0.5B-Instruct-f16.gguf",
     "isDownloaded": false,
     "downloadProgress": 0.0,
@@ -19,7 +19,7 @@
   },
   "quantized4Bit": {
     "type": "4-bit Quantized",
-    "path": "models/qwen2.5-0.5b/fp16/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+    "path": "models/qwen2.5-0.5b/int4/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
     "downloadLink": "https://huggingface.co/kolosal/qwen2.5-0.5b/resolve/main/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
     "isDownloaded": false,
     "downloadProgress": 0.0,

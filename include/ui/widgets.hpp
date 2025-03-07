@@ -765,8 +765,6 @@ namespace Slider
         renderLabel.erase(std::remove(renderLabel.begin(), renderLabel.end(), '#'), renderLabel.end());
         std::replace(renderLabel.begin(), renderLabel.end(), '_', ' ');
 
-        // Apply horizontal padding and render label
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + paddingX);
         LabelConfig labelConfig;
         labelConfig.id = label;
         labelConfig.label = renderLabel;
@@ -861,8 +859,6 @@ namespace IntInputField
         renderLabel.erase(std::remove(renderLabel.begin(), renderLabel.end(), '#'), renderLabel.end());
         std::replace(renderLabel.begin(), renderLabel.end(), '_', ' ');
 
-        // Apply horizontal padding and render label
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + paddingX);
         LabelConfig labelConfig;
         labelConfig.id = label;
         labelConfig.label = renderLabel;

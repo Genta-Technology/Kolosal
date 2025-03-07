@@ -4,6 +4,7 @@
 #include "ui/widgets.hpp"
 #include "ui/chat/model_manager_modal.hpp"
 #include "model/model_manager.hpp"
+#include "model/server_state_manager.hpp"
 
 #include <IconsCodicons.h>
 
@@ -11,14 +12,12 @@ class ServerLogViewer {
 public:
     ServerLogViewer() {
         m_logBuffer = "Server logs will be displayed here.";
-        m_serverPort = "8080"; // Default port
-        m_serverRunning = false;
         m_lastLogUpdate = std::chrono::steady_clock::now();
     }
 
     ~ServerLogViewer() {
         // Make sure to stop the server on destruction
-        if (m_serverRunning) {
+        if (ServerStateManager::getInstance().isServerRunning()) {
             Model::ModelManager::getInstance().stopServer();
         }
     }
@@ -26,6 +25,7 @@ public:
     void render(const float sidebarWidth) {
         ImGuiIO& io = ImGui::GetIO();
         Model::ModelManager& modelManager = Model::ModelManager::getInstance();
+        ServerStateManager& serverState = ServerStateManager::getInstance();
 
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
@@ -39,67 +39,34 @@ public:
 
         // Top bar with controls
         {
-            // Server status indicator
-            ImGui::TextUnformatted("Status:");
-            ImGui::SameLine();
-
-            if (m_serverRunning) {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));
-                ImGui::TextUnformatted("Running");
-            }
-            else {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.5f, 0.0f, 1.0f));
-                ImGui::TextUnformatted("Stopped");
-            }
-            ImGui::PopStyleColor();
-            ImGui::SameLine(0, 20);
-
-            // Port input field
-            ImGui::TextUnformatted("Port:");
-            ImGui::SameLine();
-
-            //InputFieldConfig portConfig;
-            //portConfig.id = "##server_port";
-            //portConfig.size = ImVec2(100, 0);
-            //portConfig.text = m_serverPort;
-            //portConfig.onTextChanged = [this](const std::string& text) {
-            //    m_serverPort = text;
-            //    };
-            //portConfig.readOnly = m_serverRunning; // Can't change port while server is running
-            //InputField::render(portConfig);
-
-            ImGui::SameLine(0, 20);
-
             // Start/Stop server button
             ButtonConfig serverButtonConfig;
             serverButtonConfig.id = "##server_toggle_button";
 
-            if (m_serverRunning) {
+            if (serverState.isServerRunning()) {
                 serverButtonConfig.label = "Stop Server";
                 serverButtonConfig.icon = ICON_CI_DEBUG_STOP;
                 serverButtonConfig.tooltip = "Stop the server";
-                serverButtonConfig.backgroundColor = ImVec4(0.8f, 0.2f, 0.2f, 1.0f);
             }
             else {
                 serverButtonConfig.label = "Start Server";
                 serverButtonConfig.icon = ICON_CI_RUN;
                 serverButtonConfig.tooltip = "Start the server";
-                serverButtonConfig.backgroundColor = ImVec4(0.2f, 0.8f, 0.2f, 1.0f);
             }
 
             serverButtonConfig.size = ImVec2(150, 0);
             serverButtonConfig.alignment = Alignment::CENTER;
-            serverButtonConfig.onClick = [this, &modelManager]() {
-                toggleServer(modelManager);
+            serverButtonConfig.onClick = [this, &modelManager, &serverState]() {
+                toggleServer(modelManager, serverState);
                 };
 
             // Model selection button
             ButtonConfig selectModelButtonConfig;
             selectModelButtonConfig.id = "##server_select_model_button";
             selectModelButtonConfig.label =
-                modelManager.getCurrentModelName().value_or("Select Model");
+                serverState.getCurrentModelName().value_or("Select Model");
             selectModelButtonConfig.tooltip =
-                modelManager.getCurrentModelName().value_or("Select Model");
+                serverState.getCurrentModelName().value_or("Select Model");
             selectModelButtonConfig.icon = ICON_CI_SPARKLE;
             selectModelButtonConfig.size = ImVec2(180, 0);
             selectModelButtonConfig.alignment = Alignment::CENTER;
@@ -107,32 +74,73 @@ public:
                 m_modelManagerModalOpen = true;
                 };
 
-            if (modelManager.isLoadInProgress()) {
+            if (serverState.isModelLoadInProgress()) {
                 selectModelButtonConfig.label = "Loading Model...";
                 serverButtonConfig.state = ButtonState::DISABLED;
             }
 
-            if (modelManager.isModelLoaded()) {
+            if (serverState.isModelLoaded()) {
                 selectModelButtonConfig.icon = ICON_CI_SPARKLE_FILLED;
             }
             else {
                 serverButtonConfig.state = ButtonState::DISABLED; // Can't start server without model
             }
 
-            Button::render(serverButtonConfig);
-            ImGui::SameLine(0, 10);
-            Button::render(selectModelButtonConfig);
+            std::vector<ButtonConfig> buttonConfigs = { serverButtonConfig, selectModelButtonConfig };
+
+            // Add reload button if model params have changed
+            if (serverState.haveModelParamsChanged() && serverState.isModelLoaded()) {
+                ButtonConfig reloadModelButtonConfig;
+                reloadModelButtonConfig.id = "##reload_model_button";
+                reloadModelButtonConfig.icon = ICON_CI_REFRESH;
+                reloadModelButtonConfig.tooltip = "Reload model with new parameters";
+                reloadModelButtonConfig.size = ImVec2(24, 24);
+                reloadModelButtonConfig.alignment = Alignment::CENTER;
+				reloadModelButtonConfig.backgroundColor = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
+                reloadModelButtonConfig.onClick = [this, &modelManager, &serverState]() {
+					modelManager.switchModel(
+						modelManager.getCurrentModelName().value(),
+						modelManager.getCurrentVariantType()
+					);
+					serverState.resetModelParamsChanged();
+                    };
+
+                // Disable the reload button if server is running or model is loading
+                if (serverState.isServerRunning() || serverState.isModelLoadInProgress()) {
+                    reloadModelButtonConfig.state = ButtonState::DISABLED;
+                }
+
+                buttonConfigs.push_back(reloadModelButtonConfig);
+            }
+
+			Button::renderGroup(buttonConfigs, ImGui::GetCursorPosX(), ImGui::GetCursorPosY());
 
             // Show API endpoint info if server is running
-            if (m_serverRunning) {
-                ImGui::SameLine(0, 20);
+            if (serverState.isServerRunning()) {
+                ImGui::SameLine();
+
+				ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 40);
+
                 ImGui::TextUnformatted("API Endpoint:");
                 ImGui::SameLine();
 
-                std::string endpoint = "http://localhost:" + m_serverPort + "/v1/chat/completions";
+                std::string endpoint = "http://localhost:" + serverState.getServerPortString() + "/v1/chat/completions";
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.8f, 1.0f, 1.0f));
                 ImGui::TextUnformatted(endpoint.c_str());
                 ImGui::PopStyleColor();
+
+                ImGui::SameLine();
+				ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2);
+                ButtonConfig copyButtonConfig;
+                copyButtonConfig.id = "##copy_endpoint_button";
+                copyButtonConfig.icon = ICON_CI_COPY;
+                copyButtonConfig.tooltip = "Copy endpoint to clipboard";
+                copyButtonConfig.size = ImVec2(24, 24);
+                copyButtonConfig.onClick = [endpoint]() {
+                    ImGui::SetClipboardText(endpoint.c_str());
+                    };
+
+                Button::render(copyButtonConfig);
             }
 
             m_modelManagerModal.render(m_modelManagerModalOpen);
@@ -169,29 +177,27 @@ public:
 private:
     bool m_isLogFocused = false;
     std::string m_logBuffer;
-    std::string m_serverPort;
-    bool m_serverRunning;
     size_t m_lastLogIndex = 0;
     std::chrono::steady_clock::time_point m_lastLogUpdate;
 
     ModelManagerModal m_modelManagerModal;
     bool m_modelManagerModalOpen = false;
 
-    void toggleServer(Model::ModelManager& modelManager) {
-        if (m_serverRunning) {
+    void toggleServer(Model::ModelManager& modelManager, ServerStateManager& serverState) {
+        if (serverState.isServerRunning()) {
             // Stop the server
             modelManager.stopServer();
-            m_serverRunning = false;
+            serverState.setServerRunning(false);
         }
         else {
             // Start the server
-            if (modelManager.isModelLoaded()) {
-                if (modelManager.startServer(m_serverPort)) {
-                    m_serverRunning = true;
-                    addToLogBuffer("Server started on port " + m_serverPort);
+            if (serverState.isModelLoaded()) {
+                if (modelManager.startServer(serverState.getServerPortString())) {
+                    serverState.setServerRunning(true);
+                    addToLogBuffer("Server started on port " + serverState.getServerPortString());
                 }
                 else {
-                    addToLogBuffer("Failed to start server on port " + m_serverPort);
+                    addToLogBuffer("Failed to start server on port " + serverState.getServerPortString());
                 }
             }
             else {
