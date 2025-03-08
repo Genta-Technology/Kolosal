@@ -1,0 +1,55 @@
+name: "Feature request"
+description: "Share your ideas for Kolosal AI."
+title: "[FEATURE]: "
+labels: ["enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🚀 Kolosal AI Feature Request
+        Thank you for taking the time to suggest an improvement! Please provide details below to help us understand your idea.
+
+  - type: textarea
+    id: feature_request
+    attributes:
+      label: "💡 What Problem Does This Solve? (Optional)"
+      description: "Describe the problem or limitation this feature would address."
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: feature_description
+    attributes:
+      label: "✨ Proposed Solution"
+      description: "Describe what you want to happen, including details on how it should work."
+    validations:
+      required: false
+
+  - type: textarea
+    id: feature_alternatives
+    attributes:
+      label: "🔄 Alternative Approaches (Optional)"
+      description: "Have you considered other solutions or workarounds?"
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: "📌 Additional Context (Optional)"
+      description: "Any extra details, screenshots, or relevant information?"
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        📌 **Before submitting**, please:
+        - Check if a similar request already exists.
+        - Provide enough detail so we can understand your idea.
+        - Focus on how this feature benefits Kolosal AI.
+
+        Thanks for contributing to Kolosal AI! 🚀

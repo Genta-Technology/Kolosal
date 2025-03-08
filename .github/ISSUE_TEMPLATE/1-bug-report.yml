@@ -1,0 +1,98 @@
+name: "Bug report"
+description: "Report bugs and unexpected behavior in Kolosal AI."
+title: "[BUG]: "
+labels: ["bug"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🚀 Kolosal AI Bug Report
+        Thank you for taking the time to report an issue! Before submitting, please check if a similar issue has already been reported.
+
+  - type: textarea
+    id: bug_description
+    attributes:
+      label: "🐞 Describe the Bug"
+      description: "Provide a clear and concise description of the bug, including any error messages."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: "🔄 Steps to Reproduce (Optional)"
+      description: "Provide a step-by-step guide on how to reproduce the bug."
+      placeholder: |
+        1. Go to '...'
+        2. Run '...'
+        3. Observe '...'
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: "✅ Expected Behavior (Optional)"
+      description: "Describe what you expected to happen instead of the current issue."
+    validations:
+      required: false
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: "❌ Actual Behavior (Optional)"
+      description: "Describe what actually happened."
+    validations:
+      required: false
+
+  - type: textarea
+    id: stacktrace
+    attributes:
+      label: "🖥️ Code Snippet / Logs (Optional)"
+      description: "Provide a minimal reproducible code snippet or logs if applicable."
+      placeholder: |
+        ```python
+        # Paste your code snippet here
+        ```
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: "📸 Screenshots (Optional)"
+      description: "Attach any screenshots or recordings that may help illustrate the issue."
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "🔍 Environment Details (Optional)"
+      description: "Provide details about your environment setup."
+      value: |
+        - Kolosal AI Version
+        - OS: [e.g. Windows 10 / Windows 11]
+        - Hardware: [e.g. GPU: NVIDIA RTX 3090, RAM: 32GB]
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: "💡 Additional Context (Optional)"
+      description: "Add any other relevant information or workarounds you've found."
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        📌 **Before submitting**, please:
+        - Include a detailed bug description.
+        - Test with the latest Kolosal AI release.
+        - Check existing issues to avoid duplicates.
+
+        Thanks for helping improve Kolosal AI! 🚀
