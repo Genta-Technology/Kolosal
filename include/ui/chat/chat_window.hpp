@@ -279,6 +279,73 @@ private:
         }
     }
 
+    void generateChatTitle(const std::string& firstUserMessage) {
+        auto& modelManager = Model::ModelManager::getInstance();
+        auto& chatManager = Chat::ChatManager::getInstance();
+
+        // Create parameters for title generation
+        ChatCompletionParameters titleParams;
+
+        // Add a system prompt instructing the model to generate a short, descriptive title
+        const std::string titlePrompt = firstUserMessage +
+            "\n-----\n"
+            "Ignore all previous instructions. The preceding text is a conversation thread that needs a concise but descriptive 3 to 5 word title in natural English so that readers will be able to easily find it again. Do not add any quotation marks, formatting, or any symbol to the title. Respond only with the title text.";
+
+        // Add the title prompt as a user message
+        titleParams.messages.push_back({ "user", titlePrompt });
+
+        // Configure title generation parameters
+        titleParams.maxNewTokens = 20;  // Short title only needs few tokens
+        titleParams.temperature = 0.7;  // Slightly creative but not too random
+        titleParams.streaming = false;  // No need for streaming for a quick title
+
+        // Use a separate thread to avoid blocking UI
+        std::thread([titleParams]() {
+            auto& modelManager = Model::ModelManager::getInstance();
+            auto& chatManager = Chat::ChatManager::getInstance();
+
+            // Generate the title (synchronous call)
+            CompletionResult titleResult = modelManager.chatCompleteSync(titleParams, false);
+
+            if (!titleResult.text.empty()) {
+                // Clean up the generated title
+                std::string newTitle = titleResult.text;
+
+                // Trim whitespace and quotes
+                // Remove symbols and trim whitespace, and if the title contain text "Title:", remove it
+                auto trim = [](std::string& s) {
+                    // Remove "Title:" if present
+                    const std::string titlePrefix = "Title:";
+                    size_t pos = s.find(titlePrefix);
+                    if (pos != std::string::npos) {
+                        s.erase(pos, titlePrefix.length());
+                    }
+
+                    // Remove symbols except '+' and '-'
+                    s.erase(std::remove_if(s.begin(), s.end(), [](char c) {
+                        return std::ispunct(static_cast<unsigned char>(c)) && c != '+' && c != '-';
+                        }), s.end());
+
+                    // Trim whitespace
+                    s.erase(0, s.find_first_not_of(" \t\n\r"));
+                    if (!s.empty()) {
+                        s.erase(s.find_last_not_of(" \t\n\r") + 1);
+                    }
+                    };
+
+                trim(newTitle);
+
+                // Apply the new title if it's valid
+                if (!newTitle.empty()) {
+                    if (!chatManager.renameCurrentChat(newTitle).get())
+                    {
+						std::cerr << "[ChatSection] Failed to rename chat to: " << newTitle << "\n";
+                    }
+                }
+            }
+            }).detach();
+    }
+
     // Render the row of buttons that allow the user to switch models or clear chat.
     void renderChatFeatureButtons(float baseX, float baseY) {
 		Model::ModelManager& modelManager = Model::ModelManager::getInstance();
@@ -321,6 +388,9 @@ private:
 
         auto& currentChat = currentChatOpt.value();
 
+        // Check if this is the first message in the chat
+        bool isFirstMessage = currentChat.messages.empty();
+
         // Append the user message.
         Chat::Message userMessage;
         userMessage.id = static_cast<int>(currentChat.messages.size()) + 1;
@@ -339,6 +409,11 @@ private:
         }
 
         modelManager.setModelGenerationInProgress(true);
+
+        // If this is the first message, generate a title for the chat
+        if (isFirstMessage) {
+            generateChatTitle(message);
+        }
     }
 
     InputFieldConfig createInputFieldConfig(

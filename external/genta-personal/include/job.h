@@ -27,6 +27,8 @@ struct Job {
     std::atomic<bool> cancelRequested{ false };
     CompletionParameters params;
 
+    int seqId;
+
     bool isDecodingPrompt = true;
 
     int n_past;

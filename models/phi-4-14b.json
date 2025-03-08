@@ -1,0 +1,28 @@
+{
+  "name": "Phi 4 14B",
+  "author": "Microsoft",
+  "fullPrecision": {
+    "type": "Full Precision",
+    "path": "models/phi-4-14b/fp16/phi-4-F16.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/phi-4/resolve/main/phi-4-F16.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized8Bit": {
+    "type": "8-bit Quantized",
+    "path": "models/phi-4-14b/int8/phi-4-Q8_0.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/phi-4/resolve/main/phi-4-Q8_0.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  },
+  "quantized4Bit": {
+    "type": "4-bit Quantized",
+    "path": "models/phi-4-14b/int4/phi-4-Q4_K_M.gguf",
+    "downloadLink": "https://huggingface.co/kolosal/phi-4/resolve/main/phi-4-Q4_K_M.gguf",
+    "isDownloaded": false,
+    "downloadProgress": 0.0,
+    "lastSelected": 0
+  }
+}

@@ -94,6 +94,7 @@ namespace Chat
             return std::async(std::launch::async, [this, newName]() {
                 if (!validateChatName(newName)) 
                 {
+					std::cerr << "[ChatManager] [ERROR] " << newName << " is not valid" << std::endl;
                     return false;
                 }
 
@@ -101,17 +102,20 @@ namespace Chat
 
                 if (!m_currentChatName) 
                 {
+					std::cerr << "[ChatManager] No current chat selected.\n";
                     return false;
                 }
 
                 if (m_chatNameToIndex.find(newName) != m_chatNameToIndex.end()) 
                 {
+					std::cerr << "[ChatManager] Chat with name " << newName << " already exists.\n";
                     return false;
                 }
 
                 size_t currentIdx = m_currentChatIndex;
                 if (currentIdx >= m_chats.size()) 
                 {
+					std::cerr << "[ChatManager] Invalid chat index: " << currentIdx << std::endl;
                     return false;
                 }
 

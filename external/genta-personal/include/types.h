@@ -17,6 +17,7 @@ struct CompletionParameters
 	float topP = 0.5f;
 	bool streaming = false;
 	std::string kvCacheFilePath = "";
+	int seqId = -1;
 
 	bool isValid() const;
 };
@@ -43,6 +44,7 @@ struct ChatCompletionParameters
 	float topP = 0.5f;
 	bool streaming = false;
 	std::string kvCacheFilePath = "";
+	int seqId = -1;
 
 	bool isValid() const;
 };

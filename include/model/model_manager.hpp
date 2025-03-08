@@ -321,6 +321,7 @@ namespace Model
             );
             if (kvCachePathOpt.has_value()) {
                 completionParams.kvCacheFilePath = kvCachePathOpt.value().string();
+                completionParams.seqId = currentChat.id;
             }
 
             return completionParams;
@@ -363,6 +364,7 @@ namespace Model
             );
             if (kvCachePathOpt.has_value()) {
                 completionParams.kvCacheFilePath = kvCachePathOpt.value().string();
+                completionParams.seqId = currentChat.id;
             }
 
             return completionParams;
@@ -438,7 +440,7 @@ namespace Model
             return result;
         }
 
-        CompletionResult chatCompleteSync(const ChatCompletionParameters& params)
+        CompletionResult chatCompleteSync(const ChatCompletionParameters& params, const bool saveChat = true)
         {
             {
                 std::shared_lock<std::shared_mutex> lock(m_mutex);
@@ -475,8 +477,6 @@ namespace Model
                 m_jobIds.push_back(jobId);
             }
 
-            auto& chatManager = Chat::ChatManager::getInstance();
-
             // Wait for the job to complete
             m_inferenceEngine->waitForJob(jobId);
 
@@ -496,22 +496,26 @@ namespace Model
             }
 
             // Save the chat history
-            auto chatName = chatManager.getChatNameByJobId(jobId);
-            if (!chatManager.saveChat(chatName))
+            if (saveChat) 
             {
-                std::cerr << "[ModelManager] Failed to save chat: " << chatName << std::endl;
-            }
+                auto& chatManager = Chat::ChatManager::getInstance();
+                auto chatName = chatManager.getChatNameByJobId(jobId);
+                if (!chatManager.saveChat(chatName))
+                {
+                    std::cerr << "[ModelManager] Failed to save chat: " << chatName << std::endl;
+                }
 
-            // Reset jobid tracking on chat manager
-            if (!chatManager.removeJobId(jobId))
-            {
-                std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
+                // Reset jobid tracking on chat manager
+                if (!chatManager.removeJobId(jobId))
+                {
+                    std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
+                }
             }
 
             return result;
         }
 
-        int startCompletionJob(const CompletionParameters& params, std::function<void(const std::string&, const float, const int, const bool)> streamingCallback)
+        int startCompletionJob(const CompletionParameters& params, std::function<void(const std::string&, const float, const int, const bool)> streamingCallback, const bool saveChat = true)
         {
             {
                 std::shared_lock<std::shared_mutex> lock(m_mutex);
@@ -539,7 +543,7 @@ namespace Model
                 m_jobIds.push_back(jobId);
             }
 
-            std::thread([this, jobId, streamingCallback]() {
+            std::thread([this, jobId, streamingCallback, saveChat]() {
                 // Poll while job is running or until the engine says it's done
                 while (true)
                 {
@@ -569,9 +573,12 @@ namespace Model
 
                 // Reset jobid tracking on chat manager
                 {
-                    if (!Chat::ChatManager::getInstance().removeJobId(jobId))
+                    if (saveChat)
                     {
-                        std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
+                        if (!Chat::ChatManager::getInstance().removeJobId(jobId))
+                        {
+                            std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
+                        }
                     }
                 }
                 }).detach();
@@ -579,7 +586,7 @@ namespace Model
             return jobId;
         }
 
-        int startChatCompletionJob(const ChatCompletionParameters& params, std::function<void(const std::string&, const float, const int, const bool)> streamingCallback)
+        int startChatCompletionJob(const ChatCompletionParameters& params, std::function<void(const std::string&, const float, const int, const bool)> streamingCallback, const bool saveChat = true)
         {
             {
                 std::shared_lock<std::shared_mutex> lock(m_mutex);
@@ -607,10 +614,7 @@ namespace Model
                 m_jobIds.push_back(jobId);
             }
 
-            std::thread([this, jobId, streamingCallback]() {
-                // Poll while job is running or until the engine says it's done
-                auto& chatManager = Chat::ChatManager::getInstance();
-
+            std::thread([this, jobId, streamingCallback, saveChat]() {
                 while (true)
                 {
                     if (this->m_inferenceEngine->hasJobError(jobId)) break;
@@ -637,20 +641,25 @@ namespace Model
                     m_jobIds.erase(std::remove(m_jobIds.begin(), m_jobIds.end(), jobId), m_jobIds.end());
                 }
 
-                // Save the chat history
+                if (saveChat)
                 {
-                    auto chatName = chatManager.getChatNameByJobId(jobId);
-                    if (!chatManager.saveChat(chatName))
-                    {
-                        std::cerr << "[ModelManager] Failed to save chat: " << chatName << std::endl;
-                    }
-                }
+                    auto& chatManager = Chat::ChatManager::getInstance();
 
-                // Reset jobid tracking on chat manager
-                {
-                    if (!chatManager.removeJobId(jobId))
+                    // Save the chat history
                     {
-                        std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
+                        auto chatName = chatManager.getChatNameByJobId(jobId);
+                        if (!chatManager.saveChat(chatName))
+                        {
+                            std::cerr << "[ModelManager] Failed to save chat: " << chatName << std::endl;
+                        }
+                    }
+
+                    // Reset jobid tracking on chat manager
+                    {
+                        if (!chatManager.removeJobId(jobId))
+                        {
+                            std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
+                        }
                     }
                 }
                 }).detach();
@@ -753,7 +762,7 @@ namespace Model
             params.streaming = false;
 
             // Invoke the synchronous chat completion method.
-            CompletionResult result = chatCompleteSync(params);
+            CompletionResult result = chatCompleteSync(params, false);
 
             // Map the engine’s result to our ChatCompletionResponse.
             ChatCompletionResponse response = convertToChatResponse(request, result);
