@@ -31,6 +31,7 @@ typedef void (DestroyInferenceEngineFunc)(IInferenceEngine*);
 
 namespace Model
 {
+    static std::atomic<int> seqCounter;
 
     class ModelManager
     {
@@ -276,6 +277,11 @@ namespace Model
             params.temperature = request.temperature;
             params.topP = request.top_p;
             params.streaming = request.stream;
+
+			// set seqId to be the current timestamp
+            auto now = std::chrono::system_clock::now();
+            auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+            params.seqId = static_cast<int>(timestamp * 1000 + seqCounter++);
 
             return params;
         }

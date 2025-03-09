@@ -14,7 +14,7 @@ stream = client.chat.completions.create(
     model="claude-3-opus-20240229",
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": "Why anything to the power of zero is 1?"}
+        {"role": "user", "content": "Hello!"}
     ],
     stream=True
 )
