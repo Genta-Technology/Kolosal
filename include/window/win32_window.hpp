@@ -14,6 +14,7 @@
 
 #include "config.hpp"
 #include "window.hpp"
+#include "window_composition_attribute.hpp"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -27,7 +28,7 @@ public:
         , height(720)
         , should_close(false)
         , borderless(true)
-        , borderless_shadow(true)
+        , borderless_shadow(false)
         , borderless_drag(false)
         , borderless_resize(true) {}
 
@@ -52,7 +53,69 @@ public:
         }
 
         set_borderless(borderless);
-        set_borderless_shadow(borderless_shadow);
+
+        // Apply acrylic effect instead of shadow
+        applyAcrylicEffect();
+    }
+
+    void applyAcrylicEffect()
+    {
+        if (!hwnd) return;
+
+        HMODULE hUser = GetModuleHandle(TEXT("user32.dll"));
+        if (hUser)
+        {
+            pfnSetWindowCompositionAttribute setWindowCompositionAttribute =
+                (pfnSetWindowCompositionAttribute)GetProcAddress(hUser, "SetWindowCompositionAttribute");
+
+            if (setWindowCompositionAttribute)
+            {
+                // Create accent policy for acrylic blur
+                ACCENT_POLICY accent{ ACCENT_ENABLE_ACRYLICBLURBEHIND, 0, 0, 0 };
+
+                // Set the gradient color ($AABBGGRR format)
+                // This is a dark semi-transparent color that works well with UI
+                accent.GradientColor = 0x99000000;  // Adjust alpha for transparency level
+
+                // Apply the acrylic effect
+                WINDOWCOMPOSITIONATTRIBDATA data;
+                data.Attrib = WCA_ACCENT_POLICY;
+                data.pvData = &accent;
+                data.cbData = sizeof(accent);
+
+                setWindowCompositionAttribute(hwnd, &data);
+            }
+        }
+
+        // Set rounded corners.
+        // For Windows 11, try to use DWMWA_WINDOW_CORNER_PREFERENCE if available; otherwise, fallback to SetWindowRgn.
+        typedef enum _DWM_WINDOW_CORNER_PREFERENCE {
+            DWMWCP_DEFAULT = 0,
+            DWMWCP_DONOTROUND = 1,
+            DWMWCP_ROUND = 2,
+            DWMWCP_ROUNDSMALL = 3
+        } DWM_WINDOW_CORNER_PREFERENCE;
+
+        // The DWMWA_WINDOW_CORNER_PREFERENCE attribute is 33.
+        const DWORD DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+        DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_ROUND; // Or use DWMWCP_ROUNDSMALL per your taste
+
+        HRESULT hr = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference, sizeof(preference));
+        if (SUCCEEDED(hr)) {
+            // Successfully applied system-managed rounded corners on supported systems.
+        }
+        else {
+            // Fallback: use SetWindowRgn to create rounded window corners.
+            RECT rect;
+            if (GetClientRect(hwnd, &rect)) {
+                int width = rect.right - rect.left;
+                int height = rect.bottom - rect.top;
+                HRGN hRgn = CreateRoundRectRgn(0, 0, width, height, Config::WINDOW_CORNER_RADIUS, Config::WINDOW_CORNER_RADIUS);
+                if (hRgn) {
+                    SetWindowRgn(hwnd, hRgn, TRUE);
+                }
+            }
+        }
     }
 
     void show() override
@@ -144,6 +207,11 @@ public:
             }
             case WM_ACTIVATE: {
                 window->is_window_active = (wParam != WA_INACTIVE);
+                break;
+            }
+            case WM_SIZE: {
+                // Reapply acrylic effect when the window is resized
+                window->applyAcrylicEffect();
                 break;
             }
             case WM_CLOSE: {

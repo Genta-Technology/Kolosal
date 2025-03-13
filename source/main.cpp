@@ -2,14 +2,10 @@
 
 #include "window/window_factory.hpp"
 #include "window/graphics_context_factory.hpp"
-#include "window/gradient_background.hpp"
 
 #include "ui/fonts.hpp"
 #include "ui/title_bar.hpp"
 #include "ui/tab_manager.hpp"
-#include "ui/chat/chat_history_sidebar.hpp"
-#include "ui/chat/chat_window.hpp"
-#include "ui/chat/preset_sidebar.hpp"
 
 #include "chat/chat_manager.hpp"
 #include "model/preset_manager.hpp"
@@ -37,8 +33,6 @@ public:
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext();
-
-        GradientBackground::CleanUp();
 
         NFD_Quit();
     }
@@ -122,13 +116,6 @@ void InitializeImGui(Window& window)
     ImGui_ImplOpenGL3_Init("#version 330");
 }
 
-void InitializeGradientBackground(int display_w, int display_h)
-{
-    GradientBackground::generateGradientTexture(display_w, display_h);
-    g_shaderProgram = GradientBackground::createShaderProgram(g_quadVertexShaderSource, g_quadFragmentShaderSource);
-    GradientBackground::setupFullScreenQuad();
-}
-
 void StartNewFrame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplWin32_NewFrame();
@@ -191,9 +178,6 @@ public:
         display_w = window->getWidth();
         display_h = window->getHeight();
 
-        // Initialize gradient background
-        InitializeGradientBackground(display_w, display_h);
-
         // Create the window state transition manager
         transitionManager = std::make_unique<WindowStateTransitionManager>(*window);
     }
@@ -227,17 +211,12 @@ public:
             {
                 display_w = new_display_w;
                 display_h = new_display_h;
-                GradientBackground::generateGradientTexture(display_w, display_h);
                 glViewport(0, 0, display_w, display_h);
             }
 
-            // Render the gradient background with transition effects
-            GradientBackground::renderGradientBackground(
-                display_w,
-                display_h,
-                transitionManager->getTransitionProgress(),
-                transitionManager->getEasedProgress()
-            );
+            // Clear background with solid color instead of gradient
+            glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // Transparent background
+            glClear(GL_COLOR_BUFFER_BIT);
 
             // Render the ImGui draw data using OpenGL
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
