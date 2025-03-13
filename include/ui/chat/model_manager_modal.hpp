@@ -343,7 +343,7 @@ struct SortableModel {
 // Time wasted: 18 hours.
 class ModelManagerModal {
 public:
-    ModelManagerModal() = default;
+    ModelManagerModal() : m_searchText(""), m_shouldFocusSearch(false) {}
 
     void render(bool& showDialog) {
         auto& manager = Model::ModelManager::getInstance();
@@ -356,6 +356,8 @@ public:
         if (showDialog && !m_wasShowing) {
             // Modal just opened - refresh the model list
             needsUpdate = true;
+            // Focus the search field when the modal is opened
+            m_shouldFocusSearch = true;
         }
 
         // Check for changes in download status
@@ -385,6 +387,7 @@ public:
         if (needsUpdate) {
             updateSortedModels();
             m_lastModelCount = models.size();
+            filterModels(); // Apply the current search filter to the updated models
         }
 
         m_wasShowing = showDialog;
@@ -406,6 +409,10 @@ public:
             auto& manager = Model::ModelManager::getInstance();
             const auto& models = manager.getModels();
 
+            // Render search field at the top
+            renderSearchField();
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ModelManagerConstants::sectionSpacing);
+
             LabelConfig downloadedSectionLabel;
             downloadedSectionLabel.id = "##downloadedModelsHeader";
             downloadedSectionLabel.label = "Downloaded Models";
@@ -423,7 +430,7 @@ public:
             int downloadedCardCount = 0;
 
             // First pass to check if we have any downloaded models
-            for (const auto& sortableModel : m_sortedModels) {
+            for (const auto& sortableModel : m_filteredModels) { // Use filtered models instead of all models
                 std::string currentVariant = manager.getCurrentVariantForModel(models[sortableModel.index].name);
                 if (manager.isModelDownloaded(sortableModel.index, currentVariant)) {
                     hasDownloadedModels = true;
@@ -433,7 +440,7 @@ public:
 
             // Render downloaded models
             if (hasDownloadedModels) {
-                for (const auto& sortableModel : m_sortedModels) {
+                for (const auto& sortableModel : m_filteredModels) { // Use filtered models instead of all models
                     std::string currentVariant = manager.getCurrentVariantForModel(models[sortableModel.index].name);
                     if (manager.isModelDownloaded(sortableModel.index, currentVariant)) {
                         if (downloadedCardCount % numCards == 0) {
@@ -466,7 +473,9 @@ public:
                 // Show a message if no downloaded models
                 LabelConfig noModelsLabel;
                 noModelsLabel.id = "##noDownloadedModels";
-                noModelsLabel.label = "No downloaded models yet. Download models from the section below.";
+                noModelsLabel.label = m_searchText.empty() ?
+                    "No downloaded models yet. Download models from the section below." :
+                    "No downloaded models match your search. Try a different search term.";
                 noModelsLabel.size = ImVec2(0, 0);
                 noModelsLabel.fontType = FontsManager::ITALIC;
                 noModelsLabel.fontSize = FontsManager::MD;
@@ -496,22 +505,37 @@ public:
             Label::render(availableSectionLabel);
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
 
-            // Render all models (available for download)
-            for (size_t i = 0; i < m_sortedModels.size(); ++i) {
-                if (i % numCards == 0) {
-                    ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding,
-                        ImGui::GetCursorPosY() + (i > 0 ? ModelManagerConstants::cardSpacing : 0)));
-                }
+            // Check if we have any available models that match the search
+            if (m_filteredModels.empty() && !m_searchText.empty()) {
+                LabelConfig noModelsLabel;
+                noModelsLabel.id = "##noAvailableModels";
+                noModelsLabel.label = "No models match your search. Try a different search term.";
+                noModelsLabel.size = ImVec2(0, 0);
+                noModelsLabel.fontType = FontsManager::ITALIC;
+                noModelsLabel.fontSize = FontsManager::MD;
+                noModelsLabel.alignment = Alignment::LEFT;
 
-                ModelCardRenderer card(m_sortedModels[i].index, models[m_sortedModels[i].index],
-                    [this](int index, const std::string& variant) {
-                        m_deleteModal.setModel(index, variant);
-                        m_deleteModalOpen = true;
-                    });
-                card.render();
+                ImGui::SetCursorPosX(ModelManagerConstants::padding);
+                Label::render(noModelsLabel);
+            }
+            else {
+                // Render all models (available for download)
+                for (size_t i = 0; i < m_filteredModels.size(); ++i) {
+                    if (i % numCards == 0) {
+                        ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding,
+                            ImGui::GetCursorPosY() + (i > 0 ? ModelManagerConstants::cardSpacing : 0)));
+                    }
 
-                if ((i + 1) % numCards != 0 && i < m_sortedModels.size() - 1) {
-                    ImGui::SameLine(0.0f, ModelManagerConstants::cardSpacing);
+                    ModelCardRenderer card(m_filteredModels[i].index, models[m_filteredModels[i].index],
+                        [this](int index, const std::string& variant) {
+                            m_deleteModal.setModel(index, variant);
+                            m_deleteModalOpen = true;
+                        });
+                    card.render();
+
+                    if ((i + 1) % numCards != 0 && i < m_filteredModels.size() - 1) {
+                        ImGui::SameLine(0.0f, ModelManagerConstants::cardSpacing);
+                    }
                 }
             }
             };
@@ -543,6 +567,7 @@ public:
 
         if (m_needsUpdateAfterDelete && !m_deleteModalOpen) {
             updateSortedModels();
+            filterModels(); // Apply search filter after updating models
             m_needsUpdateAfterDelete = false;
         }
 
@@ -562,6 +587,11 @@ private:
     size_t m_lastModelCount = 0;
     std::unordered_set<std::string> m_lastDownloadedStatus;
     std::vector<SortableModel> m_sortedModels;
+    std::vector<SortableModel> m_filteredModels;  // New: Filtered list of models based on search
+
+    // Search related variables
+    std::string m_searchText;
+    bool m_shouldFocusSearch;
 
     void updateSortedModels() {
         auto& manager = Model::ModelManager::getInstance();
@@ -578,5 +608,67 @@ private:
 
         // Sort models alphabetically by name
         std::sort(m_sortedModels.begin(), m_sortedModels.end());
+
+        // Initialize filtered models with all models when sort is updated
+        filterModels();
+    }
+
+    // New method: Filter models based on search text
+    void filterModels() {
+        m_filteredModels.clear();
+
+        if (m_searchText.empty()) {
+            // If no search term, show all models
+            m_filteredModels = m_sortedModels;
+            return;
+        }
+
+        // Convert search text to lowercase for case-insensitive comparison
+        std::string searchLower = m_searchText;
+        std::transform(searchLower.begin(), searchLower.end(), searchLower.begin(),
+            [](unsigned char c) { return std::tolower(c); });
+
+        // Filter models based on name containing the search text
+        for (const auto& model : m_sortedModels) {
+            std::string nameLower = model.name;
+            std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+
+            if (nameLower.find(searchLower) != std::string::npos) {
+                m_filteredModels.push_back(model);
+            }
+        }
+    }
+
+    // New method: Render search field
+    void renderSearchField() {
+        ImGui::SetCursorPosX(ModelManagerConstants::padding);
+
+        // Create and configure search input field
+        InputFieldConfig searchConfig(
+            "##modelSearch",
+            ImVec2(ImGui::GetContentRegionAvail().x, 32.0f),
+            m_searchText,
+            m_shouldFocusSearch
+        );
+        searchConfig.placeholderText = "Search models...";
+        searchConfig.processInput = [this](const std::string& text) {
+            // No need to handle submission specifically as we'll filter on every change
+            };
+
+        // Style the search field
+        searchConfig.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+        searchConfig.hoverColor = RGBAToImVec4(44, 44, 44, 255);
+        searchConfig.activeColor = RGBAToImVec4(54, 54, 54, 255);
+
+        // Render the search field
+        InputField::render(searchConfig);
+
+        // Filter models whenever search text changes
+        static std::string lastSearch;
+        if (lastSearch != m_searchText) {
+            lastSearch = m_searchText;
+            filterModels();
+        }
     }
 };
