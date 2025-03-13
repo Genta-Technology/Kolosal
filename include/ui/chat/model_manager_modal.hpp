@@ -15,6 +15,8 @@ namespace ModelManagerConstants {
     constexpr float cardSpacing = 10.0f;
     constexpr float padding = 16.0f;
     constexpr float modalVerticalScale = 0.9f;
+    constexpr float sectionSpacing = 20.0f;
+    constexpr float sectionHeaderHeight = 30.0f;
 }
 
 class DeleteModelModalComponent {
@@ -87,13 +89,13 @@ private:
 class ModelCardRenderer {
 public:
     ModelCardRenderer(int index, const Model::ModelData& modelData,
-        std::function<void(int, const std::string&)> onDeleteRequested)
-        : m_index(index), m_model(modelData), m_onDeleteRequested(onDeleteRequested)
+        std::function<void(int, const std::string&)> onDeleteRequested, std::string id = "")
+        : m_index(index), m_model(modelData), m_onDeleteRequested(onDeleteRequested), m_id(id)
     {
-        selectButton.id = "##select" + std::to_string(m_index);
+        selectButton.id = "##select" + std::to_string(m_index) + m_id;
         selectButton.size = ImVec2(ModelManagerConstants::cardWidth - 18, 0);
 
-        deleteButton.id = "##delete" + std::to_string(m_index);
+        deleteButton.id = "##delete" + std::to_string(m_index) + m_id;
         deleteButton.size = ImVec2(24, 0);
         deleteButton.backgroundColor = RGBAToImVec4(200, 50, 50, 255);
         deleteButton.hoverColor = RGBAToImVec4(220, 70, 70, 255);
@@ -104,14 +106,14 @@ public:
             m_onDeleteRequested(m_index, currentVariant);
             };
 
-        authorLabel.id = "##modelAuthor" + std::to_string(m_index);
+        authorLabel.id = "##modelAuthor" + std::to_string(m_index) + m_id;
         authorLabel.label = m_model.author;
         authorLabel.size = ImVec2(0, 0);
         authorLabel.fontType = FontsManager::ITALIC;
         authorLabel.fontSize = FontsManager::SM;
         authorLabel.alignment = Alignment::LEFT;
 
-        nameLabel.id = "##modelName" + std::to_string(m_index);
+        nameLabel.id = "##modelName" + std::to_string(m_index) + m_id;
         nameLabel.label = m_model.name;
         nameLabel.size = ImVec2(0, 0);
         nameLabel.fontType = FontsManager::BOLD;
@@ -127,7 +129,7 @@ public:
         ImGui::PushStyleColor(ImGuiCol_ChildBg, RGBAToImVec4(26, 26, 26, 255));
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
 
-        std::string childName = "ModelCard" + std::to_string(m_index);
+        std::string childName = "ModelCard" + std::to_string(m_index) + m_id;
         ImGui::BeginChild(childName.c_str(), ImVec2(ModelManagerConstants::cardWidth, ModelManagerConstants::cardHeight), true);
 
         renderHeader();
@@ -154,7 +156,7 @@ public:
 
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 12);
                 float fraction = static_cast<float>(progress) / 100.0f;
-				ProgressBar::render(fraction, ImVec2(ModelManagerConstants::cardWidth - 18, 6));
+                ProgressBar::render(fraction, ImVec2(ModelManagerConstants::cardWidth - 18, 6));
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
             }
             else {
@@ -172,7 +174,7 @@ public:
         }
         else {
             bool isLoadingSelected = isSelected && Model::ModelManager::getInstance().isLoadInProgress();
-			bool isUnloading = isSelected && Model::ModelManager::getInstance().isUnloadInProgress();
+            bool isUnloading = isSelected && Model::ModelManager::getInstance().isUnloadInProgress();
 
             // Configure button label and base state
             if (isLoadingSelected || isUnloading) {
@@ -206,7 +208,7 @@ public:
                 selectButton.borderColor = RGBAToImVec4(172, 131, 255, 255 / 4);
                 selectButton.borderSize = 1.0f;
                 selectButton.state = ButtonState::NORMAL;
-				selectButton.tooltip = "Click to unload model from memory";
+                selectButton.tooltip = "Click to unload model from memory";
                 selectButton.onClick = [this]() {
                     Model::ModelManager::getInstance().unloadModel();
                     };
@@ -228,9 +230,9 @@ public:
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 24 - 2);
 
             if (isSelected && Model::ModelManager::getInstance().isLoadInProgress())
-				deleteButton.state = ButtonState::DISABLED;
-			else
-				deleteButton.state = ButtonState::NORMAL;
+                deleteButton.state = ButtonState::DISABLED;
+            else
+                deleteButton.state = ButtonState::NORMAL;
 
             Button::render(deleteButton);
         }
@@ -250,6 +252,7 @@ public:
 
 private:
     int m_index;
+    std::string m_id;
     const Model::ModelData& m_model;
     std::function<void(int, const std::string&)> m_onDeleteRequested;
 
@@ -259,15 +262,15 @@ private:
     }
 
     void renderVariantOptions(const std::string& currentVariant) {
-		LabelConfig variantLabel;
-		variantLabel.id = "##variantLabel" + std::to_string(m_index);
-		variantLabel.label = "Model Variants";
-		variantLabel.size = ImVec2(0, 0);
-		variantLabel.fontType = FontsManager::REGULAR;
-		variantLabel.fontSize = FontsManager::SM;
-		variantLabel.alignment = Alignment::LEFT;
-		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2);
-		Label::render(variantLabel);
+        LabelConfig variantLabel;
+        variantLabel.id = "##variantLabel" + std::to_string(m_index);
+        variantLabel.label = "Model Variants";
+        variantLabel.size = ImVec2(0, 0);
+        variantLabel.fontType = FontsManager::REGULAR;
+        variantLabel.fontSize = FontsManager::SM;
+        variantLabel.alignment = Alignment::LEFT;
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2);
+        Label::render(variantLabel);
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
 
         // Calculate the height for the scrollable area
@@ -349,17 +352,111 @@ public:
         auto renderCards = [numCards, this]() {
             auto& manager = Model::ModelManager::getInstance();
             const auto& models = manager.getModels();
+
+            LabelConfig downloadedSectionLabel;
+            downloadedSectionLabel.id = "##downloadedModelsHeader";
+            downloadedSectionLabel.label = "Downloaded Models";
+            downloadedSectionLabel.size = ImVec2(0, 0);
+            downloadedSectionLabel.fontSize = FontsManager::LG;
+            downloadedSectionLabel.alignment = Alignment::LEFT;
+
+            ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding, ImGui::GetCursorPosY()));
+            Label::render(downloadedSectionLabel);
+
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
+
+            // Count downloaded models and check if we have any
+            bool hasDownloadedModels = false;
+            int downloadedCardCount = 0;
+
+            // First pass to check if we have any downloaded models
+            for (size_t i = 0; i < models.size(); ++i) {
+                std::string currentVariant = manager.getCurrentVariantForModel(models[i].name);
+                if (manager.isModelDownloaded(static_cast<int>(i), currentVariant)) {
+                    hasDownloadedModels = true;
+                    break;
+                }
+            }
+
+            // Render downloaded models
+            if (hasDownloadedModels) {
+                for (size_t i = 0; i < models.size(); ++i) {
+                    std::string currentVariant = manager.getCurrentVariantForModel(models[i].name);
+                    if (manager.isModelDownloaded(static_cast<int>(i), currentVariant)) {
+                        if (downloadedCardCount % numCards == 0) {
+                            ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding,
+                                ImGui::GetCursorPosY() + (downloadedCardCount > 0 ? ModelManagerConstants::cardSpacing : 0)));
+                        }
+
+                        ModelCardRenderer card(static_cast<int>(i), models[i],
+                            [this](int index, const std::string& variant) {
+                                m_deleteModal.setModel(index, variant);
+                                m_deleteModalOpen = true;
+                            }, "downloaded");
+                        card.render();
+
+                        if ((downloadedCardCount + 1) % numCards != 0) {
+                            ImGui::SameLine(0.0f, ModelManagerConstants::cardSpacing);
+                        }
+
+                        downloadedCardCount++;
+                    }
+                }
+
+                // Add spacing before the next section
+                if (downloadedCardCount % numCards != 0) {
+                    ImGui::NewLine();
+                }
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ModelManagerConstants::sectionSpacing);
+            }
+            else {
+                // Show a message if no downloaded models
+                LabelConfig noModelsLabel;
+                noModelsLabel.id = "##noDownloadedModels";
+                noModelsLabel.label = "No downloaded models yet. Download models from the section below.";
+                noModelsLabel.size = ImVec2(0, 0);
+                noModelsLabel.fontType = FontsManager::ITALIC;
+                noModelsLabel.fontSize = FontsManager::MD;
+                noModelsLabel.alignment = Alignment::LEFT;
+
+                ImGui::SetCursorPosX(ModelManagerConstants::padding);
+                Label::render(noModelsLabel);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ModelManagerConstants::sectionSpacing);
+            }
+
+            // Separator between sections
+            ImGui::SetCursorPosX(ModelManagerConstants::padding);
+            ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.3f, 0.3f, 0.3f, 0.5f));
+            ImGui::Separator();
+            ImGui::PopStyleColor();
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
+
+            // Render "Available Models" section header
+            LabelConfig availableSectionLabel;
+            availableSectionLabel.id = "##availableModelsHeader";
+            availableSectionLabel.label = "Available Models";
+            availableSectionLabel.size = ImVec2(0, 0);
+            availableSectionLabel.fontSize = FontsManager::LG;
+            availableSectionLabel.alignment = Alignment::LEFT;
+
+            ImGui::SetCursorPosX(ModelManagerConstants::padding);
+            Label::render(availableSectionLabel);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
+
+            // Render all models (available for download)
             for (size_t i = 0; i < models.size(); ++i) {
                 if (i % numCards == 0) {
                     ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding,
                         ImGui::GetCursorPosY() + (i > 0 ? ModelManagerConstants::cardSpacing : 0)));
                 }
+
                 ModelCardRenderer card(static_cast<int>(i), models[i],
                     [this](int index, const std::string& variant) {
                         m_deleteModal.setModel(index, variant);
                         m_deleteModalOpen = true;
                     });
                 card.render();
+
                 if ((i + 1) % numCards != 0 && i < models.size() - 1) {
                     ImGui::SameLine(0.0f, ModelManagerConstants::cardSpacing);
                 }
@@ -376,7 +473,7 @@ public:
         config.padding = ImVec2(ModelManagerConstants::padding, 8.0f);
         ModalWindow::render(config);
 
-        // Render the delete modal if it’s open.
+        // Render the delete modal if it's open.
         if (m_deleteModalOpen) {
             m_deleteModal.render(m_deleteModalOpen);
         }
