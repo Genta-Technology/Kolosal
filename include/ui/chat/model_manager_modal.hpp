@@ -259,7 +259,28 @@ private:
     }
 
     void renderVariantOptions(const std::string& currentVariant) {
-        auto renderVariant = [this, &currentVariant](const std::string& variant, const std::string& label) {
+		LabelConfig variantLabel;
+		variantLabel.id = "##variantLabel" + std::to_string(m_index);
+		variantLabel.label = "Model Variants";
+		variantLabel.size = ImVec2(0, 0);
+		variantLabel.fontType = FontsManager::REGULAR;
+		variantLabel.fontSize = FontsManager::SM;
+		variantLabel.alignment = Alignment::LEFT;
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2);
+		Label::render(variantLabel);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
+
+        // Calculate the height for the scrollable area
+        // Card height minus header space minus button space at bottom
+        const float variantAreaHeight = 100.0f; // Adjust this value based on your layout needs
+
+        // Create a scrollable child window for variants
+        ImGui::BeginChild(("##VariantScroll" + std::to_string(m_index)).c_str(),
+            ImVec2(ModelManagerConstants::cardWidth - 18, variantAreaHeight),
+            false);
+
+        // Helper function to render a single variant option
+        auto renderVariant = [this, &currentVariant](const std::string& variant) {
             ButtonConfig btnConfig;
             btnConfig.id = "##" + variant + std::to_string(m_index);
             btnConfig.icon = (currentVariant == variant) ? ICON_CI_CHECK : ICON_CI_CLOSE;
@@ -270,26 +291,30 @@ private:
             btnConfig.onClick = [variant, this]() {
                 Model::ModelManager::getInstance().setPreferredVariant(m_model.name, variant);
                 };
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4);
             Button::render(btnConfig);
 
             ImGui::SameLine(0.0f, 4.0f);
             LabelConfig variantLabel;
             variantLabel.id = "##" + variant + "Label" + std::to_string(m_index);
-            variantLabel.label = label;
+            variantLabel.label = variant;
             variantLabel.size = ImVec2(0, 0);
             variantLabel.fontType = FontsManager::REGULAR;
             variantLabel.fontSize = FontsManager::SM;
             variantLabel.alignment = Alignment::LEFT;
-			ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 6);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 6);
             Label::render(variantLabel);
             };
 
-        renderVariant("Full Precision", "Use Full Precision");
-        ImGui::Spacing();
-        renderVariant("8-bit Quantized", "Use 8-bit quantization");
-        ImGui::Spacing();
-        renderVariant("4-bit Quantized", "Use 4-bit quantization");
+        // Iterate through all variants in the model
+        for (const auto& [variant, variantData] : m_model.variants) {
+            // For each variant, render a button
+            renderVariant(variant);
+            ImGui::Spacing();
+        }
+
+        // End the scrollable area
+        ImGui::EndChild();
     }
 
     ButtonConfig deleteButton;

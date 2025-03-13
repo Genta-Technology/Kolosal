@@ -3,12 +3,14 @@
 #include <string>
 #include <json.hpp>
 #include <filesystem>
+#include <map>
+#include <atomic>
 
 using json = nlohmann::json;
 
 namespace Model
 {
-    // In model.hpp or the appropriate header:
+    // ModelVariant structure remains mostly the same
     struct ModelVariant {
         std::string type;
         std::string path;
@@ -48,7 +50,7 @@ namespace Model
         }
     };
 
-    inline void to_json(nlohmann::json &j, const ModelVariant &v)
+    inline void to_json(nlohmann::json& j, const ModelVariant& v)
     {
         j = nlohmann::json{
             {"type", v.type},
@@ -56,10 +58,10 @@ namespace Model
             {"downloadLink", v.downloadLink},
             {"isDownloaded", v.isDownloaded},
             {"downloadProgress", v.downloadProgress},
-            {"lastSelected", v.lastSelected}};
+            {"lastSelected", v.lastSelected} };
     }
 
-    inline void from_json(const nlohmann::json &j, ModelVariant &v)
+    inline void from_json(const nlohmann::json& j, ModelVariant& v)
     {
         j.at("type").get_to(v.type);
         j.at("path").get_to(v.path);
@@ -69,42 +71,54 @@ namespace Model
         j.at("lastSelected").get_to(v.lastSelected);
     }
 
+    // Refactored ModelData to use a map of variants
     struct ModelData
     {
         std::string name;
         std::string author;
-        ModelVariant fullPrecision;
-		ModelVariant quantized8Bit;
-        ModelVariant quantized4Bit;
+        std::map<std::string, ModelVariant> variants;
 
-        ModelData(const std::string &name = "",
-			      const std::string& author = "",
-                  const ModelVariant &fullPrecision = ModelVariant(),
-                  const ModelVariant &quantized8Bit = ModelVariant(),
-                  const ModelVariant &quantized4Bit = ModelVariant())
-            : name(name)
-			, author(author)
-            , fullPrecision(fullPrecision)
-			, quantized8Bit(quantized8Bit)
-            , quantized4Bit(quantized4Bit) {}
+        // Constructor with no variants
+        ModelData(const std::string& name = "", const std::string& author = "")
+            : name(name), author(author) {
+        }
+
+        // Add a variant to the model
+        void addVariant(const std::string& variantType, const ModelVariant& variant) {
+            variants[variantType] = variant;
+        }
+
+        // Check if a variant exists
+        bool hasVariant(const std::string& variantType) const {
+            return variants.find(variantType) != variants.end();
+        }
+
+        // Get a variant (const version)
+        const ModelVariant* getVariant(const std::string& variantType) const {
+            auto it = variants.find(variantType);
+            return (it != variants.end()) ? &(it->second) : nullptr;
+        }
+
+        // Get a variant (non-const version)
+        ModelVariant* getVariant(const std::string& variantType) {
+            auto it = variants.find(variantType);
+            return (it != variants.end()) ? &(it->second) : nullptr;
+        }
     };
 
-    inline void to_json(nlohmann::json &j, const ModelData &m)
+    inline void to_json(nlohmann::json& j, const ModelData& m)
     {
         j = nlohmann::json{
             {"name", m.name},
-			{"author", m.author},
-            {"fullPrecision", m.fullPrecision},
-			{"quantized8Bit", m.quantized8Bit},
-            {"quantized4Bit", m.quantized4Bit}};
+            {"author", m.author},
+            {"variants", m.variants}
+        };
     }
 
-    inline void from_json(const nlohmann::json &j, ModelData &m)
+    inline void from_json(const nlohmann::json& j, ModelData& m)
     {
         j.at("name").get_to(m.name);
-		j.at("author").get_to(m.author);
-        j.at("fullPrecision").get_to(m.fullPrecision);
-		j.at("quantized8Bit").get_to(m.quantized8Bit);
-        j.at("quantized4Bit").get_to(m.quantized4Bit);
+        j.at("author").get_to(m.author);
+        j.at("variants").get_to(m.variants);
     }
 } // namespace Model

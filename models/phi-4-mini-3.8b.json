@@ -1,28 +1,30 @@
 {
   "name": "Phi 4 Mini 3.8B",
   "author": "Microsoft",
-  "fullPrecision": {
-    "type": "Full Precision",
-    "path": "models/phi-4-mini-3.8b/fp16/Phi-4-mini-instruct.BF16.gguf",
-    "downloadLink": "https://huggingface.co/kolosal/phi-4-mini/resolve/main/Phi-4-mini-instruct.BF16.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
-  },
-  "quantized8Bit": {
-    "type": "8-bit Quantized",
-    "path": "models/phi-4-mini-3.8b/int8/Phi-4-mini-instruct.Q8_0.gguf",
-    "downloadLink": "https://huggingface.co/kolosal/phi-4-mini/resolve/main/Phi-4-mini-instruct.Q8_0.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
-  },
-  "quantized4Bit": {
-    "type": "4-bit Quantized",
-    "path": "models/phi-4-mini-3.8b/int4/Phi-4-mini-instruct-Q4_K_M.gguf",
-    "downloadLink": "https://huggingface.co/kolosal/phi-4-mini/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
+  "variants": {
+    "Full Precision": {
+      "type": "Full Precision",
+      "path": "models/phi-4-mini-3.8b/fp16/Phi-4-mini-instruct.BF16.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/phi-4-mini/resolve/main/Phi-4-mini-instruct.BF16.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "8-bit Quantized": {
+      "type": "8-bit Quantized",
+      "path": "models/phi-4-mini-3.8b/int8/Phi-4-mini-instruct.Q8_0.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/phi-4-mini/resolve/main/Phi-4-mini-instruct.Q8_0.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "4-bit Quantized": {
+      "type": "4-bit Quantized",
+      "path": "models/phi-4-mini-3.8b/int4/Phi-4-mini-instruct-Q4_K_M.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/phi-4-mini/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    }
   }
 }

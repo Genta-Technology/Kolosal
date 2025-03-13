@@ -1,28 +1,30 @@
 {
   "name": "Deepseek R1 Qwen2.5 7B",
   "author": "Deepseek AI",
-  "fullPrecision": {
-    "type": "Full Precision",
-    "path": "models/deepseek-r1-qwen-7b/fp16/DeepSeek-R1-Distill-Qwen-7B-f16.gguf",
-    "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Qwen-7B/resolve/main/DeepSeek-R1-Distill-Qwen-7B-f16.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
-  },
-  "quantized8Bit": {
-    "type": "8-bit Quantized",
-    "path": "models/deepseek-r1-qwen-7b/int8/DeepSeek-R1-Distill-Qwen-7B-Q8_0.gguf",
-    "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Qwen-7B/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q8_0.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
-  },
-  "quantized4Bit": {
-    "type": "4-bit Quantized",
-    "path": "models/deepseek-r1-qwen-7b/int4/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
-    "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Qwen-7B/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
+  "variants": {
+    "Full Precision": {
+      "type": "Full Precision",
+      "path": "models/deepseek-r1-qwen-7b/fp16/DeepSeek-R1-Distill-Qwen-7B-f16.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Qwen-7B/resolve/main/DeepSeek-R1-Distill-Qwen-7B-f16.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "8-bit Quantized": {
+      "type": "8-bit Quantized",
+      "path": "models/deepseek-r1-qwen-7b/int8/DeepSeek-R1-Distill-Qwen-7B-Q8_0.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Qwen-7B/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q8_0.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "4-bit Quantized": {
+      "type": "4-bit Quantized",
+      "path": "models/deepseek-r1-qwen-7b/int4/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Qwen-7B/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    }
   }
 }

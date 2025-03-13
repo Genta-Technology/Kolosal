@@ -1,28 +1,30 @@
 {
   "name": "Llama 3 8B Sahabat AI",
   "author": "Meta, GoTo",
-  "fullPrecision": {
-    "type": "Full Precision",
-    "path": "models/llama-3-sahabat-ai/fp16/llama3-8b-cpt-sahabatai-v1-instruct.bf16.gguf",
-    "downloadLink": "https://huggingface.co/kolosal/llama-3-8b-sahabat-ai/resolve/main/llama3-8b-cpt-sahabatai-v1-instruct.bf16.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
-  },
-  "quantized8Bit": {
-    "type": "8-bit Quantized",
-    "path": "models/llama-3-sahabat-ai/int8/llama3-8b-cpt-sahabatai-v1-instruct.Q8_0.gguf",
-    "downloadLink": "https://huggingface.co/kolosal/llama-3-8b-sahabat-ai/resolve/main/llama3-8b-cpt-sahabatai-v1-instruct.Q8_0.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
-  },
-  "quantized4Bit": {
-    "type": "4-bit Quantized",
-    "path": "models/llama-3-sahabat-ai/int4/llama3-8b-cpt-sahabatai-v1-instruct.Q4_K_M.gguf",
-    "downloadLink": "https://huggingface.co/kolosal/llama-3-8b-sahabat-ai/resolve/main/llama3-8b-cpt-sahabatai-v1-instruct.Q4_K_M.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
+  "variants": {
+    "Full Precision": {
+      "type": "Full Precision",
+      "path": "models/llama-3-sahabat-ai/fp16/llama3-8b-cpt-sahabatai-v1-instruct.bf16.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/llama-3-8b-sahabat-ai/resolve/main/llama3-8b-cpt-sahabatai-v1-instruct.bf16.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "8-bit Quantized": {
+      "type": "8-bit Quantized",
+      "path": "models/llama-3-sahabat-ai/int8/llama3-8b-cpt-sahabatai-v1-instruct.Q8_0.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/llama-3-8b-sahabat-ai/resolve/main/llama3-8b-cpt-sahabatai-v1-instruct.Q8_0.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "4-bit Quantized": {
+      "type": "4-bit Quantized",
+      "path": "models/llama-3-sahabat-ai/int4/llama3-8b-cpt-sahabatai-v1-instruct.Q4_K_M.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/llama-3-8b-sahabat-ai/resolve/main/llama3-8b-cpt-sahabatai-v1-instruct.Q4_K_M.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    }
   }
 }

@@ -7,7 +7,9 @@
 #include <filesystem>
 #include <vector>
 #include <future>
+#include <algorithm>
 #include <curl/curl.h>
+#include <iostream>
 
 namespace Model
 {
@@ -16,15 +18,15 @@ namespace Model
     public:
         virtual ~IModelPersistence() = default;
         virtual std::future<std::vector<ModelData>> loadAllModels() = 0;
-        virtual std::future<void> downloadModelVariant(ModelData& modelData, ModelVariant& variant) = 0;
+        virtual std::future<void> downloadModelVariant(ModelData& modelData, const std::string& variantType) = 0;
         virtual std::future<void> saveModelData(const ModelData& modelData) = 0;
-        virtual std::future<void> deleteModelVariant(ModelData& modelData, ModelVariant& variant) = 0;
+        virtual std::future<void> deleteModelVariant(ModelData& modelData, const std::string& variantType) = 0;
     };
 
     class FileModelPersistence : public IModelPersistence
     {
     public:
-        explicit FileModelPersistence(const std::string &basePath)
+        explicit FileModelPersistence(const std::string& basePath)
             : m_basePath(basePath)
         {
             if (!std::filesystem::exists(m_basePath))
@@ -37,14 +39,14 @@ namespace Model
         {
             return std::async(std::launch::async, [this]() -> std::vector<ModelData> {
                 std::vector<ModelData> models;
-                try 
+                try
                 {
-                    for (const auto& entry : std::filesystem::directory_iterator(m_basePath)) 
+                    for (const auto& entry : std::filesystem::directory_iterator(m_basePath))
                     {
-                        if (entry.path().extension() == ".json") 
+                        if (entry.path().extension() == ".json")
                         {
                             std::ifstream file(entry.path());
-                            if (file.is_open()) 
+                            if (file.is_open())
                             {
                                 nlohmann::json j;
                                 file >> j;
@@ -52,16 +54,26 @@ namespace Model
                             }
                         }
                     }
-                } catch (...) 
+                }
+                catch (...)
                 {
                     // Return whatever was read successfully.
                 }
                 return models; });
         }
 
-        std::future<void> downloadModelVariant(ModelData& modelData, ModelVariant& variant) override
+        std::future<void> downloadModelVariant(ModelData& modelData, const std::string& variantType) override
         {
-            return std::async(std::launch::async, [&variant, &modelData, this]() {
+            return std::async(std::launch::async, [this, &modelData, variantType]() {
+                // Check if variant exists
+                auto variantIter = modelData.variants.find(variantType);
+                if (variantIter == modelData.variants.end()) {
+                    std::cerr << "[FileModelPersistence] Error: Variant '" << variantType << "' not found in model '" << modelData.name << "'\n";
+                    return;
+                }
+
+                ModelVariant& variant = variantIter->second;
+
                 // Reset cancellation flag at the start.
                 variant.cancelDownload = false;
 
@@ -125,9 +137,43 @@ namespace Model
                     file << j.dump(4);
                     file.close();
                 }
-            });
+                });
         }
 
+        std::future<void> deleteModelVariant(ModelData& modelData, const std::string& variantType) override
+        {
+            return std::async(std::launch::async, [this, &modelData, variantType]() {
+                // Check if variant exists
+                auto variantIter = modelData.variants.find(variantType);
+                if (variantIter == modelData.variants.end()) {
+                    std::cerr << "[FileModelPersistence] Error: Variant '" << variantType << "' not found in model '" << modelData.name << "'\n";
+                    return;
+                }
+
+                ModelVariant& variant = variantIter->second;
+
+                // Check if the file exists and attempt to remove it.
+                if (std::filesystem::exists(variant.path))
+                {
+                    try {
+                        std::filesystem::remove(variant.path);
+                    }
+                    catch (const std::filesystem::filesystem_error& e) {
+                        std::cerr << "[FileModelPersistence] Error deleting file " << variant.path
+                            << ": " << e.what() << "\n";
+                    }
+                }
+                // Reset the variant's state so that it can be redownloaded.
+                variant.isDownloaded = false;
+                variant.downloadProgress = 0.0;
+                variant.lastSelected = 0;
+
+                // Save the updated model data.
+                saveModelData(modelData).get();
+                });
+        }
+
+    private:
         static size_t write_data(void* ptr, size_t size, size_t nmemb, void* userdata)
         {
             std::ofstream* stream = static_cast<std::ofstream*>(userdata);
@@ -152,31 +198,6 @@ namespace Model
             return 0;
         }
 
-        std::future<void> deleteModelVariant(ModelData& modelData, ModelVariant& variant) override
-        {
-            return std::async(std::launch::async, [this, &modelData, &variant]() {
-                // Check if the file exists and attempt to remove it.
-                if (std::filesystem::exists(variant.path))
-                {
-                    try {
-                        std::filesystem::remove(variant.path);
-                    }
-                    catch (const std::filesystem::filesystem_error& e) {
-                        std::cerr << "[FileModelPersistence] Error deleting file " << variant.path
-                            << ": " << e.what() << "\n";
-                    }
-                }
-                // Reset the variant’s state so that it can be redownloaded.
-                variant.isDownloaded = false;
-                variant.downloadProgress = 0.0;
-                variant.lastSelected = 0;
-
-                // Save the updated model data.
-                saveModelData(modelData).get();
-                });
-        }
-
-    private:
         std::string m_basePath;
     };
 } // namespace Model

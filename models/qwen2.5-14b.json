@@ -1,28 +1,30 @@
 {
   "name": "Qwen2.5 14B",
   "author": "Alibaba",
-  "fullPrecision": {
-    "type": "Full Precision",
-    "path": "models/qwen2.5-14b/fp16/Qwen2.5-14B-Instruct-f16.gguf",
-    "downloadLink": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-f16.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
-  },
-  "quantized8Bit": {
-    "type": "8-bit Quantized",
-    "path": "models/qwen2.5-14b/int8/Qwen2.5-14B-Instruct-Q8_0.gguf",
-    "downloadLink": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q8_0.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
-  },
-  "quantized4Bit": {
-    "type": "4-bit Quantized",
-    "path": "models/qwen2.5-14b/int4/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
-    "downloadLink": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
-    "isDownloaded": false,
-    "downloadProgress": 0.0,
-    "lastSelected": 0
+  "variants": {
+    "Full Precision": {
+      "type": "Full Precision",
+      "path": "models/qwen2.5-14b/fp16/Qwen2.5-14B-Instruct-f16.gguf",
+      "downloadLink": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-f16.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "8-bit Quantized": {
+      "type": "8-bit Quantized",
+      "path": "models/qwen2.5-14b/int8/Qwen2.5-14B-Instruct-Q8_0.gguf",
+      "downloadLink": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q8_0.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "4-bit Quantized": {
+      "type": "4-bit Quantized",
+      "path": "models/qwen2.5-14b/int4/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+      "downloadLink": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    }
   }
 }
