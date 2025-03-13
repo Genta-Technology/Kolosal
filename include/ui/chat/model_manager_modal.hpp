@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <algorithm>
 
 namespace ModelManagerConstants {
     constexpr float cardWidth = 200.0f;
@@ -326,6 +327,15 @@ private:
     LabelConfig authorLabel;
 };
 
+struct SortableModel {
+    int index;
+    std::string name;
+
+    bool operator<(const SortableModel& other) const {
+        return name < other.name;
+    }
+};
+
 // TODO: Fix the nested modal
 // when i tried to make the delete modal rendered on top of the model modal, it simply
 // either didn't show up at all, or the model modal closed, and the entire application
@@ -336,6 +346,49 @@ public:
     ModelManagerModal() = default;
 
     void render(bool& showDialog) {
+        auto& manager = Model::ModelManager::getInstance();
+
+        // Update sorted models when:
+        // - The modal is opened for the first time
+        // - A model is downloaded, deleted, or its status changed
+        bool needsUpdate = false;
+
+        if (showDialog && !m_wasShowing) {
+            // Modal just opened - refresh the model list
+            needsUpdate = true;
+        }
+
+        // Check for changes in download status
+        const auto& models = manager.getModels();
+        if (models.size() != m_lastModelCount) {
+            // The model count changed
+            needsUpdate = true;
+        }
+
+        // Check for changes in downloaded status
+        if (!needsUpdate) {
+            std::unordered_set<std::string> currentDownloaded;
+
+            for (size_t i = 0; i < models.size(); ++i) {
+                std::string currentVariant = manager.getCurrentVariantForModel(models[i].name);
+                if (manager.isModelDownloaded(static_cast<int>(i), currentVariant)) {
+                    currentDownloaded.insert(models[i].name + ":" + currentVariant);
+                }
+            }
+
+            if (currentDownloaded != m_lastDownloadedStatus) {
+                needsUpdate = true;
+                m_lastDownloadedStatus = std::move(currentDownloaded);
+            }
+        }
+
+        if (needsUpdate) {
+            updateSortedModels();
+            m_lastModelCount = models.size();
+        }
+
+        m_wasShowing = showDialog;
+
         ImVec2 windowSize = ImGui::GetWindowSize();
         if (windowSize.x == 0) windowSize = ImGui::GetMainViewport()->Size;
         const float targetWidth = windowSize.x;
@@ -370,9 +423,9 @@ public:
             int downloadedCardCount = 0;
 
             // First pass to check if we have any downloaded models
-            for (size_t i = 0; i < models.size(); ++i) {
-                std::string currentVariant = manager.getCurrentVariantForModel(models[i].name);
-                if (manager.isModelDownloaded(static_cast<int>(i), currentVariant)) {
+            for (const auto& sortableModel : m_sortedModels) {
+                std::string currentVariant = manager.getCurrentVariantForModel(models[sortableModel.index].name);
+                if (manager.isModelDownloaded(sortableModel.index, currentVariant)) {
                     hasDownloadedModels = true;
                     break;
                 }
@@ -380,15 +433,15 @@ public:
 
             // Render downloaded models
             if (hasDownloadedModels) {
-                for (size_t i = 0; i < models.size(); ++i) {
-                    std::string currentVariant = manager.getCurrentVariantForModel(models[i].name);
-                    if (manager.isModelDownloaded(static_cast<int>(i), currentVariant)) {
+                for (const auto& sortableModel : m_sortedModels) {
+                    std::string currentVariant = manager.getCurrentVariantForModel(models[sortableModel.index].name);
+                    if (manager.isModelDownloaded(sortableModel.index, currentVariant)) {
                         if (downloadedCardCount % numCards == 0) {
                             ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding,
                                 ImGui::GetCursorPosY() + (downloadedCardCount > 0 ? ModelManagerConstants::cardSpacing : 0)));
                         }
 
-                        ModelCardRenderer card(static_cast<int>(i), models[i],
+                        ModelCardRenderer card(sortableModel.index, models[sortableModel.index],
                             [this](int index, const std::string& variant) {
                                 m_deleteModal.setModel(index, variant);
                                 m_deleteModalOpen = true;
@@ -444,20 +497,20 @@ public:
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
 
             // Render all models (available for download)
-            for (size_t i = 0; i < models.size(); ++i) {
+            for (size_t i = 0; i < m_sortedModels.size(); ++i) {
                 if (i % numCards == 0) {
                     ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding,
                         ImGui::GetCursorPosY() + (i > 0 ? ModelManagerConstants::cardSpacing : 0)));
                 }
 
-                ModelCardRenderer card(static_cast<int>(i), models[i],
+                ModelCardRenderer card(m_sortedModels[i].index, models[m_sortedModels[i].index],
                     [this](int index, const std::string& variant) {
                         m_deleteModal.setModel(index, variant);
                         m_deleteModalOpen = true;
                     });
                 card.render();
 
-                if ((i + 1) % numCards != 0 && i < models.size() - 1) {
+                if ((i + 1) % numCards != 0 && i < m_sortedModels.size() - 1) {
                     ImGui::SameLine(0.0f, ModelManagerConstants::cardSpacing);
                 }
             }
@@ -476,12 +529,23 @@ public:
         // Render the delete modal if it's open.
         if (m_deleteModalOpen) {
             m_deleteModal.render(m_deleteModalOpen);
+
+            // Mark for update on next frame after deletion
+            if (!m_deleteModalOpen && m_wasDeleteModalOpen) {
+                m_needsUpdateAfterDelete = true;
+            }
         }
 
         if (m_wasDeleteModalOpen && !m_deleteModalOpen) {
             showDialog = true;
             ImGui::OpenPopup(config.id.c_str());
         }
+
+        if (m_needsUpdateAfterDelete && !m_deleteModalOpen) {
+            updateSortedModels();
+            m_needsUpdateAfterDelete = false;
+        }
+
         m_wasDeleteModalOpen = m_deleteModalOpen;
 
         if (!ImGui::IsPopupOpen(config.id.c_str())) {
@@ -492,7 +556,27 @@ public:
 private:
     DeleteModelModalComponent m_deleteModal;
     bool m_deleteModalOpen = false;
-
-    // This flag tracks if the delete modal was open on the previous frame.
     bool m_wasDeleteModalOpen = false;
+    bool m_wasShowing = false;
+    bool m_needsUpdateAfterDelete = false;
+    size_t m_lastModelCount = 0;
+    std::unordered_set<std::string> m_lastDownloadedStatus;
+    std::vector<SortableModel> m_sortedModels;
+
+    void updateSortedModels() {
+        auto& manager = Model::ModelManager::getInstance();
+        const auto& models = manager.getModels();
+
+        // Clear and rebuild the sorted model list
+        m_sortedModels.clear();
+        m_sortedModels.reserve(models.size());
+
+        for (size_t i = 0; i < models.size(); ++i) {
+            // Store the index and name directly, avoiding storing pointers
+            m_sortedModels.push_back({ static_cast<int>(i), models[i].name });
+        }
+
+        // Sort models alphabetically by name
+        std::sort(m_sortedModels.begin(), m_sortedModels.end());
+    }
 };
