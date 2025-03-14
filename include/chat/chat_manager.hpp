@@ -92,53 +92,57 @@ namespace Chat
         std::future<bool> renameCurrentChat(const std::string& newName)
         {
             return std::async(std::launch::async, [this, newName]() {
-                if (!validateChatName(newName)) 
+                if (!validateChatName(newName))
                 {
-					std::cerr << "[ChatManager] [ERROR] " << newName << " is not valid" << std::endl;
+                    std::cerr << "[ChatManager] [ERROR] " << newName << " is not valid" << std::endl;
                     return false;
                 }
 
                 std::unique_lock<std::shared_mutex> lock(m_mutex);
 
-                if (!m_currentChatName) 
+                if (!m_currentChatName)
                 {
-					std::cerr << "[ChatManager] No current chat selected.\n";
+                    std::cerr << "[ChatManager] No current chat selected.\n";
                     return false;
                 }
 
-                if (m_chatNameToIndex.find(newName) != m_chatNameToIndex.end()) 
+                // Generate a unique name if the requested name already exists
+                std::string uniqueName = newName;
+                int counter = 1;
+
+                while (m_chatNameToIndex.find(uniqueName) != m_chatNameToIndex.end())
                 {
-					std::cerr << "[ChatManager] Chat with name " << newName << " already exists.\n";
-                    return false;
+                    uniqueName = newName + " (" + std::to_string(counter) + ")";
+                    counter++;
                 }
 
                 size_t currentIdx = m_currentChatIndex;
-                if (currentIdx >= m_chats.size()) 
+                if (currentIdx >= m_chats.size())
                 {
-					std::cerr << "[ChatManager] Invalid chat index: " << currentIdx << std::endl;
+                    std::cerr << "[ChatManager] Invalid chat index: " << currentIdx << std::endl;
                     return false;
                 }
 
                 std::string oldName = m_chats[currentIdx].name;
-                m_chats[currentIdx].name = newName;
+                m_chats[currentIdx].name = uniqueName;
                 m_chats[currentIdx].lastModified = static_cast<int>(std::time(nullptr));
-                
+
                 // Update indices
                 m_chatNameToIndex.erase(oldName);
-                m_chatNameToIndex[newName] = currentIdx;
-                m_currentChatName = newName;
+                m_chatNameToIndex[uniqueName] = currentIdx;
+                m_currentChatName = uniqueName;
 
                 // Save changes
                 auto chat = m_chats[currentIdx];
                 auto saveResult = m_persistence->saveChat(chat).get();
-                if (saveResult) 
+                if (saveResult)
                 {
                     m_persistence->deleteChat(oldName).get();
-                    m_persistence->renameKvChat(oldName, newName).get();
+                    m_persistence->renameKvChat(oldName, uniqueName).get();
                 }
 
                 return saveResult;
-            });
+                });
         }
 
 		std::future<bool> clearCurrentChat()
