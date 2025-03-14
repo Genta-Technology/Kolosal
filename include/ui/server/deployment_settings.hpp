@@ -44,6 +44,20 @@ public:
             int new_n_ctx = static_cast<int>(n_ctx_float);
             if (new_n_ctx != n_ctx) {
                 configManager.setContextSize(new_n_ctx);
+
+                // Adjust dependent parameters if n_ctx decreased
+                if (new_n_ctx < n_ctx) {
+                    // Check and adjust n_batch if needed
+                    if (configManager.getBatchSize() > new_n_ctx) {
+                        configManager.setBatchSize(new_n_ctx);
+                    }
+
+                    // Check and adjust n_keep if needed
+                    if (configManager.getKeepSize() > new_n_ctx) {
+                        configManager.setKeepSize(new_n_ctx);
+                    }
+                }
+
                 configManager.saveConfig(); // Auto-save on change
                 serverState.setModelParamsChanged(true); // Mark params as changed
             }
@@ -102,6 +116,19 @@ public:
             configManager.saveConfig();
             serverState.setModelParamsChanged(true); // Mark params as changed
         }
+
+		// n_batch slider (max number of tokens to process at each iteration) - using float for slider then converting back to int
+		{
+			int n_batch = configManager.getBatchSize();
+			float n_batch_float = static_cast<float>(n_batch);
+			Slider::render("##n_batch", n_batch_float, 1.0f, configManager.getContextSize(), sliderWidth, "%.0f");
+			int new_n_batch = static_cast<int>(n_batch_float);
+			if (new_n_batch != n_batch) {
+				configManager.setBatchSize(new_n_batch);
+				configManager.saveConfig(); // Auto-save on change
+				serverState.setModelParamsChanged(true); // Mark params as changed
+			}
+		}
 
         // cont_batching checkbox
         renderCheckbox("Continuous Batching", "##cont_batching", configManager.getContinuousBatching(),

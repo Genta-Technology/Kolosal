@@ -78,6 +78,7 @@ namespace Model
         bool getContinuousBatching() const { return config_.cont_batching; }
         bool getWarmup() const { return config_.warmup; }
         int getParallelCount() const { return config_.n_parallel; }
+		int getBatchSize() const { return config_.n_batch; }
         int getGpuLayers() const { return config_.n_gpu_layers; }
 
         // Setters
@@ -88,6 +89,7 @@ namespace Model
         void setContinuousBatching(bool enable) { config_.cont_batching = enable; }
         void setWarmup(bool enable) { config_.warmup = enable; }
         void setParallelCount(int count) { config_.n_parallel = count; }
+		void setBatchSize(int size) { config_.n_batch = size; }
         void setGpuLayers(int layers) { config_.n_gpu_layers = layers; }
 
     private:
