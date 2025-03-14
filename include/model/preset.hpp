@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config.hpp"
+
 #include <string>
 #include <json.hpp>
 
@@ -43,13 +45,19 @@ namespace Model
             : id(id)
             , lastModified(lastModified)
             , name(name)
-            , systemPrompt(systemPrompt)
+            , systemPrompt("")
             , temperature(temperature)
             , top_p(top_p)
             , top_k(top_k)
             , random_seed(random_seed)
             , min_length(min_length)
-            , max_new_tokens(max_new_tokens) {}
+            , max_new_tokens(max_new_tokens) 
+        {
+            // Pre-allocate with a reasonable reserve size
+            // This helps prevent reallocations and memory fragmentation
+            this->systemPrompt.reserve(Config::InputField::TEXT_SIZE); // Reserve 4KB initially
+            this->systemPrompt = systemPrompt; // Then assign the value
+        }
 
         bool operator==(const ModelPreset& other) const
         {

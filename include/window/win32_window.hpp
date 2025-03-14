@@ -75,7 +75,7 @@ public:
 
                 // Set the gradient color ($AABBGGRR format)
                 // This is a dark semi-transparent color that works well with UI
-                accent.GradientColor = 0x99000000;  // Adjust alpha for transparency level
+                accent.GradientColor = 0xB3000000;  // Adjust alpha for transparency level
 
                 // Apply the acrylic effect
                 WINDOWCOMPOSITIONATTRIBDATA data;

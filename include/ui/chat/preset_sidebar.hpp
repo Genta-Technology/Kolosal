@@ -135,7 +135,15 @@ private:
         saveConfig.size = ImVec2(m_sidebarWidth / 2 - 15, 0);
         saveConfig.onClick = [&]() {
             if (Model::PresetManager::getInstance().hasUnsavedChanges()) {
-                Model::PresetManager::getInstance().saveCurrentPreset().get();
+                try {
+                    bool success = Model::PresetManager::getInstance().saveCurrentPreset().get();
+                    if (!success) {
+						std::cerr << "[PresetSelectionComponent] [ERROR] Failed to save preset.\n";
+                    }
+                }
+                catch (const std::exception& e) {
+					std::cerr << "[PresetSelectionComponent] [ERROR] " << e.what() << "\n";
+                }
             }
             };
 
@@ -170,21 +178,37 @@ public:
         if (!currentPresetOpt) return;
         auto& currentPreset = currentPresetOpt->get();
 
-        // Render the system prompt label and multi-line input field.
-		ImGui::Spacing(); ImGui::Spacing();
+        // Create a temporary buffer with sufficient capacity
+        static std::string tempSystemPrompt(Config::InputField::TEXT_SIZE, '\0');
+
+        // On first render or when preset changes, copy current value to the buffer
+        static int lastPresetId = -1;
+        if (lastPresetId != currentPreset.id) {
+            tempSystemPrompt = currentPreset.systemPrompt;
+            lastPresetId = currentPreset.id;
+        }
+
+        // Render the system prompt label and multi-line input field
+        ImGui::Spacing(); ImGui::Spacing();
         Label::render(m_systemPromptLabel);
         ImGui::Spacing();
         ImGui::Spacing();
+
         InputFieldConfig inputConfig(
             "##systemprompt",
             ImVec2(m_sidebarWidth - 20, 100),
-            currentPreset.systemPrompt,
+            tempSystemPrompt, // Use the temporary buffer instead
             m_focusSystemPrompt
         );
         inputConfig.placeholderText = "Enter your system prompt here...";
-        inputConfig.processInput = [&](const std::string& input) {
+        inputConfig.processInput = [&currentPreset](const std::string& input) {
+            // Copy the input to our temporary buffer first
+            tempSystemPrompt = input;
+
+            // Then safely update the preset's system prompt
             currentPreset.systemPrompt = input;
             };
+
         InputField::renderMultiline(inputConfig);
 
         // Render the model settings label and sampling sliders/inputs.

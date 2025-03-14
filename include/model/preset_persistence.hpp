@@ -68,18 +68,37 @@ namespace Model
             {
                 std::filesystem::path filePath = getPresetPath(preset.name);
 
-                nlohmann::json j = preset;
+                // Open file before JSON serialization to fail early if file can't be opened
                 std::ofstream file(filePath);
                 if (!file.is_open())
                 {
+					std::cerr << "[PRESET PERSISTENCE] [ERROR] Failed to open file for writing: " << filePath.string() << std::endl;
                     return false;
                 }
-                file << j.dump(4);
+
+                // Serialize to JSON with better exception handling
+                nlohmann::json j;
+                try {
+                    j = preset;
+                }
+                catch (const std::exception& e) {
+					std::cerr << "[PRESET PERSISTENCE] [ERROR] JSON serialization failed: " << e.what() << std::endl;
+                    return false;
+                }
+
+                // Write to file with exception handling
+                try {
+                    file << j.dump(4);
+                }
+                catch (const std::exception& e) {
+					std::cerr << "[PRESET PERSISTENCE] [ERROR] Failed to write JSON to file: " << e.what() << std::endl;
+                    return false;
+                }
                 return true;
             }
-            catch (const std::exception&)
+            catch (const std::exception& e)
             {
-                // Log error
+				std::cerr << "[PRESET PERSISTENCE] [ERROR] Failed to save preset: " << e.what() << std::endl;
                 return false;
             }
         }

@@ -66,7 +66,8 @@ namespace Config
 
     namespace InputField
     {
-        constexpr size_t TEXT_SIZE = 81920;
+		// max 64kb of text
+        constexpr size_t TEXT_SIZE = 64 * 1024;
 
         constexpr float CHILD_ROUNDING = 10.0F;
         constexpr float FRAME_ROUNDING = 12.0F;
