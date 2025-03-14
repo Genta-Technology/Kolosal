@@ -649,9 +649,7 @@ namespace Chat
         // Validation helpers
         static bool validateChatName(const std::string& name) 
         {
-            if (name.empty() || name.length() > 256) return false;
-            const std::string invalidChars = R"(<>:"/\|?*)";
-            return name.find_first_of(invalidChars) == std::string::npos;
+            return !(name.empty() || name.length() > 256);
         }
 
         void updateChatTimestamp(size_t chatIndex, int newTimestamp)

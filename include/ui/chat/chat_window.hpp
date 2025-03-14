@@ -321,11 +321,6 @@ private:
                         s.erase(pos, titlePrefix.length());
                     }
 
-                    // Remove symbols except '+' and '-'
-                    s.erase(std::remove_if(s.begin(), s.end(), [](char c) {
-                        return std::ispunct(static_cast<unsigned char>(c)) && c != '+' && c != '-';
-                        }), s.end());
-
                     // Trim whitespace
                     s.erase(0, s.find_first_not_of(" \t\n\r"));
                     if (!s.empty()) {

@@ -183,12 +183,22 @@ namespace Chat
 
         std::filesystem::path getChatPath(const std::string& chatName) const override
         {
+			// remove characters that are not allowed in file names
+			std::string chatNameFiltered = chatName;
+			std::replace_if(chatNameFiltered.begin(), chatNameFiltered.end(),
+				[](char c) { return !std::isalnum(c); }, '_');
+
             return std::filesystem::absolute(
                 std::filesystem::path(m_basePath) / (chatName + ".chat"));
         }
 
         std::filesystem::path getKvChatPath(const std::string& chatName) const override
 		{
+            // remove characters that are not allowed in file names
+            std::string chatNameFiltered = chatName;
+            std::replace_if(chatNameFiltered.begin(), chatNameFiltered.end(),
+                [](char c) { return !std::isalnum(c); }, '_');
+
 			return std::filesystem::absolute(
 				std::filesystem::path(m_basePath) / (chatName + ".bin"));
 		}

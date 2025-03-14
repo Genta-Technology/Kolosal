@@ -372,9 +372,9 @@ public:
             std::unordered_set<std::string> currentDownloaded;
 
             for (size_t i = 0; i < models.size(); ++i) {
-                std::string currentVariant = manager.getCurrentVariantForModel(models[i].name);
-                if (manager.isModelDownloaded(static_cast<int>(i), currentVariant)) {
-                    currentDownloaded.insert(models[i].name + ":" + currentVariant);
+                // Check if ANY variant is downloaded instead of just the current one
+                if (manager.isAnyVariantDownloaded(static_cast<int>(i))) {
+                    currentDownloaded.insert(models[i].name); // Don't need to add variant to the key
                 }
             }
 
@@ -430,9 +430,9 @@ public:
             int downloadedCardCount = 0;
 
             // First pass to check if we have any downloaded models
-            for (const auto& sortableModel : m_filteredModels) { // Use filtered models instead of all models
-                std::string currentVariant = manager.getCurrentVariantForModel(models[sortableModel.index].name);
-                if (manager.isModelDownloaded(sortableModel.index, currentVariant)) {
+            for (const auto& sortableModel : m_filteredModels) {
+                // Check if ANY variant is downloaded instead of just current variant
+                if (manager.isAnyVariantDownloaded(sortableModel.index)) {
                     hasDownloadedModels = true;
                     break;
                 }
@@ -440,9 +440,9 @@ public:
 
             // Render downloaded models
             if (hasDownloadedModels) {
-                for (const auto& sortableModel : m_filteredModels) { // Use filtered models instead of all models
-                    std::string currentVariant = manager.getCurrentVariantForModel(models[sortableModel.index].name);
-                    if (manager.isModelDownloaded(sortableModel.index, currentVariant)) {
+                for (const auto& sortableModel : m_filteredModels) {
+                    // Check if ANY variant is downloaded instead of just current variant
+                    if (manager.isAnyVariantDownloaded(sortableModel.index)) {
                         if (downloadedCardCount % numCards == 0) {
                             ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding,
                                 ImGui::GetCursorPosY() + (downloadedCardCount > 0 ? ModelManagerConstants::cardSpacing : 0)));

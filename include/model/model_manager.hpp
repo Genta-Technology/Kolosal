@@ -248,6 +248,16 @@ namespace Model
             return variant ? variant->downloadProgress : 0.0;
         }
 
+        bool isAnyVariantDownloaded(int modelIndex) const {
+            const ModelData& model = m_models[modelIndex];
+            for (const auto& [variant, _] : model.variants) {
+                if (isModelDownloaded(modelIndex, variant)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         //--------------------------------------------------------------------------------------------
 		// Inference Engine
 		//--------------------------------------------------------------------------------------------
