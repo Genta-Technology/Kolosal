@@ -30,7 +30,8 @@ public:
         , borderless(true)
         , borderless_shadow(false)
         , borderless_drag(false)
-        , borderless_resize(true) {}
+        , borderless_resize(true) {
+    }
 
     ~Win32Window()
     {
@@ -54,30 +55,56 @@ public:
 
         set_borderless(borderless);
 
-        // Apply acrylic effect instead of shadow
-        applyAcrylicEffect();
+        // Apply visual effect (acrylic or fallback)
+        applyVisualEffect();
     }
 
-    void applyAcrylicEffect()
+    void applyVisualEffect()
     {
         if (!hwnd) return;
 
+        bool acrylicApplied = false;
+
+        // Try to apply acrylic effect first
         HMODULE hUser = GetModuleHandle(TEXT("user32.dll"));
         if (hUser)
         {
             pfnSetWindowCompositionAttribute setWindowCompositionAttribute =
                 (pfnSetWindowCompositionAttribute)GetProcAddress(hUser, "SetWindowCompositionAttribute");
 
-            if (setWindowCompositionAttribute)
+            if (setWindowCompositionAttribute && isAcrylicSupported())
             {
                 // Create accent policy for acrylic blur
                 ACCENT_POLICY accent{ ACCENT_ENABLE_ACRYLICBLURBEHIND, 0, 0, 0 };
 
                 // Set the gradient color ($AABBGGRR format)
-                // This is a dark semi-transparent color that works well with UI
-                accent.GradientColor = 0xB3000000;  // Adjust alpha for transparency level
+                accent.GradientColor = 0xB3000000;  // Semi-transparent dark color
 
                 // Apply the acrylic effect
+                WINDOWCOMPOSITIONATTRIBDATA data;
+                data.Attrib = WCA_ACCENT_POLICY;
+                data.pvData = &accent;
+                data.cbData = sizeof(accent);
+
+                if (setWindowCompositionAttribute(hwnd, &data)) {
+                    acrylicApplied = true;
+                }
+            }
+        }
+
+        // If acrylic effect failed or isn't supported, apply fallback with system accent color
+        if (!acrylicApplied && hUser)
+        {
+            pfnSetWindowCompositionAttribute setWindowCompositionAttribute =
+                (pfnSetWindowCompositionAttribute)GetProcAddress(hUser, "SetWindowCompositionAttribute");
+
+            if (setWindowCompositionAttribute)
+            {
+                // Use system accent color as fallback
+                DWORD systemAccentColor = getSystemAccentColor();
+
+                ACCENT_POLICY accent{ ACCENT_ENABLE_GRADIENT, 0, systemAccentColor, 0 };
+
                 WINDOWCOMPOSITIONATTRIBDATA data;
                 data.Attrib = WCA_ACCENT_POLICY;
                 data.pvData = &accent;
@@ -87,6 +114,12 @@ public:
             }
         }
 
+        // Apply rounded corners
+        applyRoundedCorners();
+    }
+
+    void applyRoundedCorners()
+    {
         // Set rounded corners.
         // For Windows 11, try to use DWMWA_WINDOW_CORNER_PREFERENCE if available; otherwise, fallback to SetWindowRgn.
         typedef enum _DWM_WINDOW_CORNER_PREFERENCE {
@@ -116,6 +149,42 @@ public:
                 }
             }
         }
+    }
+
+    bool isAcrylicSupported()
+    {
+        // Check if DWM composition is enabled (required for acrylic)
+        BOOL compositionEnabled = FALSE;
+        if (!SUCCEEDED(DwmIsCompositionEnabled(&compositionEnabled)) || !compositionEnabled) {
+            return false;
+        }
+
+        // On versions before Windows 10 1803, acrylic is not available
+        // Could use feature detection, but for simplicity, we'll just try to apply it
+        // and let the fallback handle failure cases
+        return true;
+    }
+
+    DWORD getSystemAccentColor()
+    {
+        // Default color (dark with some transparency) in case we can't get the system color
+        DWORD defaultColor = 0xB3000000;
+
+        // Try to get the Windows accent color
+        DWORD colorizationColor = 0;
+        BOOL opaqueBlend = FALSE;
+        if (SUCCEEDED(DwmGetColorizationColor(&colorizationColor, &opaqueBlend)))
+        {
+            // Convert from ARGB to AABBGGRR format
+            BYTE a = 0xB3; // Use a fixed alpha for semi-transparency
+            BYTE r = (colorizationColor >> 16) & 0xFF;
+            BYTE g = (colorizationColor >> 8) & 0xFF;
+            BYTE b = colorizationColor & 0xFF;
+
+            return (a << 24) | (b << 16) | (g << 8) | r;
+        }
+
+        return defaultColor;
     }
 
     void show() override
@@ -210,8 +279,13 @@ public:
                 break;
             }
             case WM_SIZE: {
-                // Reapply acrylic effect when the window is resized
-                window->applyAcrylicEffect();
+                // Reapply visual effect when the window is resized
+                window->applyVisualEffect();
+                break;
+            }
+            case WM_DWMCOLORIZATIONCOLORCHANGED: {
+                // System accent color changed, reapply visual effect
+                window->applyVisualEffect();
                 break;
             }
             case WM_CLOSE: {
@@ -307,7 +381,7 @@ private:
                 throw last_error("failed to register window class");
             }
             return wcx.lpszClassName;
-        }();
+            }();
         return window_class_name;
     }
 
