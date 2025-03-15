@@ -1,0 +1,30 @@
+{
+  "name": "Gemma 3 1B",
+  "author": "Google",
+  "variants": {
+    "Full Precision": {
+      "type": "Full Precision",
+      "path": "models/gemma-3-1b/fp16/google_gemma-3-1b-it_f16.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/gemma-3-1b/resolve/main/google_gemma-3-1b-it_f16.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "8-bit Quantized": {
+      "type": "8-bit Quantized",
+      "path": "models/gemma-3-1b/int8/google_gemma-3-1b-it_q8_0.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/gemma-3-1b/resolve/main/google_gemma-3-1b-it_q8_0.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "4-bit Quantized": {
+      "type": "4-bit Quantized",
+      "path": "models/gemma-3-1b/int4/google_gemma-3-1b-it_q4_k_m.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/gemma-3-1b/resolve/main/google_gemma-3-1b-it_q4_k_m.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    }
+  }
+}

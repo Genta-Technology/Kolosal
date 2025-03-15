@@ -7,6 +7,8 @@
 ;-----------------------------------
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "LogicLib.nsh"
+!include "nsProcess.nsh"
 
 ;-----------------------------------
 ; Variables
@@ -14,17 +16,21 @@
 Var StartMenuFolder
 Var ChatHistoryDir
 Var DefaultChatDir
+Var OldVersion
+Var NewVersion
+Var IsUpgrade
 
 ;-----------------------------------
 ; Embed version info (metadata)
 ;-----------------------------------
-VIProductVersion "0.1.6.0"
+!define VERSION "0.1.7.0"
+VIProductVersion "${VERSION}"
 VIAddVersionKey "ProductName" "Kolosal AI Installer"
 VIAddVersionKey "CompanyName" "Genta Technology"
 VIAddVersionKey "FileDescription" "Kolosal AI Installer"
 VIAddVersionKey "LegalCopyright" "Copyright (C) 2025"
-VIAddVersionKey "FileVersion" "0.1.6.0"
-VIAddVersionKey "ProductVersion" "0.1.6.0"
+VIAddVersionKey "FileVersion" "${VERSION}"
+VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "OriginalFilename" "KolosalAI_Installer.exe"
 VIAddVersionKey "Comments" "Installer for Kolosal AI"
 VIAddVersionKey "Publisher" "Genta Technology"
@@ -68,8 +74,46 @@ RequestExecutionLevel admin
 !define MUI_STARTMENUPAGE_DEFAULTFOLDER "Kolosal AI"
 
 Function .onInit
+    ; Initialize default chat directory
     StrCpy $DefaultChatDir "$LOCALAPPDATA\KolosalAI\ChatHistory"
     StrCpy $ChatHistoryDir $DefaultChatDir
+    
+    ; Check for previous installation
+    StrCpy $IsUpgrade "false"
+    ReadRegStr $R0 HKLM "Software\KolosalAI" "Install_Dir"
+    ReadRegStr $OldVersion HKLM "Software\KolosalAI" "Version"
+    StrCpy $NewVersion "${VERSION}"
+    
+    ${If} $R0 != ""
+        StrCpy $IsUpgrade "true"
+        
+        ; Detect if the application is running
+        ${nsProcess::FindProcess} "KolosalDesktop.exe" $R1
+        ${If} $R1 == 0
+            MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
+                "Kolosal AI is currently running. Please close it before continuing.$\n$\nPress OK to automatically close the application and continue with the update, or Cancel to abort installation." \
+                IDCANCEL abort
+                
+            ; Kill the process if user chose to continue
+            ${nsProcess::KillProcess} "KolosalDesktop.exe" $R1
+            Sleep 2000 ; Give it time to fully terminate
+        ${EndIf}
+    ${EndIf}
+    
+    Return
+    
+abort:
+    Abort "Installation aborted. Please close Kolosal AI and run the installer again."
+FunctionEnd
+
+Function ChatHistoryDirectoryPre
+    StrCpy $ChatHistoryDir $DefaultChatDir
+    !undef MUI_DIRECTORYPAGE_VARIABLE
+    !define MUI_DIRECTORYPAGE_VARIABLE $ChatHistoryDir
+    !undef MUI_PAGE_HEADER_TEXT
+    !define MUI_PAGE_HEADER_TEXT "${CHATHISTORY_TITLE}"
+    !undef MUI_PAGE_HEADER_SUBTEXT
+    !define MUI_PAGE_HEADER_SUBTEXT "${CHATHISTORY_SUBTITLE}"
 FunctionEnd
 
 ; Page order
@@ -91,22 +135,29 @@ FunctionEnd
 
 !insertmacro MUI_LANGUAGE "English"
 
-Function ChatHistoryDirectoryPre
-    StrCpy $ChatHistoryDir $DefaultChatDir
-    !undef MUI_DIRECTORYPAGE_VARIABLE
-    !define MUI_DIRECTORYPAGE_VARIABLE $ChatHistoryDir
-    !undef MUI_PAGE_HEADER_TEXT
-    !define MUI_PAGE_HEADER_TEXT "${CHATHISTORY_TITLE}"
-    !undef MUI_PAGE_HEADER_SUBTEXT
-    !define MUI_PAGE_HEADER_SUBTEXT "${CHATHISTORY_SUBTITLE}"
-FunctionEnd
-
 ;-----------------------------------
 ; Installation Section
 ;-----------------------------------
 Section "Kolosal AI" SecKolosalAI
-  ; Force overwrite of existing files so that EXE and DLL files are always replaced
+  ; Force overwrite of existing files
   SetOverwrite on
+  
+  ; If this is an upgrade, remove old files first (except chat history)
+  ${If} $IsUpgrade == "true"
+    ; Display upgrade message
+    DetailPrint "Upgrading from version $OldVersion to $NewVersion"
+    
+    ; Remove previous program files but keep the directory structure
+    RMDir /r "$INSTDIR\assets"
+    RMDir /r "$INSTDIR\fonts"
+    RMDir /r "$INSTDIR\models"
+    Delete "$INSTDIR\*.dll"
+    Delete "$INSTDIR\*.exe"
+    Delete "$INSTDIR\LICENSE"
+    
+    ; Small delay to ensure all files are released
+    Sleep 1000
+  ${EndIf}
   
   SetOutPath "$INSTDIR"
   
@@ -120,6 +171,8 @@ Section "Kolosal AI" SecKolosalAI
   File "libcrypto-3-x64.dll"
   File "libssl-3-x64.dll"
   File "libcurl.dll"
+  FILE "kolosal_server.dll"
+  FILE "vcomp140.dll"
   File "LICENSE"
 
   ; Create and populate subdirectories
@@ -135,9 +188,11 @@ Section "Kolosal AI" SecKolosalAI
   SetOutPath "$INSTDIR\models"
   File /r "models\*.*"
 
-  ; Create chat history directory
-  CreateDirectory "$ChatHistoryDir"
-  AccessControl::GrantOnFile "$ChatHistoryDir" "(S-1-5-32-545)" "FullAccess"
+  ; Create chat history directory if it doesn't exist
+  ${If} $IsUpgrade == "false"
+    CreateDirectory "$ChatHistoryDir"
+    AccessControl::GrantOnFile "$ChatHistoryDir" "(S-1-5-32-545)" "FullAccess"
+  ${EndIf}
 
   SetOutPath "$INSTDIR"
 
@@ -154,9 +209,11 @@ Section "Kolosal AI" SecKolosalAI
   ; Write registry information
   WriteRegStr HKLM "SOFTWARE\KolosalAI" "Install_Dir" "$INSTDIR"
   WriteRegStr HKLM "SOFTWARE\KolosalAI" "ChatHistory_Dir" "$ChatHistoryDir"
+  WriteRegStr HKLM "SOFTWARE\KolosalAI" "Version" "${VERSION}"
   
   WriteRegStr HKCU "Software\KolosalAI" "Install_Dir" "$INSTDIR"
   WriteRegStr HKCU "Software\KolosalAI" "ChatHistory_Dir" "$ChatHistoryDir"
+  WriteRegStr HKCU "Software\KolosalAI" "Version" "${VERSION}"
   
   ; Write uninstaller registry information
   WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayName" "Kolosal AI"
@@ -164,21 +221,40 @@ Section "Kolosal AI" SecKolosalAI
   WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "Publisher" "Genta Technology"
   WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayIcon" "$INSTDIR\assets\icon.ico"
+  WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayVersion" "${VERSION}"
   
   WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayName" "Kolosal AI"
   WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "UninstallString" "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "Publisher" "Genta Technology"
   WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayIcon" "$INSTDIR\assets\icon.ico"
+  WriteRegStr HKCU "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayVersion" "${VERSION}"
 
   ; Create uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
+  
+  ; Clean temporary files that might be left from previous versions
+  RMDir /r "$TEMP\KolosalAI"
+  Delete "$TEMP\KolosalAI_*.log"
+  Delete "$TEMP\KolosalAI_*.tmp"
 SectionEnd
 
 ;-----------------------------------
 ; Uninstall Section
 ;-----------------------------------
 Section "Uninstall"
+  ; Check if the application is running before uninstalling
+  ${nsProcess::FindProcess} "KolosalDesktop.exe" $R1
+  ${If} $R1 == 0
+      MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION \
+          "Kolosal AI is currently running. Please close it before continuing.$\n$\nPress OK to automatically close the application and continue with uninstallation, or Cancel to abort." \
+          IDCANCEL abortUninstall
+          
+      ; Kill the process if user chose to continue
+      ${nsProcess::KillProcess} "KolosalDesktop.exe" $R1
+      Sleep 2000 ; Give it time to fully terminate
+  ${EndIf}
+
   ; Retrieve Start Menu folder from registry
   !insertmacro MUI_STARTMENU_GETFOLDER Application $StartMenuFolder
   
@@ -209,6 +285,15 @@ keepChatHistory:
   ; Remove registry keys
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI"
   DeleteRegKey HKLM "Software\KolosalAI"
+  DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI"
+  DeleteRegKey HKCU "Software\KolosalAI"
+  
+  ${nsProcess::Unload}
+  Goto done
+
+abortUninstall:
+  Abort "Uninstallation aborted. Please close Kolosal AI and try again."
 
 noRemove:
+done:
 SectionEnd

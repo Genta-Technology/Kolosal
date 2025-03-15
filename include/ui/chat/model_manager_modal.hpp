@@ -613,9 +613,11 @@ private:
         filterModels();
     }
 
-    // New method: Filter models based on search text
+    // Filter models based on search text
     void filterModels() {
         m_filteredModels.clear();
+        auto& manager = Model::ModelManager::getInstance();
+        const auto& models = manager.getModels();
 
         if (m_searchText.empty()) {
             // If no search term, show all models
@@ -628,13 +630,23 @@ private:
         std::transform(searchLower.begin(), searchLower.end(), searchLower.begin(),
             [](unsigned char c) { return std::tolower(c); });
 
-        // Filter models based on name containing the search text
+        // Filter models based on name OR author containing the search text
         for (const auto& model : m_sortedModels) {
-            std::string nameLower = model.name;
+            // Get the model data using the stored index
+            const auto& modelData = models[model.index];
+
+            // Convert name and author to lowercase for case-insensitive comparison
+            std::string nameLower = modelData.name;
             std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
                 [](unsigned char c) { return std::tolower(c); });
 
-            if (nameLower.find(searchLower) != std::string::npos) {
+            std::string authorLower = modelData.author;
+            std::transform(authorLower.begin(), authorLower.end(), authorLower.begin(),
+                [](unsigned char c) { return std::tolower(c); });
+
+            // Add model to filtered results if either name OR author contains the search text
+            if (nameLower.find(searchLower) != std::string::npos ||
+                authorLower.find(searchLower) != std::string::npos) {
                 m_filteredModels.push_back(model);
             }
         }

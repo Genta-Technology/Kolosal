@@ -1,0 +1,22 @@
+{
+  "name": "Gemma 3 27B",
+  "author": "Google",
+  "variants": {
+    "8-bit Quantized": {
+      "type": "8-bit Quantized",
+      "path": "models/gemma-3-27b/int8/google_gemma-3-27b-it_q8_0.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/gemma-3-27b/resolve/main/google_gemma-3-27b-it_q8_0.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "4-bit Quantized": {
+      "type": "4-bit Quantized",
+      "path": "models/gemma-3-27b/int4/google_gemma-3-27b-it_q4_k_m.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/gemma-3-27b/resolve/main/google_gemma-3-27b-it_q4_k_m.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    }
+  }
+}

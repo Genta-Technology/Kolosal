@@ -1,0 +1,30 @@
+{
+  "name": "Bahasa AI 4B",
+  "author": "Alibaba, Bahasa AI",
+  "variants": {
+    "Full Precision": {
+      "type": "Full Precision",
+      "path": "models/bahasa-ai-4b/fp16/Bahasalab_Bahasa-4b-chat_f16.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/bahasa-ai-4b/resolve/main/Bahasalab_Bahasa-4b-chat_f16.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "8-bit Quantized": {
+      "type": "8-bit Quantized",
+      "path": "models/bahasa-ai-4b/int8/Bahasalab_Bahasa-4b-chat_q8_0.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/bahasa-ai-4b/resolve/main/Bahasalab_Bahasa-4b-chat_q8_0.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    },
+    "4-bit Quantized": {
+      "type": "4-bit Quantized",
+      "path": "models/bahasa-ai-4b/int4/Bahasalab_Bahasa-4b-chat_q4_k_m.gguf",
+      "downloadLink": "https://huggingface.co/kolosal/bahasa-ai-4b/resolve/main/Bahasalab_Bahasa-4b-chat_q4_k_m.gguf",
+      "isDownloaded": false,
+      "downloadProgress": 0.0,
+      "lastSelected": 0
+    }
+  }
+}
