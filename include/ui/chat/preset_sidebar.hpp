@@ -2,6 +2,7 @@
 
 #include "imgui.h"
 #include "model/preset_manager.hpp"
+#include "system_prompt_modal.hpp"
 #include "ui/widgets.hpp"
 #include "config.hpp"
 #include "nfd.h"
@@ -167,10 +168,12 @@ private:
 
 class SamplingSettingsComponent {
 public:
-    // Takes sidebarWidth by reference.
-    SamplingSettingsComponent(float& sidebarWidth, bool& focusSystemPrompt)
-        : m_sidebarWidth(sidebarWidth), m_focusSystemPrompt(focusSystemPrompt)
+    // Takes sidebarWidth by reference and sharedSystemPromptBuffer by reference
+    SamplingSettingsComponent(float& sidebarWidth, bool& focusSystemPrompt, std::string& sharedSystemPromptBuffer)
+        : m_sidebarWidth(sidebarWidth), m_focusSystemPrompt(focusSystemPrompt), m_sharedSystemPromptBuffer(sharedSystemPromptBuffer)
     {
+        // Initialize the edit button handler
+        m_onEditSystemPromptRequested = []() {};
     }
 
     void render() {
@@ -178,34 +181,64 @@ public:
         if (!currentPresetOpt) return;
         auto& currentPreset = currentPresetOpt->get();
 
-        // Create a temporary buffer with sufficient capacity
-        static std::string tempSystemPrompt(Config::InputField::TEXT_SIZE, '\0');
-
-        // On first render or when preset changes, copy current value to the buffer
+        // Sync the shared buffer with the current preset on first load or when preset changes
         static int lastPresetId = -1;
         if (lastPresetId != currentPreset.id) {
-            tempSystemPrompt = currentPreset.systemPrompt;
+            m_sharedSystemPromptBuffer = currentPreset.systemPrompt;
             lastPresetId = currentPreset.id;
         }
 
-        // Render the system prompt label and multi-line input field
+        // Render the system prompt label and edit button
         ImGui::Spacing(); ImGui::Spacing();
+
+        // Create a row for the label and button
+        ImGui::BeginGroup();
         Label::render(m_systemPromptLabel);
+
+        // Calculate position for the edit button
+        float labelWidth = ImGui::CalcTextSize(m_systemPromptLabel.label.c_str()).x +
+            Config::Icon::DEFAULT_FONT_SIZE + m_systemPromptLabel.gap.value();
+
+        ImGui::SameLine();
+
+		// Position the edit button to edge of the sidebar
+		ImGui::SetCursorPosX(m_sidebarWidth - 38);
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
+
+        // Create edit button
+        ButtonConfig editButtonConfig;
+        editButtonConfig.id = "##editsystemprompt";
+        editButtonConfig.icon = ICON_CI_EDIT;
+        editButtonConfig.size = ImVec2(24, 24);
+        editButtonConfig.alignment = Alignment::CENTER;
+        editButtonConfig.backgroundColor = Config::Color::TRANSPARENT_COL;
+        editButtonConfig.hoverColor = Config::Color::SECONDARY;
+        editButtonConfig.activeColor = Config::Color::PRIMARY;
+        editButtonConfig.tooltip = "Edit System Prompt in Modal";
+        editButtonConfig.onClick = [&]() {
+            // Call the callback when edit button is clicked
+            if (m_onEditSystemPromptRequested) {
+                m_onEditSystemPromptRequested();
+            }
+            };
+
+        Button::render(editButtonConfig);
+        ImGui::EndGroup();
+
         ImGui::Spacing();
         ImGui::Spacing();
 
+        // Use the shared buffer for the input field
         InputFieldConfig inputConfig(
             "##systemprompt",
             ImVec2(m_sidebarWidth - 20, 100),
-            tempSystemPrompt, // Use the temporary buffer instead
+            m_sharedSystemPromptBuffer,
             m_focusSystemPrompt
         );
         inputConfig.placeholderText = "Enter your system prompt here...";
-        inputConfig.processInput = [&currentPreset](const std::string& input) {
-            // Copy the input to our temporary buffer first
-            tempSystemPrompt = input;
-
-            // Then safely update the preset's system prompt
+        inputConfig.processInput = [&currentPreset, this](const std::string& input) {
+            // Update shared buffer and preset
+            m_sharedSystemPromptBuffer = input;
             currentPreset.systemPrompt = input;
             };
 
@@ -232,9 +265,14 @@ public:
     void setSystemPromptLabel(const LabelConfig& label) { m_systemPromptLabel = label; }
     void setModelSettingsLabel(const LabelConfig& label) { m_modelSettingsLabel = label; }
 
+    // Callback used to request opening the system prompt modal
+    std::function<void()> m_onEditSystemPromptRequested;
+
 private:
     float& m_sidebarWidth;
     bool& m_focusSystemPrompt;
+    std::string& m_sharedSystemPromptBuffer;
+
     LabelConfig m_systemPromptLabel{
         "##systempromptlabel",
         "System Prompt",
@@ -368,12 +406,22 @@ public:
     ModelPresetSidebar()
         : m_sidebarWidth(Config::ChatHistorySidebar::SIDEBAR_WIDTH),
         m_presetSelectionComponent(m_sidebarWidth),
-        m_samplingSettingsComponent(m_sidebarWidth, m_focusSystemPrompt),
+        m_samplingSettingsComponent(m_sidebarWidth, m_focusSystemPrompt, m_sharedSystemPromptBuffer),
         m_saveAsDialogComponent(m_sidebarWidth, m_focusNewPresetName),
+        m_systemPromptModalComponent(m_sidebarWidth),
         m_exportButtonComponent(m_sidebarWidth)
     {
+        // Initialize the system prompt buffer with sufficient capacity
+        m_sharedSystemPromptBuffer.reserve(Config::InputField::TEXT_SIZE);
+
         // Set up the callback for "Save as New" so that it shows the modal.
         m_presetSelectionComponent.m_onSaveAsRequested = [this]() { m_showSaveAsDialog = true; };
+
+        // Set up the callback for "Edit System Prompt" button
+        m_samplingSettingsComponent.m_onEditSystemPromptRequested = [this]() {
+            m_showSystemPromptModal = true;
+            m_focusModalEditor = true;  // Focus editor when opening the modal
+            };
     }
 
     void render() {
@@ -405,21 +453,26 @@ public:
         ImGui::End();
 
         m_saveAsDialogComponent.render(m_showSaveAsDialog, m_newPresetName);
+        m_systemPromptModalComponent.render(m_showSystemPromptModal, m_sharedSystemPromptBuffer, m_focusModalEditor);
     }
 
-	float getSidebarWidth() const {
-		return m_sidebarWidth;
-	}
+    float getSidebarWidth() const {
+        return m_sidebarWidth;
+    }
 
 private:
     float m_sidebarWidth;
     bool m_showSaveAsDialog = false;
+    bool m_showSystemPromptModal = false;
     std::string m_newPresetName;
+    std::string m_sharedSystemPromptBuffer;
     bool m_focusSystemPrompt = true;
+    bool m_focusModalEditor = true;
     bool m_focusNewPresetName = true;
 
     PresetSelectionComponent m_presetSelectionComponent;
     SamplingSettingsComponent m_samplingSettingsComponent;
     SaveAsDialogComponent m_saveAsDialogComponent;
+    SystemPromptModalComponent m_systemPromptModalComponent;
     ExportButtonComponent m_exportButtonComponent;
 };
