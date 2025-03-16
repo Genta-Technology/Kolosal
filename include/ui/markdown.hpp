@@ -4,6 +4,15 @@
 #include <imgui.h>
 #include <imgui_md.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#elif defined(__APPLE__)
+#include <cstdlib>
+#else // Linux and other Unix-like systems
+#include <cstdlib>
+#endif
+
 #include "ui/widgets.hpp"
 #include "config.hpp"
 
@@ -82,6 +91,26 @@ protected:
         nfo.col_tint = ImVec4(1, 1, 1, 1);
         nfo.col_border = ImVec4(0, 0, 0, 0);
         return true;
+    }
+
+    void open_url() const override
+    {
+        // Get the URL from the base class's m_href member
+        const std::string url = m_href;
+
+        if (url.empty()) {
+            return; // No URL to open
+        }
+
+#ifdef _WIN32
+        ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+#elif defined(__APPLE__)
+        std::string cmd = "open \"" + url + "\"";
+        system(cmd.c_str());
+#else
+        std::string cmd = "xdg-open \"" + url + "\"";
+        system(cmd.c_str());
+#endif
     }
 
     void html_div(const std::string& dclass, bool enter) override
