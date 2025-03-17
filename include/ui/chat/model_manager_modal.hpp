@@ -276,7 +276,7 @@ private:
 
         // Calculate the height for the scrollable area
         // Card height minus header space minus button space at bottom
-        const float variantAreaHeight = 100.0f; // Adjust this value based on your layout needs
+        const float variantAreaHeight = 80.0f;
 
         // Create a scrollable child window for variants
         ImGui::BeginChild(("##VariantScroll" + std::to_string(m_index)).c_str(),
