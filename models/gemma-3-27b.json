@@ -8,7 +8,8 @@
       "downloadLink": "https://huggingface.co/kolosal/gemma-3-27b/resolve/main/google_gemma-3-27b-it_q8_0.gguf",
       "isDownloaded": false,
       "downloadProgress": 0.0,
-      "lastSelected": 0
+      "lastSelected": 0,
+      "size": 28.7
     },
     "4-bit Quantized": {
       "type": "4-bit Quantized",
@@ -16,7 +17,8 @@
       "downloadLink": "https://huggingface.co/kolosal/gemma-3-27b/resolve/main/google_gemma-3-27b-it_q4_k_m.gguf",
       "isDownloaded": false,
       "downloadProgress": 0.0,
-      "lastSelected": 0
+      "lastSelected": 0,
+      "size": 16.5
     }
   }
 }
