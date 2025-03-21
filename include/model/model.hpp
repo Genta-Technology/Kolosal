@@ -10,7 +10,6 @@ using json = nlohmann::json;
 
 namespace Model
 {
-    // ModelVariant structure remains mostly the same
     struct ModelVariant {
         std::string type;
         std::string path;
@@ -19,6 +18,7 @@ namespace Model
         double downloadProgress;
         int lastSelected;
         std::atomic_bool cancelDownload{ false };
+        float size;
 
         // Default constructor is fine.
         ModelVariant() = default;
@@ -31,7 +31,8 @@ namespace Model
             , isDownloaded(other.isDownloaded)
             , downloadProgress(other.downloadProgress)
             , lastSelected(other.lastSelected)
-            , cancelDownload(false) // Always initialize to false on copy.
+            , cancelDownload(false)
+			, size(other.size)
         {
         }
 
@@ -44,7 +45,8 @@ namespace Model
                 isDownloaded = other.isDownloaded;
                 downloadProgress = other.downloadProgress;
                 lastSelected = other.lastSelected;
-                cancelDownload = false; // Reinitialize the cancellation flag.
+                cancelDownload = false;
+				size = other.size;
             }
             return *this;
         }
@@ -58,7 +60,8 @@ namespace Model
             {"downloadLink", v.downloadLink},
             {"isDownloaded", v.isDownloaded},
             {"downloadProgress", v.downloadProgress},
-            {"lastSelected", v.lastSelected} };
+            {"lastSelected", v.lastSelected},
+            {"size", v.size} };
     }
 
     inline void from_json(const nlohmann::json& j, ModelVariant& v)
@@ -69,6 +72,7 @@ namespace Model
         j.at("isDownloaded").get_to(v.isDownloaded);
         j.at("downloadProgress").get_to(v.downloadProgress);
         j.at("lastSelected").get_to(v.lastSelected);
+		j.at("size").get_to(v.size);
     }
 
     // Refactored ModelData to use a map of variants

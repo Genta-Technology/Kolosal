@@ -2,6 +2,7 @@
 
 #include <imgui.h>
 
+#define APP_VERSION "0.1.8"
 
 // TODO: Need to refactor this to use json file that is modifiable by the user in realtime
 //       Set up a system to save and load the settings from a json file
@@ -132,4 +133,5 @@ namespace Config
     constexpr float INPUT_HEIGHT = 100.0F;
     constexpr float CHAT_WINDOW_CONTENT_WIDTH = 750.0F;
     constexpr float TITLE_BAR_HEIGHT = 50.0F;
+    constexpr float FOOTER_HEIGHT = 22.0F;
 } // namespace Config

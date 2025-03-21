@@ -6,6 +6,7 @@
 #include "ui/fonts.hpp"
 #include "ui/title_bar.hpp"
 #include "ui/tab_manager.hpp"
+#include "ui/status_bar.hpp"
 
 #include "chat/chat_manager.hpp"
 #include "model/preset_manager.hpp"
@@ -149,6 +150,9 @@ public:
         tabManager->addTab(std::make_unique<ChatTab>());
         tabManager->addTab(std::make_unique<ServerTab>());
 
+        // Initialize the status bar
+        statusBar = std::make_unique<StatusBar>();
+
         // Create and show the window
         window = WindowFactory::createWindow();
         window->createWindow(Config::WINDOW_WIDTH, Config::WINDOW_HEIGHT, Config::WINDOW_TITLE,
@@ -201,6 +205,9 @@ public:
             // Render the currently active tab (chat tab in this example)
             tabManager->renderCurrentTab();
 
+            // Render the status bar
+            statusBar->render();
+
             // Render ImGui
             ImGui::Render();
 
@@ -237,6 +244,7 @@ private:
     std::unique_ptr<ScopedCleanup> cleanup;
     std::unique_ptr<WindowStateTransitionManager> transitionManager;
     std::unique_ptr<TabManager> tabManager;
+    std::unique_ptr<StatusBar> statusBar;
     int display_w;
     int display_h;
 };

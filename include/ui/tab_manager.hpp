@@ -24,7 +24,6 @@ public:
     virtual const char* getIcon() const = 0;
 };
 
-// Update ChatTab to implement the new methods
 class ChatTab : public ITab {
 public:
     ChatTab()
@@ -81,7 +80,6 @@ private:
 	DeploymentSettingsSidebar deploymentSettingsSidebar;
 };
 
-// Update TabManager to handle tab activation/deactivation
 class TabManager {
 public:
     TabManager() : activeTabIndex(0) {}

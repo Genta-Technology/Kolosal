@@ -199,7 +199,7 @@ public:
     void render(float leftSidebarWidth, float rightSidebarWidth) {
         ImGuiIO& io = ImGui::GetIO();
         ImVec2 windowSize = ImVec2(io.DisplaySize.x - rightSidebarWidth - leftSidebarWidth,
-            io.DisplaySize.y - Config::TITLE_BAR_HEIGHT);
+            io.DisplaySize.y - Config::TITLE_BAR_HEIGHT - Config::FOOTER_HEIGHT);
 
         ImGui::SetNextWindowPos(ImVec2(leftSidebarWidth, Config::TITLE_BAR_HEIGHT), ImGuiCond_Always);
         ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);

@@ -426,7 +426,7 @@ public:
 
     void render() {
         ImGuiIO& io = ImGui::GetIO();
-        const float sidebarHeight = io.DisplaySize.y - Config::TITLE_BAR_HEIGHT;
+        const float sidebarHeight = io.DisplaySize.y - Config::TITLE_BAR_HEIGHT - Config::FOOTER_HEIGHT;
 
         ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - m_sidebarWidth, Config::TITLE_BAR_HEIGHT), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(m_sidebarWidth, sidebarHeight), ImGuiCond_Always);
