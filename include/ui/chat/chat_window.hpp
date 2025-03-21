@@ -194,8 +194,6 @@ public:
         m_lastContentHeight = 0.0f;
     }
 
-    // Render the chat window. This method computes layout values and then renders
-    // the cached widgets, updating only the dynamic properties.
     void render(float leftSidebarWidth, float rightSidebarWidth) {
         ImGuiIO& io = ImGui::GetIO();
         ImVec2 windowSize = ImVec2(io.DisplaySize.x - rightSidebarWidth - leftSidebarWidth,
@@ -233,12 +231,9 @@ public:
         for (int i = 0; i < 4; ++i)
             ImGui::Spacing();
 
-        if (paddingX > 0.0F)
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + paddingX);
-
         // Render the chat history region.
         float availableHeight = ImGui::GetContentRegionAvail().y - m_inputHeight - Config::BOTTOM_MARGIN;
-        renderChatHistoryWithAutoScroll(contentWidth, availableHeight);
+        renderChatHistoryWithAutoScroll(contentWidth, availableHeight, paddingX);
 
         ImGui::Spacing();
         float inputFieldPaddingX = (availableWidth - contentWidth) / 2.0F;
@@ -251,11 +246,13 @@ public:
     }
 
 private:
-    void renderChatHistoryWithAutoScroll(float contentWidth, float availableHeight) {
+    void renderChatHistoryWithAutoScroll(float contentWidth, float availableHeight, float paddingX) {
         const char* chatHistoryId = "ChatHistoryRegion";
 
         // Begin the child window for chat history
-        ImGui::BeginChild(chatHistoryId, ImVec2(contentWidth, availableHeight), false, ImGuiWindowFlags_NoScrollbar);
+        ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0, 0, 0, 0));
+        ImGui::BeginChild(chatHistoryId, ImVec2(-1, availableHeight), false);
+		ImGui::PopStyleColor();
 
         // Check if we were at the bottom before rendering new content
         float scrollY = ImGui::GetScrollY();
@@ -264,7 +261,9 @@ private:
 
         // Render the chat content
         if (auto chat = Chat::ChatManager::getInstance().getCurrentChat())
-            chatHistoryRenderer.render(*chat, contentWidth);
+        {
+            chatHistoryRenderer.render(*chat, contentWidth, paddingX);
+        }
 
         // Calculate if content height has changed (new content was added)
         float currentMaxScrollY = ImGui::GetScrollMaxY();

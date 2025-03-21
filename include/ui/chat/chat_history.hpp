@@ -50,7 +50,7 @@ public:
 		bubbleBgColorAssistant = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
-    void render(const Chat::ChatHistory& chatHistory, float contentWidth)
+    void render(const Chat::ChatHistory& chatHistory, float contentWidth, float& paddingX)
     {
         const size_t currentMessageCount = chatHistory.messages.size();
         const bool newMessageAdded = currentMessageCount > m_lastMessageCount;
@@ -60,7 +60,7 @@ public:
         const bool atBottom = (scrollMaxY <= 0.0f) || (scrollY >= scrollMaxY - ChatHistoryConstants::MIN_SCROLL_DIFFERENCE);
 
         for (size_t i = 0; i < currentMessageCount; ++i) {
-            renderMessage(chatHistory.messages[i], static_cast<int>(i), contentWidth);
+            renderMessage(chatHistory.messages[i], static_cast<int>(i), contentWidth, paddingX);
         }
 
         if (newMessageAdded && atBottom) {
@@ -130,7 +130,7 @@ private:
         return dim;
     }
 
-    void renderMessageContent(const Chat::Message& msg, float bubbleWidth, float bubblePadding)
+    void renderMessageContent(const Chat::Message& msg, float bubbleWidth, float bubblePadding, float& paddingX)
     {
         if (msg.role == "user") {
             ImGui::SetCursorPosX(bubblePadding);
@@ -139,6 +139,8 @@ private:
         }
 
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 24);
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + paddingX);
+		ImGui::BeginChild("##assistant_message_" + msg.id, { bubbleWidth, 0 }, ImGuiChildFlags_AutoResizeY);
         ImGui::BeginGroup();
 
         auto segments = parseThinkSegments(msg.content);
@@ -196,6 +198,7 @@ private:
         }
 
         ImGui::EndGroup();
+		ImGui::EndChild();
     }
 
     static void chatStreamingCallback(const std::string& partialOutput, const float tps, const int jobId, const bool isFinished) {
@@ -320,9 +323,13 @@ private:
         modelManager.setModelGenerationInProgress(true);
     }
 
-    void renderMetadata(const Chat::Message& msg, int index, float bubbleWidth, float bubblePadding)
+    void renderMetadata(const Chat::Message& msg, int index, float bubbleWidth, float bubblePadding, float& paddingX)
     {
         ImGui::PushStyleColor(ImGuiCol_Text, timestampColor);
+		if (msg.role == "assistant")
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + paddingX);
+
+        float cursorX = ImGui::GetCursorPosX();
 
         // Timestamp
         ImGui::TextWrapped("%s", timePointToString(msg.timestamp).c_str());
@@ -337,9 +344,8 @@ private:
         // Copy button
         ImGui::SameLine();
         ImGui::SetCursorPosX(
-            ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x -
-            (msg.role == "assistant" ? 2 : 1) *
-            Config::Button::WIDTH - bubblePadding
+            cursorX + bubbleWidth -
+            2 * Config::Button::WIDTH - bubblePadding
         );
 
         std::vector<ButtonConfig> helperButtons;
@@ -375,7 +381,7 @@ private:
         ImGui::PopStyleColor();
     }
 
-    void renderMessage(const Chat::Message& msg, int index, float contentWidth)
+    void renderMessage(const Chat::Message& msg, int index, float contentWidth, float& _paddingX /* Padding to center the message */)
     {
         const auto [bubbleWidth, bubblePadding, paddingX] = calculateDimensions(msg, contentWidth);
 
@@ -384,7 +390,7 @@ private:
             ? bubbleBgColorUser
             : bubbleBgColorAssistant);
 
-        ImGui::SetCursorPosX(paddingX);
+        ImGui::SetCursorPosX(paddingX + _paddingX);
 
         if (msg.role == "user") {
             ImVec2 textSize = ImGui::CalcTextSize(msg.content.c_str(), nullptr, true, bubbleWidth - 2 * bubblePadding);
@@ -396,9 +402,9 @@ private:
                 ImGuiChildFlags_Border | ImGuiChildFlags_AlwaysUseWindowPadding);
             ImGui::PopStyleVar();
 
-            renderMessageContent(msg, bubbleWidth - 2 * bubblePadding, bubblePadding);
+            renderMessageContent(msg, bubbleWidth - 2 * bubblePadding, bubblePadding, _paddingX);
             ImGui::Spacing();
-            renderMetadata(msg, index, bubbleWidth, 0);
+            renderMetadata(msg, index, bubbleWidth, 0, _paddingX);
 
             ImGui::EndChild();
         }
@@ -421,9 +427,9 @@ private:
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 12);
             }
 
-            renderMessageContent(msg, bubbleWidth, bubblePadding);
+            renderMessageContent(msg, bubbleWidth, bubblePadding, _paddingX);
             ImGui::Spacing();
-            renderMetadata(msg, index, bubbleWidth, bubblePadding);
+            renderMetadata(msg, index, bubbleWidth, bubblePadding, _paddingX);
         }
 
         ImGui::PopStyleColor();
