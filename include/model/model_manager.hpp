@@ -296,6 +296,52 @@ namespace Model
             return params;
         }
 
+        CompletionParameters buildCompletionParameters(const CompletionRequest& request) {
+            CompletionParameters params;
+
+            // Set prompt based on request format
+            if (std::holds_alternative<std::string>(request.prompt)) {
+                params.prompt = std::get<std::string>(request.prompt);
+            }
+            else if (std::holds_alternative<std::vector<std::string>>(request.prompt)) {
+                // Join multiple prompts with newlines if array is provided
+                const auto& prompts = std::get<std::vector<std::string>>(request.prompt);
+                std::ostringstream joined;
+                for (size_t i = 0; i < prompts.size(); ++i) {
+                    joined << prompts[i];
+                    if (i < prompts.size() - 1) {
+                        joined << "\n";
+                    }
+                }
+                params.prompt = joined.str();
+            }
+
+            // Map parameters from request to our format
+            if (request.seed.has_value()) {
+                params.randomSeed = request.seed.value();
+            }
+
+            if (request.max_tokens.has_value()) {
+                params.maxNewTokens = request.max_tokens.value();
+            }
+            else {
+                // Use a reasonable default if not specified (OpenAI default is 16)
+                params.maxNewTokens = 16;
+            }
+
+            // Copy other parameters
+            params.temperature = request.temperature;
+            params.topP = request.top_p;
+            params.streaming = request.stream;
+
+            // Set unique sequence ID based on timestamp
+            auto now = std::chrono::system_clock::now();
+            auto timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+            params.seqId = static_cast<int>(timestamp * 1000 + seqCounter++);
+
+            return params;
+        }
+
         ChatCompletionParameters buildChatCompletionParameters(
             const Chat::ChatHistory& currentChat,
             const std::string& userInput
@@ -740,19 +786,35 @@ namespace Model
             Logger::instance().setLevel(LogLevel::SERVER_INFO);
             Logger::logInfo("Starting model server on port %s", port.c_str());
 
-            // Set inference callbacks
-            kolosal::ServerAPI::instance().setInferenceCallback(
+            // Set chat completion callbacks
+            kolosal::ServerAPI::instance().setChatCompletionCallback(
                 [this](const ChatCompletionRequest& request) {
-                    return this->handleNonStreamingRequest(request);
+                    return this->handleChatCompletionRequest(request);
                 }
             );
 
-            kolosal::ServerAPI::instance().setStreamingInferenceCallback(
+            kolosal::ServerAPI::instance().setChatCompletionStreamingCallback(
                 [this](const ChatCompletionRequest& request,
                     const std::string& requestId,
                     int chunkIndex,
                     ChatCompletionChunk& outputChunk) {
-                        return this->handleStreamingRequest(request, requestId, chunkIndex, outputChunk);
+                        return this->handleChatCompletionStreamingRequest(request, requestId, chunkIndex, outputChunk);
+                }
+            );
+
+            // Set completion callbacks
+            kolosal::ServerAPI::instance().setCompletionCallback(
+                [this](const CompletionRequest& request) {
+                    return this->handleCompletionRequest(request);
+                }
+            );
+
+            kolosal::ServerAPI::instance().setCompletionStreamingCallback(
+                [this](const CompletionRequest& request,
+                    const std::string& requestId,
+                    int chunkIndex,
+                    CompletionChunk& outputChunk) {
+                        return this->handleCompletionStreamingRequest(request, requestId, chunkIndex, outputChunk);
                 }
             );
 
@@ -771,7 +833,7 @@ namespace Model
             kolosal::ServerAPI::instance().shutdown();
         }
 
-        ChatCompletionResponse handleNonStreamingRequest(const ChatCompletionRequest& request) {
+        ChatCompletionResponse handleChatCompletionRequest(const ChatCompletionRequest& request) {
             // Build parameters from the incoming request.
             ChatCompletionParameters params = buildChatCompletionParameters(request);
             // (The parameters will include the messages and other fields.)
@@ -785,20 +847,33 @@ namespace Model
             return response;
         }
 
-        bool ModelManager::handleStreamingRequest(
+        CompletionResponse handleCompletionRequest(const CompletionRequest& request) {
+            // Build parameters from the incoming request
+            CompletionParameters params = buildCompletionParameters(request);
+            params.streaming = false;
+
+            // Invoke the synchronous completion method
+            CompletionResult result = completeSync(params);
+
+            // Map the engine's result to our CompletionResponse
+            CompletionResponse response = convertToCompletionResponse(request, result);
+            return response;
+        }
+
+        bool handleChatCompletionStreamingRequest(
             const ChatCompletionRequest& request,
             const std::string& requestId,
             int chunkIndex,
             ChatCompletionChunk& outputChunk) {
-            // Look up (or create) the StreamingContext for this requestId.
-            std::shared_ptr<StreamingContext> ctx;
+            // Look up (or create) the ChatCompletionStreamingContext for this requestId.
+            std::shared_ptr<ChatCompletionStreamingContext> ctx;
             {
                 std::unique_lock<std::mutex> lock(m_streamContextsMutex);
                 auto it = m_streamingContexts.find(requestId);
                 if (it == m_streamingContexts.end()) {
                     // For the very first chunk (chunkIndex==0) we create a new context.
                     if (chunkIndex == 0) {
-                        ctx = std::make_shared<StreamingContext>();
+                        ctx = std::make_shared<ChatCompletionStreamingContext>();
                         m_streamingContexts[requestId] = ctx;
                     }
                     else {
@@ -909,6 +984,9 @@ namespace Model
                                 ctx->cv.notify_all();
                                 break;
                             }
+
+							// Sleep briefly to avoid busy-waiting
+							std::this_thread::sleep_for(std::chrono::milliseconds(100));
                         }
                     }
                     catch (const std::exception& e) {
@@ -1036,6 +1114,245 @@ namespace Model
 
                 // More chunks to come
                 return true;
+            }
+        }
+
+        bool handleCompletionStreamingRequest(
+            const CompletionRequest& request,
+            const std::string& requestId,
+            int chunkIndex,
+            CompletionChunk& outputChunk) {
+
+            // Get or create streaming context
+            std::shared_ptr<CompletionStreamingContext> ctx;
+            {
+                std::unique_lock<std::mutex> lock(m_completionStreamContextsMutex);
+                auto it = m_completionStreamingContexts.find(requestId);
+                if (it == m_completionStreamingContexts.end()) {
+                    // For first chunk, create a new context
+                    if (chunkIndex == 0) {
+                        ctx = std::make_shared<CompletionStreamingContext>();
+                        m_completionStreamingContexts[requestId] = ctx;
+                    }
+                    else {
+                        Logger::logError("[ModelManager] Completion streaming context not found for requestId: %s",
+                            requestId.c_str());
+                        return false;
+                    }
+                }
+                else {
+                    ctx = it->second;
+                }
+            }
+
+            // If this is the first call, start the asynchronous job
+            if (chunkIndex == 0) {
+                // Build parameters with streaming enabled
+                CompletionParameters params = buildCompletionParameters(request);
+                params.streaming = true;
+
+                // Track job ID and model for this request
+                int jobId = -1;
+
+                {
+                    std::lock_guard<std::mutex> lock(ctx->mtx);
+                    ctx->model = request.model;
+
+                    // Submit the completion job to the inference engine
+                    jobId = m_inferenceEngine->submitCompletionsJob(params);
+                    ctx->jobId = jobId;
+                }
+
+                if (jobId < 0) {
+                    Logger::logError("[ModelManager] Failed to submit completion job for requestId: %s",
+                        requestId.c_str());
+                    {
+                        std::lock_guard<std::mutex> lock(ctx->mtx);
+                        ctx->error = true;
+                        ctx->errorMessage = "Failed to start completion job";
+                        ctx->finished = true;
+                    }
+                    {
+                        std::unique_lock<std::mutex> lock(m_completionStreamContextsMutex);
+                        m_completionStreamingContexts.erase(requestId);
+                    }
+                    return false;
+                }
+
+                // Add job ID to global tracking
+                {
+                    std::unique_lock<std::shared_mutex> lock(m_mutex);
+                    m_jobIds.push_back(jobId);
+                }
+
+                // Launch an asynchronous thread that polls the job and accumulates new text
+                std::thread([this, jobId, requestId, ctx]() {
+                    std::string lastText;
+                    auto startTime = std::chrono::steady_clock::now();
+
+                    try {
+                        while (true) {
+                            // Check if the job has an error
+                            if (this->m_inferenceEngine->hasJobError(jobId)) {
+                                std::string errorMsg = this->m_inferenceEngine->getJobError(jobId);
+                                Logger::logError("[ModelManager] Streaming completion job error for jobId: %d - %s",
+                                    jobId, errorMsg.c_str());
+                                {
+                                    std::lock_guard<std::mutex> lock(ctx->mtx);
+                                    ctx->error = true;
+                                    ctx->errorMessage = errorMsg;
+                                    ctx->finished = true;
+                                }
+                                ctx->cv.notify_all();
+                                break;
+                            }
+
+                            // Get the current result and check if finished
+                            CompletionResult partial = this->m_inferenceEngine->getJobResult(jobId);
+                            bool isFinished = this->m_inferenceEngine->isJobFinished(jobId);
+
+                            // Compute delta text (only new text since last poll)
+                            std::string newText;
+                            if (partial.text.size() > lastText.size()) {
+                                newText = partial.text.substr(lastText.size());
+                                lastText = partial.text;
+                            }
+
+                            // If we have new text, add it to the chunks
+                            if (!newText.empty()) {
+                                {
+                                    std::lock_guard<std::mutex> lock(ctx->mtx);
+                                    ctx->fullText = lastText;
+                                    ctx->chunks.push_back(newText);
+                                }
+                                ctx->cv.notify_all();
+                            }
+
+                            // If the job is finished, set the finished flag and break
+                            if (isFinished) {
+                                auto endTime = std::chrono::steady_clock::now();
+                                auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    endTime - startTime).count();
+
+                                Logger::logInfo("[ModelManager] Streaming completion job %d completed in %lld ms",
+                                    jobId, durationMs);
+
+                                {
+                                    std::lock_guard<std::mutex> lock(ctx->mtx);
+                                    ctx->finished = true;
+                                }
+                                ctx->cv.notify_all();
+                                break;
+                            }
+                        }
+                    }
+                    catch (const std::exception& e) {
+                        Logger::logError("[ModelManager] Exception in completion streaming thread: %s", e.what());
+                        {
+                            std::lock_guard<std::mutex> lock(ctx->mtx);
+                            ctx->error = true;
+                            ctx->errorMessage = e.what();
+                            ctx->finished = true;
+                        }
+                        ctx->cv.notify_all();
+                    }
+
+                    // Clean up job ID tracking
+                    {
+                        std::unique_lock<std::shared_mutex> lock(this->m_mutex);
+                        this->m_jobIds.erase(
+                            std::remove(this->m_jobIds.begin(), this->m_jobIds.end(), jobId),
+                            this->m_jobIds.end());
+                    }
+                    }).detach();
+            }
+
+            // Prepare the chunk response
+            outputChunk.id = requestId;
+            outputChunk.model = request.model;
+            outputChunk.created = static_cast<int64_t>(std::time(nullptr));
+            outputChunk.choices.clear();
+
+            // For first chunk, just create an empty choice
+            if (chunkIndex == 0) {
+                CompletionChunkChoice choice;
+                choice.index = 0;
+                choice.text = "";
+                choice.finish_reason = ""; // Use empty string instead of nullptr
+                outputChunk.choices.push_back(choice);
+                return true;
+            }
+            // For subsequent chunks, wait for content
+            else {
+                std::unique_lock<std::mutex> lock(ctx->mtx);
+
+                // Wait with timeout for the chunk to be available
+                bool result = ctx->cv.wait_for(lock, std::chrono::seconds(30), [ctx, chunkIndex]() {
+                    return (ctx->chunks.size() >= static_cast<size_t>(chunkIndex)) ||
+                        ctx->finished || ctx->error;
+                    });
+
+                if (!result) {
+                    // Timeout occurred
+                    Logger::logError("[ModelManager] Timeout waiting for completion chunk %d for requestId %s",
+                        chunkIndex, requestId.c_str());
+
+                    // Keep the lock when we check if this is the last message
+                    std::unique_lock<std::mutex> glock(m_completionStreamContextsMutex);
+                    m_completionStreamingContexts.erase(requestId);
+                    return false;
+                }
+
+                // Handle errors - still holding the lock
+                if (ctx->error) {
+                    Logger::logError("[ModelManager] Error in streaming completion for requestId %s: %s",
+                        requestId.c_str(), ctx->errorMessage.c_str());
+
+                    // Keep the lock when we check if this is the last message
+                    std::unique_lock<std::mutex> glock(m_completionStreamContextsMutex);
+                    m_completionStreamingContexts.erase(requestId);
+                    return false;
+                }
+
+                CompletionChunkChoice choice;
+                choice.index = 0;
+
+                // Check for completion state while still holding the lock
+                bool hasChunk = ctx->chunks.size() >= static_cast<size_t>(chunkIndex);
+                bool isFinished = ctx->finished;
+                bool isLastChunk = false;
+
+                if (hasChunk) {
+                    // Get the content for this chunk while holding the lock
+                    choice.text = ctx->chunks[chunkIndex - 1];
+
+                    // Determine if this is the last chunk while safely protected by the lock
+                    isLastChunk = isFinished && (ctx->chunks.size() == static_cast<size_t>(chunkIndex));
+                    choice.finish_reason = isLastChunk ? "stop" : ""; // Use empty string instead of nullptr
+                }
+                else if (isFinished) {
+                    // No chunk but job is finished - send empty final chunk
+                    choice.text = "";
+                    choice.finish_reason = "stop";
+                    isLastChunk = true;
+                }
+                else {
+                    // We have no chunk yet but still waiting
+                    choice.text = "";
+                    choice.finish_reason = ""; // Use empty string instead of nullptr
+                }
+
+                // Release the ctx lock before acquiring the global contexts lock to avoid deadlock
+                lock.unlock();
+
+                // Clean up if this is the last chunk
+                if (isLastChunk) {
+                    std::unique_lock<std::mutex> glock(m_completionStreamContextsMutex);
+                    m_completionStreamingContexts.erase(requestId);
+                }
+
+                outputChunk.choices.push_back(choice);
+                return !isLastChunk; // Return true if more chunks remain, false if this is the last one
             }
         }
 
@@ -1845,6 +2162,38 @@ namespace Model
             return response;
         }
 
+        static CompletionResponse convertToCompletionResponse(const CompletionRequest& request, const CompletionResult& result) {
+            CompletionResponse response;
+            response.model = request.model;
+
+            // Create a choice with the generated text
+            CompletionChoice choice;
+            choice.index = 0;
+            choice.text = result.text;
+            choice.finish_reason = "stop"; // Assuming completion finished normally
+
+            response.choices.push_back(choice);
+
+            // Set usage statistics - this is an estimation
+            int promptLength = 0;
+            if (std::holds_alternative<std::string>(request.prompt)) {
+                promptLength = std::get<std::string>(request.prompt).size() / 4; // Rough token estimation
+            }
+            else if (std::holds_alternative<std::vector<std::string>>(request.prompt)) {
+                for (const auto& p : std::get<std::vector<std::string>>(request.prompt)) {
+                    promptLength += p.size() / 4;
+                }
+            }
+
+            int completionLength = result.text.size() / 4; // Rough token estimation
+
+            response.usage.prompt_tokens = promptLength;
+            response.usage.completion_tokens = completionLength;
+            response.usage.total_tokens = promptLength + completionLength;
+
+            return response;
+        }
+
         mutable std::shared_mutex                       m_mutex;
         std::unique_ptr<IModelPersistence>              m_persistence;
         std::vector<ModelData>                          m_models;
@@ -1874,7 +2223,7 @@ namespace Model
         IInferenceEngine* m_inferenceEngine = nullptr;
 
 		// Server related
-        struct StreamingContext {
+        struct ChatCompletionStreamingContext {
             std::mutex mtx;
             std::condition_variable cv;
             std::vector<std::string> chunks;
@@ -1885,8 +2234,23 @@ namespace Model
             bool error = false;
         };
         std::mutex m_streamContextsMutex;
-        std::unordered_map<std::string, std::shared_ptr<StreamingContext>>
+        std::unordered_map<std::string, std::shared_ptr<ChatCompletionStreamingContext>>
             m_streamingContexts;
+
+        struct CompletionStreamingContext {
+            std::mutex mtx;
+            std::condition_variable cv;
+            std::string model;
+            int jobId = -1;
+            std::vector<std::string> chunks;
+            bool finished = false;
+            bool error = false;
+            std::string errorMessage;
+            std::string fullText; // Accumulated full text
+        };
+        std::mutex m_completionStreamContextsMutex;
+        std::unordered_map<std::string, std::shared_ptr<CompletionStreamingContext>> 
+            m_completionStreamingContexts;
     };
 
     inline void initializeModelManager(const bool async = true)
