@@ -1,6 +1,10 @@
 {
   "name": "Gemma 2 9B Sahabat AI",
   "author": "Google, GoTo",
+  "hidden_size": 3584,
+  "attention_heads": 16,
+  "hidden_layers": 42,
+  "kv_heads": 8,
   "variants": {
     "Full Precision": {
       "type": "Full Precision",

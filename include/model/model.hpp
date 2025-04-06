@@ -81,10 +81,17 @@ namespace Model
         std::string name;
         std::string author;
         std::map<std::string, ModelVariant> variants;
+        uint16_t hidden_size;
+        uint16_t attention_heads;
+        uint16_t hidden_layers;
+        uint16_t kv_heads;
 
         // Constructor with no variants
-        ModelData(const std::string& name = "", const std::string& author = "")
-            : name(name), author(author) {
+        ModelData(const std::string& name = "", const std::string& author = "",
+            const uint16_t hidden_size = 0, const uint16_t attention_heads = 0,
+            const uint16_t hidden_layers = 0, const uint16_t kv_heads = 0)
+            : name(name), author(author), hidden_size(hidden_size), attention_heads(attention_heads)
+            , hidden_layers(hidden_layers), kv_heads(kv_heads) {
         }
 
         // Add a variant to the model
@@ -115,7 +122,11 @@ namespace Model
         j = nlohmann::json{
             {"name", m.name},
             {"author", m.author},
-            {"variants", m.variants}
+            {"variants", m.variants},
+			{"hidden_size", m.hidden_size},
+			{"attention_heads", m.attention_heads},
+			{"hidden_layers", m.hidden_layers},
+			{"kv_heads", m.kv_heads}
         };
     }
 
@@ -124,5 +135,9 @@ namespace Model
         j.at("name").get_to(m.name);
         j.at("author").get_to(m.author);
         j.at("variants").get_to(m.variants);
+		j.at("hidden_size").get_to(m.hidden_size);
+		j.at("attention_heads").get_to(m.attention_heads);
+		j.at("hidden_layers").get_to(m.hidden_layers);
+		j.at("kv_heads").get_to(m.kv_heads);
     }
 } // namespace Model

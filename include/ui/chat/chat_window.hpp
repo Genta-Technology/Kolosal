@@ -5,7 +5,7 @@
 #include "chat_history.hpp"
 #include "ui/widgets.hpp"
 #include "ui/markdown.hpp"
-#include "ui/chat/model_manager_modal.hpp"
+#include "ui/model_manager_modal.hpp"
 #include "chat/chat_manager.hpp"
 #include "model/preset_manager.hpp"
 #include "model/model_manager.hpp"
@@ -349,7 +349,7 @@ private:
             auto& chatManager = Chat::ChatManager::getInstance();
 
             // Generate the title (synchronous call)
-            CompletionResult titleResult = modelManager.chatCompleteSync(titleParams, false);
+            CompletionResult titleResult = modelManager.chatCompleteSync(titleParams, modelManager.getCurrentModelName().value(), false);
 
             if (!titleResult.text.empty()) {
                 // Clean up the generated title
@@ -442,7 +442,8 @@ private:
             buildChatCompletionParameters(currentChat, message);
 
         auto& modelManager = Model::ModelManager::getInstance();
-        int jobId = modelManager.startChatCompletionJob(completionParams, chatStreamingCallback);
+        int jobId = modelManager.startChatCompletionJob(completionParams, chatStreamingCallback,
+            modelManager.getCurrentModelName().value());
         if (!chatManager.setCurrentJobId(jobId)) {
             std::cerr << "[ChatSection] Failed to set the current job ID.\n";
         }
@@ -509,7 +510,8 @@ private:
             sendButtonConfig.tooltip = "Stop generation";
             sendButtonConfig.onClick = []() {
                 Model::ModelManager::getInstance().stopJob(
-                    Chat::ChatManager::getInstance().getCurrentJobId()
+                    Chat::ChatManager::getInstance().getCurrentJobId(),
+					Model::ModelManager::getInstance().getCurrentModelName().value()
                 );
                 };
             sendButtonConfig.state = ButtonState::NORMAL;

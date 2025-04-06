@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../config.hpp"
+#include "../system_monitor.hpp"
 #include "widgets.hpp"
 #include "fonts.hpp"
 #include <imgui.h>
@@ -23,36 +24,24 @@ class StatusBar {
 public:
     StatusBar()
         : lastUpdateTime(std::chrono::steady_clock::now())
-        , memoryUsageMB(0)
-        , cpuUsage(0.0f)
         , updateInterval(1000)
     {
         // Get the username once during initialization
         getCurrentUsername();
-
-        // Initialize CPU measurement data
-#ifdef _WIN32
-        ZeroMemory(&prevSysKernelTime, sizeof(FILETIME));
-        ZeroMemory(&prevSysUserTime, sizeof(FILETIME));
-        ZeroMemory(&prevProcKernelTime, sizeof(FILETIME));
-        ZeroMemory(&prevProcUserTime, sizeof(FILETIME));
-
-        // First call to CPU measurement (baseline)
-        measureCpuUsage();
-#endif
-
-        updateMemoryUsage();
         updateCurrentTime();
     }
 
     void render() {
         ImGuiIO& io = ImGui::GetIO();
 
+        // Get the instance of SystemMonitor
+        SystemMonitor& sysMonitor = SystemMonitor::getInstance();
+
         // Only update metrics occasionally to reduce CPU impact
         auto currentTime = std::chrono::steady_clock::now();
         if (std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastUpdateTime).count() > updateInterval) {
-            measureCpuUsage();
-            updateMemoryUsage();
+            // Update SystemMonitor to get fresh stats
+            sysMonitor.update();
             updateCurrentTime();
             lastUpdateTime = currentTime;
         }
@@ -80,36 +69,59 @@ public:
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.4f));
 
         if (ImGui::Begin("##StatusBar", nullptr, window_flags)) {
-            // Left side: Version and username
-			LabelConfig versionLabel;
-			versionLabel.id = "##versionLabel";
-			versionLabel.label = "Version: " + std::string(APP_VERSION);
-			versionLabel.size = ImVec2(200, 20);
-			versionLabel.fontSize = FontsManager::SM;
+            // Left side: Version
+            LabelConfig versionLabel;
+            versionLabel.id = "##versionLabel";
+            versionLabel.label = "Version: " + std::string(APP_VERSION);
+            versionLabel.size = ImVec2(200, 20);
+            versionLabel.fontSize = FontsManager::SM;
 
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 10);
 
-			Label::render(versionLabel);
+            Label::render(versionLabel);
 
             ImGui::SameLine();
 
-			std::stringstream ss;
-            ss << std::fixed << std::setprecision(1) << cpuUsage;
+            // Get metrics from SystemMonitor
+            float cpuUsage = sysMonitor.getCpuUsagePercentage();
+            size_t memoryUsageMB = sysMonitor.getUsedMemoryByProcess() / (1024 * 1024);
 
-			ButtonConfig cpuUsageLabel;
-			cpuUsageLabel.id = "##cpuUsageLabel";
-			cpuUsageLabel.label = "CPU: " + ss.str() + "%";
-			cpuUsageLabel.size = ImVec2(100, 20);
+            // Format the CPU usage with one decimal place
+            std::stringstream cpuSS;
+            cpuSS << std::fixed << std::setprecision(1) << cpuUsage;
+
+            // Prepare buttons for system metrics
+            ButtonConfig cpuUsageLabel;
+            cpuUsageLabel.id = "##cpuUsageLabel";
+            cpuUsageLabel.label = "CPU: " + cpuSS.str() + "%";
+            cpuUsageLabel.size = ImVec2(100, 20);
             cpuUsageLabel.fontSize = FontsManager::SM;
 
-			ButtonConfig memoryUsageLabel;
-			memoryUsageLabel.id = "##memoryUsageLabel";
-			memoryUsageLabel.label = "Memory: " + std::to_string(memoryUsageMB) + " MB";
-			memoryUsageLabel.size = ImVec2(150, 20);
-			memoryUsageLabel.fontSize = FontsManager::SM;
+            ButtonConfig memoryUsageLabel;
+            memoryUsageLabel.id = "##memoryUsageLabel";
+            memoryUsageLabel.label = "Memory: " + std::to_string(memoryUsageMB) + " MB";
+            memoryUsageLabel.size = ImVec2(150, 20);
+            memoryUsageLabel.fontSize = FontsManager::SM;
 
-			Button::renderGroup({ cpuUsageLabel, memoryUsageLabel }, 
-                ImGui::GetContentRegionAvail().x - 150, ImGui::GetCursorPosY() - 2, 0);
+            // Create buttons for GPU metrics if available
+            std::vector<ButtonConfig> buttonConfigs = { cpuUsageLabel, memoryUsageLabel };
+
+            if (sysMonitor.hasGpuSupport()) {
+                size_t gpuUsageMB = sysMonitor.getUsedGpuMemoryByProcess() / (1024 * 1024);
+                ButtonConfig gpuUsageLabel;
+                gpuUsageLabel.id = "##gpuUsageLabel";
+                gpuUsageLabel.label = "GPU Memory: " + std::to_string(gpuUsageMB) + " MB";
+                gpuUsageLabel.size = ImVec2(180, 20);
+                gpuUsageLabel.fontSize = FontsManager::SM;
+                buttonConfigs.push_back(gpuUsageLabel);
+            }
+
+            // Right-align the time display
+            float contentWidth = ImGui::GetContentRegionAvail().x;
+            float timeWidth = 150;  // Approximate width needed for time display
+
+            Button::renderGroup(buttonConfigs, contentWidth - timeWidth,
+                ImGui::GetCursorPosY() - 2, 0);
         }
         ImGui::End();
 
@@ -119,18 +131,9 @@ public:
 
 private:
     std::chrono::steady_clock::time_point lastUpdateTime;
-    size_t memoryUsageMB;
-    float cpuUsage;
     int updateInterval;
     std::string username;
     char timeBuffer[64];
-
-#ifdef _WIN32
-    FILETIME prevSysKernelTime;
-    FILETIME prevSysUserTime;
-    FILETIME prevProcKernelTime;
-    FILETIME prevProcUserTime;
-#endif
 
     void getCurrentUsername() {
 #ifdef _WIN32
@@ -159,98 +162,6 @@ private:
                 username = "unknown";
             }
         }
-#endif
-    }
-
-    void measureCpuUsage() {
-#ifdef _WIN32
-        FILETIME sysIdleTime, sysKernelTime, sysUserTime;
-        FILETIME procCreationTime, procExitTime, procKernelTime, procUserTime;
-
-        // Get system times
-        if (!GetSystemTimes(&sysIdleTime, &sysKernelTime, &sysUserTime)) {
-            return;
-        }
-
-        // Get process times
-        HANDLE hProcess = GetCurrentProcess();
-        if (!GetProcessTimes(hProcess, &procCreationTime, &procExitTime, &procKernelTime, &procUserTime)) {
-            return;
-        }
-
-        // First call - just set the previous values and return
-        if (prevSysKernelTime.dwLowDateTime == 0 && prevSysKernelTime.dwHighDateTime == 0) {
-            prevSysKernelTime = sysKernelTime;
-            prevSysUserTime = sysUserTime;
-            prevProcKernelTime = procKernelTime;
-            prevProcUserTime = procUserTime;
-            return;
-        }
-
-        // Convert FILETIME to ULARGE_INTEGER for easier math
-        ULARGE_INTEGER sysKernelTimeULI, sysUserTimeULI;
-        ULARGE_INTEGER procKernelTimeULI, procUserTimeULI;
-        ULARGE_INTEGER prevSysKernelTimeULI, prevSysUserTimeULI;
-        ULARGE_INTEGER prevProcKernelTimeULI, prevProcUserTimeULI;
-
-        sysKernelTimeULI.LowPart = sysKernelTime.dwLowDateTime;
-        sysKernelTimeULI.HighPart = sysKernelTime.dwHighDateTime;
-        sysUserTimeULI.LowPart = sysUserTime.dwLowDateTime;
-        sysUserTimeULI.HighPart = sysUserTime.dwHighDateTime;
-
-        procKernelTimeULI.LowPart = procKernelTime.dwLowDateTime;
-        procKernelTimeULI.HighPart = procKernelTime.dwHighDateTime;
-        procUserTimeULI.LowPart = procUserTime.dwLowDateTime;
-        procUserTimeULI.HighPart = procUserTime.dwHighDateTime;
-
-        prevSysKernelTimeULI.LowPart = prevSysKernelTime.dwLowDateTime;
-        prevSysKernelTimeULI.HighPart = prevSysKernelTime.dwHighDateTime;
-        prevSysUserTimeULI.LowPart = prevSysUserTime.dwLowDateTime;
-        prevSysUserTimeULI.HighPart = prevSysUserTime.dwHighDateTime;
-
-        prevProcKernelTimeULI.LowPart = prevProcKernelTime.dwLowDateTime;
-        prevProcKernelTimeULI.HighPart = prevProcKernelTime.dwHighDateTime;
-        prevProcUserTimeULI.LowPart = prevProcUserTime.dwLowDateTime;
-        prevProcUserTimeULI.HighPart = prevProcUserTime.dwHighDateTime;
-
-        // Calculate time differences
-        ULONGLONG sysTimeChange = (sysKernelTimeULI.QuadPart - prevSysKernelTimeULI.QuadPart) +
-            (sysUserTimeULI.QuadPart - prevSysUserTimeULI.QuadPart);
-
-        ULONGLONG procTimeChange = (procKernelTimeULI.QuadPart - prevProcKernelTimeULI.QuadPart) +
-            (procUserTimeULI.QuadPart - prevProcUserTimeULI.QuadPart);
-
-        // Calculate CPU usage percentage
-        if (sysTimeChange > 0) {
-            // This gives us the percentage of system time that was spent in our process
-            cpuUsage = (float)((100.0 * procTimeChange) / sysTimeChange);
-
-            // Multiple core systems can exceed 100% - cap it
-            if (cpuUsage > 100.0f) cpuUsage = 100.0f;
-        }
-
-        // Store current times for next calculation
-        prevSysKernelTime = sysKernelTime;
-        prevSysUserTime = sysUserTime;
-        prevProcKernelTime = procKernelTime;
-        prevProcUserTime = procUserTime;
-#else
-        // TODO: Implement for other OS
-        cpuUsage = 0.0f;
-#endif
-    }
-
-    void updateMemoryUsage() {
-#ifdef _WIN32
-        HANDLE hProcess = GetCurrentProcess();
-
-        PROCESS_MEMORY_COUNTERS_EX pmc;
-        if (GetProcessMemoryInfo(hProcess, (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc))) {
-            memoryUsageMB = pmc.PrivateUsage / (1024 * 1024);
-        }
-#else
-		// TODO: Implement for other OS
-        memoryUsageMB = 100; // Placeholder
 #endif
     }
 

@@ -1,6 +1,10 @@
 {
   "name": "Gemma 3 27B",
   "author": "Google",
+  "hidden_size": 5376,
+  "attention_heads": 32,
+  "hidden_layers": 62,
+  "kv_heads": 16,
   "variants": {
     "8-bit Quantized": {
       "type": "8-bit Quantized",

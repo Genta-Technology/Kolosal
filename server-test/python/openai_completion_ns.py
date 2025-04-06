@@ -16,7 +16,7 @@ prompt = f"{system_message}\n\nUser: {user_message}\nAssistant:"
 
 # Make a non-streaming request using completions API
 response = client.completions.create(
-    model="claude-3-opus-20240229",
+    model="Qwen2.5 0.5B",
     prompt=prompt,
     max_tokens=32
 )

@@ -1,6 +1,10 @@
 {
   "name": "Llama 3.1 8B",
   "author": "Meta",
+  "hidden_size": 4096,
+  "attention_heads": 32,
+  "hidden_layers": 32,
+  "kv_heads": 8,
   "variants": {
     "Full Precision": {
       "type": "Full Precision",

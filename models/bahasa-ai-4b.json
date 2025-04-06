@@ -1,6 +1,10 @@
 {
   "name": "Bahasa AI 4B",
   "author": "Alibaba, Bahasa AI",
+  "hidden_size": 2560,
+  "attention_heads": 20,
+  "hidden_layers": 40,
+  "kv_heads": 20,
   "variants": {
     "Full Precision": {
       "type": "Full Precision",

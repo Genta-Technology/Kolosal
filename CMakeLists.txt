@@ -31,6 +31,16 @@ if(NOT OpenGL_FOUND)
 endif()
 message(STATUS "Found OpenGL: ${OpenGL_INCLUDE_DIR}")
 
+# Vulkan - Add Vulkan support
+find_package(Vulkan)
+if(Vulkan_FOUND)
+    message(STATUS "Found Vulkan: ${Vulkan_INCLUDE_DIRS}")
+    message(STATUS "    - Vulkan Libraries: ${Vulkan_LIBRARIES}")
+    add_definitions(-DHAS_VULKAN)
+else()
+    message(STATUS "Vulkan not found, GPU monitoring will be limited")
+endif()
+
 # OpenSSL
 find_package(OpenSSL REQUIRED)
 if(NOT OpenSSL_FOUND)
@@ -112,6 +122,7 @@ target_compile_definitions(kolosal_lib PUBLIC
 target_include_directories(kolosal_lib PUBLIC
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
+    ${Vulkan_INCLUDE_DIRS}
     ${OpenGL_INCLUDE_DIR}
     ${EXTERNAL_DIR}/glad/include
     ${EXTERNAL_DIR}/icons
@@ -131,6 +142,7 @@ target_include_directories(kolosal_lib PUBLIC
 # Platform-specific library dependencies
 if(WIN32)
     target_link_libraries(kolosal_lib PUBLIC
+        ${Vulkan_LIBRARIES}
         ${OpenGL_LIBRARIES}
         glad
         nfd
@@ -153,12 +165,13 @@ if(WIN32)
     )
 else()
     target_link_libraries(kolosal_lib PUBLIC
+        ${Vulkan_LIBRARIES}
         ${OpenGL_LIBRARIES}
         glad
         nfd
         OpenSSL::SSL
     )
-    
+
     target_compile_definitions(kolosal_lib PUBLIC
         IMGUI_IMPL_OPENGL_LOADER_GLAD
         ${FONT_DEFINITIONS}

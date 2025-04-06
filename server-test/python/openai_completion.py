@@ -13,7 +13,7 @@ prompt = f"Halo adalah"
 
 # Make a streaming request using completions API instead of chat
 stream = client.completions.create(
-    model="claude-3-opus-20240229",
+    model="Qwen2.5 0.5B",
     prompt=prompt,
     stream=True,
     max_tokens=32

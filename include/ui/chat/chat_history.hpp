@@ -243,7 +243,7 @@ private:
 
         // Stop current generation if running.
         if (modelManager.isCurrentlyGenerating()) {
-            modelManager.stopJob(chatManager.getCurrentJobId());
+            modelManager.stopJob(chatManager.getCurrentJobId(), modelManager.getCurrentModelName().value());
 
             while (true)
             {
@@ -315,7 +315,8 @@ private:
             chatManager.getCurrentChat().value()
         );
 
-        int jobId = modelManager.startChatCompletionJob(completionParams, chatStreamingCallback);
+        int jobId = modelManager.startChatCompletionJob(completionParams, chatStreamingCallback, 
+            modelManager.getCurrentModelName().value());
         if (!chatManager.setCurrentJobId(jobId)) {
             std::cerr << "[ChatSection] Failed to set the current job ID.\n";
         }

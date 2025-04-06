@@ -1,6 +1,10 @@
 {
   "name": "Llama 3.2 3B",
   "author": "Meta",
+  "hidden_size": 3072,
+  "attention_heads": 24,
+  "hidden_layers": 28,
+  "kv_heads": 8,
   "variants": {
     "Full Precision": {
       "type": "Full Precision",

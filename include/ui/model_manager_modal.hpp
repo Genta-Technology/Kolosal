@@ -90,7 +90,7 @@ private:
 class ModelCardRenderer {
 public:
     ModelCardRenderer(int index, const Model::ModelData& modelData,
-        std::function<void(int, const std::string&)> onDeleteRequested, std::string id = "")
+        std::function<void(int, const std::string&)> onDeleteRequested, std::string id = "", bool allowSwitching = true)
         : m_index(index), m_model(modelData), m_onDeleteRequested(onDeleteRequested), m_id(id)
     {
         selectButton.id = "##select" + std::to_string(m_index) + m_id;
@@ -120,6 +120,8 @@ public:
         nameLabel.fontType = FontsManager::BOLD;
         nameLabel.fontSize = FontsManager::MD;
         nameLabel.alignment = Alignment::LEFT;
+
+		m_allowSwitching = allowSwitching;
     }
 
     void render() {
@@ -174,8 +176,8 @@ public:
             }
         }
         else {
-            bool isLoadingSelected = isSelected && Model::ModelManager::getInstance().isLoadInProgress();
-            bool isUnloading = isSelected && Model::ModelManager::getInstance().isUnloadInProgress();
+            bool isLoadingSelected = manager.isLoadInProgress() && m_model.name == manager.getCurrentOnLoadingModel();
+			bool isUnloading = manager.isUnloadInProgress() && m_model.name == manager.getCurrentOnUnloadingModel();
 
             // Configure button label and base state
             if (isLoadingSelected || isUnloading) {
@@ -185,33 +187,52 @@ public:
                 selectButton.borderSize = 0.0f; // Remove border
             }
             else {
-                selectButton.label = isSelected ? "Selected" : "Select";
+                if (m_allowSwitching) {
+                    selectButton.label = isSelected ? "Selected" : "Select";
+                }
+                else {
+                    selectButton.label = manager.isModelLoaded(m_model.name)
+                        ? "Unload" : "Load Model";
+                }
             }
 
             // Base styling (applies to all states)
             selectButton.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
 
             // Disabled state for non-selected loading
-            if (!isSelected && Model::ModelManager::getInstance().isLoadInProgress()) {
+            if (!isSelected && manager.isLoadInProgress()) {
                 selectButton.state = ButtonState::DISABLED;
             }
 
             // Common properties
-            selectButton.onClick = [this]() {
-                std::string variant = Model::ModelManager::getInstance().getCurrentVariantForModel(m_model.name);
-                Model::ModelManager::getInstance().switchModel(m_model.name, variant);
+            selectButton.onClick = [this, &manager]() {
+                if (m_allowSwitching)
+                {
+                    std::string variant = manager.getCurrentVariantForModel(m_model.name);
+                    manager.switchModel(m_model.name, variant);
+                }
+                else
+                {
+                    if (manager.isModelLoaded(m_model.name))
+                    {
+						manager.unloadModel(m_model.name);
+					}
+                    else
+                    {
+                        manager.loadModelIntoEngine(m_model.name);
+                    }
+                }
                 };
             selectButton.size = ImVec2(ModelManagerConstants::cardWidth - 18 - 5 - 24, 0);
 
             // Selected state styling (only if not loading)
             if (isSelected && !isLoadingSelected) {
-                selectButton.icon = ICON_CI_DEBUG_DISCONNECT;
                 selectButton.borderColor = RGBAToImVec4(172, 131, 255, 255 / 4);
                 selectButton.borderSize = 1.0f;
                 selectButton.state = ButtonState::NORMAL;
                 selectButton.tooltip = "Click to unload model from memory";
-                selectButton.onClick = [this]() {
-                    Model::ModelManager::getInstance().unloadModel();
+                selectButton.onClick = [this, &manager]() {
+                    manager.unloadModel(m_model.name);
                     };
             }
 
@@ -230,10 +251,29 @@ public:
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 2);
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 24 - 2);
 
-            if (isSelected && Model::ModelManager::getInstance().isLoadInProgress())
+            if (isSelected && manager.isLoadInProgress())
                 deleteButton.state = ButtonState::DISABLED;
             else
                 deleteButton.state = ButtonState::NORMAL;
+
+            if (manager.isModelLoaded(m_model.name))
+            {
+                deleteButton.icon = ICON_CI_ARROW_UP;
+				deleteButton.tooltip = "Click to unload model";
+				deleteButton.onClick = [this, &manager]() {
+					std::cout << "[ModelManagerModal] Unloading model from delete button: " << m_model.name << "\n";
+					manager.unloadModel(m_model.name);
+					};
+			}
+			else
+			{
+				deleteButton.icon = ICON_CI_TRASH;
+				deleteButton.tooltip = "Click to delete model";
+                deleteButton.onClick = [this, &manager]() {
+                    std::string currentVariant = manager.getCurrentVariantForModel(m_model.name);
+                    m_onDeleteRequested(m_index, currentVariant);
+                    };
+			}
 
             Button::render(deleteButton);
         }
@@ -256,9 +296,43 @@ private:
     std::string m_id;
     const Model::ModelData& m_model;
     std::function<void(int, const std::string&)> m_onDeleteRequested;
+	bool m_allowSwitching;
 
     void renderHeader() {
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2);
         Label::render(authorLabel);
+
+		ImGui::SameLine();
+
+        float modelMemoryRequirement = 0;
+		float kvramMemoryRequirement = 0;
+
+		Model::ModelManager& manager = Model::ModelManager::getInstance();
+		bool hasEnoughMemory = manager.hasEnoughMemoryForModel(m_model.name, 
+            modelMemoryRequirement, kvramMemoryRequirement);
+
+        ButtonConfig memorySufficientButton;
+        memorySufficientButton.id = "##memorySufficient" + std::to_string(m_index) + m_id;
+        memorySufficientButton.icon = ICON_CI_PASS_FILLED;
+        memorySufficientButton.size = ImVec2(24, 0);
+        memorySufficientButton.tooltip = "Sufficient memory available\n\nmodel: "
+            + std::to_string(static_cast<int>(modelMemoryRequirement)) + " MB\nkv cache: "
+            + std::to_string(static_cast<int>(kvramMemoryRequirement)) + " MB";
+
+        if (!hasEnoughMemory)
+        {
+            memorySufficientButton.icon = ICON_CI_WARNING;
+            memorySufficientButton.tooltip = "Not enough memory available\n\nmodel: "
+                + std::to_string(static_cast<int>(modelMemoryRequirement)) + " MB\nkv cache: "
+                + std::to_string(static_cast<int>(kvramMemoryRequirement)) + " MB";
+        }
+
+		// place it to the top right corner of the card
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 8);
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 24 - 2);
+
+        Button::render(memorySufficientButton);
+
         Label::render(nameLabel);
     }
 
@@ -330,6 +404,7 @@ private:
 struct SortableModel {
     int index;
     std::string name;
+    bool hasSufficientMemory;
 
     bool operator<(const SortableModel& other) const {
         return name < other.name;
@@ -343,9 +418,9 @@ struct SortableModel {
 // Time wasted: 18 hours.
 class ModelManagerModal {
 public:
-    ModelManagerModal() : m_searchText(""), m_shouldFocusSearch(false) {}
+    ModelManagerModal() : m_searchText(""), m_shouldFocusSearch(false), m_showSufficientMemoryOnly(false) {}
 
-    void render(bool& showDialog) {
+    void render(bool& showDialog, bool allowSwitching = true) {
         auto& manager = Model::ModelManager::getInstance();
 
         // Update sorted models when:
@@ -405,8 +480,7 @@ public:
         }
         ImVec2 modalSize = ImVec2(modalWidth, windowSize.y * ModelManagerConstants::modalVerticalScale);
 
-        auto renderCards = [numCards, this]() {
-            auto& manager = Model::ModelManager::getInstance();
+        auto renderCards = [numCards, this, &manager, allowSwitching]() {
             const auto& models = manager.getModels();
 
             // Render search field at the top
@@ -422,6 +496,41 @@ public:
 
             ImGui::SetCursorPos(ImVec2(ModelManagerConstants::padding, ImGui::GetCursorPosY()));
             Label::render(downloadedSectionLabel);
+
+            // Add the "Show models with sufficient memory only" checkbox using custom widget
+            ImGui::SameLine();
+            ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x - 32);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2.0f);
+
+            LabelConfig memoryFilterLabel;
+            memoryFilterLabel.id = "##memoryFilterCheckbox_label";
+            memoryFilterLabel.label = "Show sufficient memory only";
+            memoryFilterLabel.size = ImVec2(0, 0);
+            memoryFilterLabel.fontType = FontsManager::REGULAR;
+            memoryFilterLabel.fontSize = FontsManager::MD;
+            memoryFilterLabel.alignment = Alignment::LEFT;
+
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4.0F);
+
+            Label::render(memoryFilterLabel);
+
+            ImGui::SameLine();
+
+            ButtonConfig memoryFilterBtn;
+            memoryFilterBtn.id = "##memoryFilterCheckbox";
+            memoryFilterBtn.icon = m_showSufficientMemoryOnly ? ICON_CI_CHECK : ICON_CI_CLOSE;
+            memoryFilterBtn.textColor = m_showSufficientMemoryOnly ? ImVec4(1, 1, 1, 1) : ImVec4(0.6f, 0.6f, 0.6f, 1.0f);
+            memoryFilterBtn.fontSize = FontsManager::SM;
+            memoryFilterBtn.size = ImVec2(24, 24);
+            memoryFilterBtn.backgroundColor = m_showSufficientMemoryOnly ? Config::Color::PRIMARY : RGBAToImVec4(60, 60, 60, 255);
+            memoryFilterBtn.hoverColor = m_showSufficientMemoryOnly ? RGBAToImVec4(53, 132, 228, 255) : RGBAToImVec4(80, 80, 80, 255);
+            memoryFilterBtn.activeColor = m_showSufficientMemoryOnly ? RGBAToImVec4(26, 95, 180, 255) : RGBAToImVec4(100, 100, 100, 255);
+            memoryFilterBtn.tooltip = "Only show models that can run with your available memory";
+            memoryFilterBtn.onClick = [this]() {
+                m_showSufficientMemoryOnly = !m_showSufficientMemoryOnly;
+                filterModels(); // Reapply filters when checkbox changes
+                };
+            Button::render(memoryFilterBtn);
 
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
 
@@ -452,7 +561,7 @@ public:
                             [this](int index, const std::string& variant) {
                                 m_deleteModal.setModel(index, variant);
                                 m_deleteModalOpen = true;
-                            }, "downloaded");
+                            }, "downloaded", allowSwitching);
                         card.render();
 
                         if ((downloadedCardCount + 1) % numCards != 0) {
@@ -493,7 +602,7 @@ public:
             ImGui::PopStyleColor();
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
 
-            // Render "Available Models" section header
+            // Render "Available Models" section header with custom checkbox
             LabelConfig availableSectionLabel;
             availableSectionLabel.id = "##availableModelsHeader";
             availableSectionLabel.label = "Available Models";
@@ -505,11 +614,19 @@ public:
             Label::render(availableSectionLabel);
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0f);
 
-            // Check if we have any available models that match the search
-            if (m_filteredModels.empty() && !m_searchText.empty()) {
+            // Check if we have any available models that match the search and filters
+            if (m_filteredModels.empty()) {
                 LabelConfig noModelsLabel;
                 noModelsLabel.id = "##noAvailableModels";
-                noModelsLabel.label = "No models match your search. Try a different search term.";
+                if (!m_searchText.empty()) {
+                    noModelsLabel.label = "No models match your search. Try a different search term.";
+                }
+                else if (m_showSufficientMemoryOnly) {
+                    noModelsLabel.label = "No models with sufficient memory found. Try disabling the memory filter.";
+                }
+                else {
+                    noModelsLabel.label = "No models available.";
+                }
                 noModelsLabel.size = ImVec2(0, 0);
                 noModelsLabel.fontType = FontsManager::ITALIC;
                 noModelsLabel.fontSize = FontsManager::MD;
@@ -587,11 +704,14 @@ private:
     size_t m_lastModelCount = 0;
     std::unordered_set<std::string> m_lastDownloadedStatus;
     std::vector<SortableModel> m_sortedModels;
-    std::vector<SortableModel> m_filteredModels;  // New: Filtered list of models based on search
+    std::vector<SortableModel> m_filteredModels;
 
     // Search related variables
     std::string m_searchText;
     bool m_shouldFocusSearch;
+
+    // Memory filter checkbox state
+    bool m_showSufficientMemoryOnly;
 
     void updateSortedModels() {
         auto& manager = Model::ModelManager::getInstance();
@@ -602,8 +722,18 @@ private:
         m_sortedModels.reserve(models.size());
 
         for (size_t i = 0; i < models.size(); ++i) {
-            // Store the index and name directly, avoiding storing pointers
-            m_sortedModels.push_back({ static_cast<int>(i), models[i].name });
+            // Check memory sufficiency status
+            float modelMemoryRequirement = 0;
+            float kvramMemoryRequirement = 0;
+            bool hasSufficientMemory = manager.hasEnoughMemoryForModel(
+                models[i].name, modelMemoryRequirement, kvramMemoryRequirement);
+
+            // Store the index, name, and memory status
+            m_sortedModels.push_back({
+                static_cast<int>(i),
+                models[i].name,
+                hasSufficientMemory
+                });
         }
 
         // Sort models alphabetically by name
@@ -613,17 +743,11 @@ private:
         filterModels();
     }
 
-    // Filter models based on search text
+    // Filter models based on search text and memory filter
     void filterModels() {
         m_filteredModels.clear();
         auto& manager = Model::ModelManager::getInstance();
         const auto& models = manager.getModels();
-
-        if (m_searchText.empty()) {
-            // If no search term, show all models
-            m_filteredModels = m_sortedModels;
-            return;
-        }
 
         // Convert search text to lowercase for case-insensitive comparison
         std::string searchLower = m_searchText;
@@ -631,7 +755,19 @@ private:
             [](unsigned char c) { return std::tolower(c); });
 
         // Filter models based on name OR author containing the search text
+        // AND the memory sufficiency if that filter is enabled
         for (const auto& model : m_sortedModels) {
+            // Skip models that don't have sufficient memory if filter is enabled
+            if (m_showSufficientMemoryOnly && !model.hasSufficientMemory) {
+                continue;
+            }
+
+            // If search text is empty, include the model (it already passed the memory filter)
+            if (searchLower.empty()) {
+                m_filteredModels.push_back(model);
+                continue;
+            }
+
             // Get the model data using the stored index
             const auto& modelData = models[model.index];
 

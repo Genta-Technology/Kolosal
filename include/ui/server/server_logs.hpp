@@ -2,7 +2,7 @@
 
 #include "imgui.h"
 #include "ui/widgets.hpp"
-#include "ui/chat/model_manager_modal.hpp"
+#include "ui/model_manager_modal.hpp"
 #include "model/model_manager.hpp"
 #include "model/server_state_manager.hpp"
 
@@ -143,7 +143,7 @@ public:
                 Button::render(copyButtonConfig);
             }
 
-            m_modelManagerModal.render(m_modelManagerModalOpen);
+            m_modelManagerModal.render(m_modelManagerModalOpen, false);
         }
 
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 12);

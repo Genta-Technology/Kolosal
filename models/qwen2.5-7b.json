@@ -1,6 +1,10 @@
 {
   "name": "Qwen2.5 7B",
   "author": "Alibaba",
+  "hidden_size": 3584,
+  "attention_heads": 28,
+  "hidden_layers": 28,
+  "kv_heads": 4,
   "variants": {
     "Full Precision": {
       "type": "Full Precision",

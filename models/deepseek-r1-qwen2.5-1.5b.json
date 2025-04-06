@@ -1,6 +1,10 @@
 {
   "name": "Deepseek R1 Qwen2.5 1.5B",
   "author": "Deepseek AI",
+  "hidden_size": 1536,
+  "attention_heads": 12,
+  "hidden_layers": 28,
+  "kv_heads": 2,
   "variants": {
     "Full Precision": {
       "type": "Full Precision",

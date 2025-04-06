@@ -1,6 +1,10 @@
 {
   "name": "Deepseek R1 Llama 8B",
   "author": "Deepseek AI",
+  "hidden_size": 4096,
+  "attention_heads": 32,
+  "hidden_layers": 32,
+  "kv_heads": 8,
   "variants": {
     "Full Precision": {
       "type": "Full Precision",

@@ -11,7 +11,7 @@ print("Starting streaming request...\n")
 
 # Make a streaming request
 stream = client.chat.completions.create(
-    model="claude-3-opus-20240229",
+    model="Qwen2.5 0.5B",
     messages=[
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": "Why anything to the power of zero is 1?"}
