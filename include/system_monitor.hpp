@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cstddef>
 #include <string>
@@ -8,12 +8,12 @@
 #include <mutex>
 #include <iostream>
 #include <atomic>
-#include <vector>
 
-// Platform-specific includes
 #ifdef _WIN32
 #include <windows.h>
 #include <psapi.h>
+#include <dxgi1_4.h>      // For IDXGIAdapter3 and QueryVideoMemoryInfo
+#pragma comment(lib, "dxgi.lib")
 #else
 #include <unistd.h>
 #include <sys/types.h>
@@ -27,9 +27,6 @@
 #endif
 #endif
 
-// OpenGL includes
-#include <glad/glad.h>
-
 constexpr size_t GB = 1024 * 1024 * 1024;
 
 class SystemMonitor {
@@ -39,7 +36,7 @@ public:
         return instance;
     }
 
-    // CPU Memory statistics
+    // CPU/Memory statistics
     size_t getTotalSystemMemory() {
         return m_totalMemory;
     }
@@ -53,7 +50,7 @@ public:
         return m_cpuUsage;
     }
 
-    // GPU Memory statistics
+    // GPU Memory statistics using DirectX (global memory, not per process)
     bool hasGpuSupport() const { return m_gpuMonitoringSupported; }
     size_t getTotalGpuMemory() {
         if (!m_gpuMonitoringSupported) return 0;
@@ -68,55 +65,14 @@ public:
         return m_usedGpuMemory;
     }
 
-    // Initialize GPU monitoring using the application's existing OpenGL context
-    void initializeOpenGL() {
+    // Initialize GPU monitoring with DirectX backend (Windows only)
+    void initializeGpuMonitoring() {
+#ifdef _WIN32
         std::lock_guard<std::mutex> lock(m_gpuMutex);
-
-        // Check if GLAD is initialized (OpenGL is working)
-        if (!gladLoadGL()) {
-            std::cerr << "[SystemMonitor] GPU monitoring failed: GLAD not loaded" << std::endl;
-            return;
-        }
-
-        // Check for OpenGL version
-        GLint majorVersion = 0, minorVersion = 0;
-        glGetIntegerv(GL_MAJOR_VERSION, &majorVersion);
-        glGetIntegerv(GL_MINOR_VERSION, &minorVersion);
-
-        if (glGetError() != GL_NO_ERROR || majorVersion < 3) {
-            std::cerr << "[SystemMonitor] GPU monitoring requires OpenGL 3.0+ (detected "
-                << majorVersion << "." << minorVersion << ")" << std::endl;
-            return;
-        }
-
-        // Check for memory info extensions
-        checkGLExtensions();
-
-        if (!m_hasNvidiaExtension && !m_hasAmdExtension) {
-            std::cout << "[SystemMonitor] No GPU memory extensions found, using estimated values" << std::endl;
-        }
-
-        m_openGLInitialized = true;
-
-        // Get initial GPU memory values
-        updateGpuStats();
-
-        std::cout << "[SystemMonitor] GPU monitoring initialized successfully" << std::endl;
-        std::cout << "[SystemMonitor] Total GPU Memory: " << (m_totalGpuMemory / (1024 * 1024))
-            << " MB, Available: " << (m_availableGpuMemory / (1024 * 1024)) << " MB" << std::endl;
-    }
-
-    void initializeGpuMonitoring(const bool useGpu) {
-        std::lock_guard<std::mutex> lock(m_gpuMutex);
-
-        if (!m_openGLInitialized) {
-            std::cerr << "[SystemMonitor] OpenGL context not initialized. Cannot monitor GPU." << std::endl;
-            return;
-        }
-
-        m_gpuMonitoringSupported = true;
-        // Initial query of GPU stats
-        updateGpuStats();
+        initializeDirectX();
+#else
+        m_gpuMonitoringSupported = false;
+#endif
     }
 
     // Calculate if there's enough memory to load a model
@@ -131,14 +87,14 @@ public:
         totalRequiredMemory = static_cast<size_t>(totalRequiredMemory * 1.2);
 
         if (m_gpuMonitoringSupported) {
-            // Check if GPU has enough memory
+            // Check if GPU has enough available memory
             if (m_availableGpuMemory < totalRequiredMemory) {
                 return false;
             }
             return true;
         }
         else {
-            // Check if system RAM has enough memory (threshold 2GB more)
+            // Check if system RAM has enough memory (threshold of 2GB more)
             if (m_availableMemory + 2 * GB < totalRequiredMemory) {
                 return false;
             }
@@ -152,12 +108,12 @@ public:
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             currentTime - m_lastCpuMeasurement).count();
 
-        // Only update every 500ms to avoid excessive CPU usage
-        if (elapsed >= 500) {
+        // Only update every 1000ms to avoid excessive CPU usage
+        if (elapsed >= 1000) {
             updateCpuUsage();
             updateMemoryStats();
 
-            if (m_gpuMonitoringSupported && m_openGLInitialized) {
+            if (m_gpuMonitoringSupported) {
                 updateGpuStats();
             }
 
@@ -182,19 +138,21 @@ private:
         m_prevProcessTotalSys = 0;
 #endif
 
-        // Initialize memory stats
+        // Initialize memory stats and CPU usage tracking
         updateMemoryStats();
-
-        // Initialize CPU usage tracking
         updateCpuUsage();
-
-        // Initialize GPU monitoring flags
-        m_hasNvidiaExtension = false;
-        m_hasAmdExtension = false;
     }
-
     ~SystemMonitor() {
-        // No cleanup needed as we don't own the OpenGL context
+#ifdef _WIN32
+        if (m_dxgiAdapter) {
+            m_dxgiAdapter->Release();
+            m_dxgiAdapter = nullptr;
+        }
+        if (m_dxgiFactory) {
+            m_dxgiFactory->Release();
+            m_dxgiFactory = nullptr;
+        }
+#endif
     }
 
     // CPU monitoring members
@@ -221,17 +179,18 @@ private:
 
     // GPU monitoring members
     bool m_gpuMonitoringSupported{ false };
-    bool m_openGLInitialized{ false };
-    bool m_hasNvidiaExtension{ false };
-    bool m_hasAmdExtension{ false };
     std::atomic<size_t> m_totalGpuMemory{ 0 };
     std::atomic<size_t> m_availableGpuMemory{ 0 };
     std::atomic<size_t> m_usedGpuMemory{ 0 };
     std::mutex m_gpuMutex;
 
-    // Memory usage estimation for app
-    std::atomic<size_t> m_lastKnownAppGpuUsage{ 0 };
-    std::chrono::steady_clock::time_point m_lastUsageIncrease;
+#ifdef _WIN32
+    // DirectX-specific members
+    IDXGIFactory1* m_dxgiFactory{ nullptr };
+    IDXGIAdapter3* m_dxgiAdapter{ nullptr };
+#endif
+
+    // Private helper methods
 
     void updateCpuUsage() {
 #ifdef _WIN32
@@ -249,7 +208,7 @@ private:
             return;
         }
 
-        // First call - just set the previous values and return
+        // First call - just store previous times and return
         if (m_prevSysKernelTime.dwLowDateTime == 0 && m_prevSysKernelTime.dwHighDateTime == 0) {
             m_prevSysKernelTime = sysKernelTime;
             m_prevSysUserTime = sysUserTime;
@@ -258,7 +217,7 @@ private:
             return;
         }
 
-        // Convert FILETIME to ULARGE_INTEGER for easier math
+        // Convert FILETIME to ULARGE_INTEGER for arithmetic
         ULARGE_INTEGER sysKernelTimeULI, sysUserTimeULI;
         ULARGE_INTEGER procKernelTimeULI, procUserTimeULI;
         ULARGE_INTEGER prevSysKernelTimeULI, prevSysUserTimeULI;
@@ -291,23 +250,19 @@ private:
         ULONGLONG procTimeChange = (procKernelTimeULI.QuadPart - prevProcKernelTimeULI.QuadPart) +
             (procUserTimeULI.QuadPart - prevProcUserTimeULI.QuadPart);
 
-        // Calculate CPU usage percentage
+        // Calculate CPU usage percentage for the process
         if (sysTimeChange > 0) {
-            // This gives us the percentage of system time that was spent in our process
             m_cpuUsage = (float)((100.0 * procTimeChange) / sysTimeChange);
-
-            // Multiple core systems can exceed 100% - cap it
             if (m_cpuUsage > 100.0f) m_cpuUsage = 100.0f;
         }
 
-        // Store current times for next calculation
+        // Store current times for next measurement
         m_prevSysKernelTime = sysKernelTime;
         m_prevSysUserTime = sysUserTime;
         m_prevProcKernelTime = procKernelTime;
         m_prevProcUserTime = procUserTime;
 #else
-        // Linux/Mac implementation
-        m_cpuUsage = 0.0f; // Placeholder
+        m_cpuUsage = 0.0f;
 #endif
     }
 
@@ -319,13 +274,11 @@ private:
         m_totalMemory = memInfo.ullTotalPhys;
         m_availableMemory = memInfo.ullAvailPhys;
 
-        // Get process memory usage
         PROCESS_MEMORY_COUNTERS_EX pmc;
         if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc))) {
             m_usedMemory = pmc.PrivateUsage;
         }
 #elif defined(__APPLE__)
-        // macOS implementation
         mach_port_t host_port = mach_host_self();
         vm_size_t page_size;
         host_page_size(host_port, &page_size);
@@ -336,7 +289,6 @@ private:
             m_availableMemory = (vm_stats.free_count + vm_stats.inactive_count) * page_size;
         }
 
-        // Total physical memory
         int mib[2] = { CTL_HW, HW_MEMSIZE };
         uint64_t total_memory = 0;
         size_t len = sizeof(total_memory);
@@ -344,20 +296,16 @@ private:
             m_totalMemory = total_memory;
         }
 
-        // Process memory usage - approximate with resident memory
         struct rusage usage;
         if (getrusage(RUSAGE_SELF, &usage) == 0) {
-            m_usedMemory = usage.ru_maxrss * 1024; // Convert to bytes
+            m_usedMemory = usage.ru_maxrss * 1024;
         }
 #else
-        // Linux implementation
         struct sysinfo memInfo;
         if (sysinfo(&memInfo) == 0) {
             m_totalMemory = memInfo.totalram * memInfo.mem_unit;
             m_availableMemory = memInfo.freeram * memInfo.mem_unit;
         }
-
-        // Get process memory usage from /proc/self/statm
         FILE* fp = fopen("/proc/self/statm", "r");
         if (fp) {
             unsigned long vm = 0, rss = 0;
@@ -369,230 +317,83 @@ private:
 #endif
     }
 
-    // Check for available OpenGL extensions
-    void checkGLExtensions() {
-        // Reset extension flags
-        m_hasNvidiaExtension = false;
-        m_hasAmdExtension = false;
+    void updateGpuStats() {
+#ifdef _WIN32
+        if (m_gpuMonitoringSupported) {
+            updateDirectXGpuStats();
+        }
+#else
+        m_totalGpuMemory = 0;
+        m_availableGpuMemory = 0;
+        m_usedGpuMemory = 0;
+#endif
+    }
 
-        // Check for supported extensions
-        GLint numExtensions = 0;
-        glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
+#ifdef _WIN32
+    // DirectX (DXGI) GPU monitoring methods
 
-        if (glGetError() != GL_NO_ERROR || numExtensions <= 0) {
+    void initializeDirectX() {
+        HRESULT hr = CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&m_dxgiFactory));
+        if (FAILED(hr)) {
+            std::cerr << "[SystemMonitor] Failed to create DXGI Factory" << std::endl;
+            m_gpuMonitoringSupported = false;
             return;
         }
 
-        for (GLint i = 0; i < numExtensions; i++) {
-            const GLubyte* extension = glGetStringi(GL_EXTENSIONS, i);
-            if (!extension) continue;
-
-            const char* extStr = reinterpret_cast<const char*>(extension);
-            if (strcmp(extStr, "GL_NVX_gpu_memory_info") == 0) {
-                m_hasNvidiaExtension = true;
+        // Enumerate adapters and choose a dedicated one (NVIDIA or AMD)
+        IDXGIAdapter* adapter = nullptr;
+        IDXGIAdapter3* dedicatedAdapter = nullptr;
+        for (UINT i = 0; m_dxgiFactory->EnumAdapters(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++) {
+            IDXGIAdapter3* adapter3 = nullptr;
+            hr = adapter->QueryInterface(__uuidof(IDXGIAdapter3), reinterpret_cast<void**>(&adapter3));
+            if (SUCCEEDED(hr) && adapter3) {
+                DXGI_ADAPTER_DESC desc;
+                hr = adapter3->GetDesc(&desc);
+                if (SUCCEEDED(hr)) {
+                    // Check for NVIDIA (0x10DE) or AMD (0x1002)
+                    if (desc.VendorId == 0x10DE || desc.VendorId == 0x1002) {
+                        dedicatedAdapter = adapter3;
+                        adapter->Release();
+                        break;
+                    }
+                }
+                adapter3->Release();
             }
-            else if (strcmp(extStr, "GL_ATI_meminfo") == 0) {
-                m_hasAmdExtension = true;
-            }
+            adapter->Release();
         }
+
+        if (!dedicatedAdapter) {
+            std::cerr << "[SystemMonitor] No dedicated NVIDIA/AMD GPU found." << std::endl;
+            m_gpuMonitoringSupported = false;
+            return;
+        }
+
+        m_dxgiAdapter = dedicatedAdapter;
+        m_gpuMonitoringSupported = true;
+        updateDirectXGpuStats();
     }
 
-    void updateGpuStats() {
-        if (!m_gpuMonitoringSupported || !m_openGLInitialized) return;
+    void updateDirectXGpuStats() {
+        if (!m_dxgiAdapter)
+            return;
 
-        // Define NVIDIA and AMD extension constants
-        constexpr GLenum GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX = 0x9047;
-        constexpr GLenum GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX = 0x9049;
-        constexpr GLenum GL_TEXTURE_FREE_MEMORY_ATI = 0x87FC;
+        DXGI_QUERY_VIDEO_MEMORY_INFO videoMemoryInfo = {};
+        HRESULT hr = m_dxgiAdapter->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &videoMemoryInfo);
+        if (SUCCEEDED(hr)) {
+            m_usedGpuMemory = videoMemoryInfo.CurrentUsage;
 
-        // Try NVIDIA extension first
-        if (m_hasNvidiaExtension) {
-            GLint totalMemKb = 0;
-            glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &totalMemKb);
-
-            if (glGetError() == GL_NO_ERROR && totalMemKb > 0) {
-                m_totalGpuMemory = static_cast<size_t>(totalMemKb) * 1024; // Convert KB to bytes
-
-                GLint availableMemKb = 0;
-                glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &availableMemKb);
-
-                if (glGetError() == GL_NO_ERROR && availableMemKb > 0) {
-                    m_availableGpuMemory = static_cast<size_t>(availableMemKb) * 1024; // Convert KB to bytes
-
-                    // Calculate total used memory (by all applications)
-                    size_t totalUsedMemory = m_totalGpuMemory > m_availableGpuMemory ?
-                        m_totalGpuMemory - m_availableGpuMemory : 0;
-
-                    // Update application GPU usage estimation based on system memory usage
-                    estimateAppGpuUsage(totalUsedMemory);
-                }
-            }
-        }
-        // Try AMD extension if NVIDIA is not available
-        else if (m_hasAmdExtension) {
-            GLint info[4];
-            glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, info);
-
-            if (glGetError() == GL_NO_ERROR && info[0] > 0) {
-                // info[0] is the available memory in KB
-                m_availableGpuMemory = static_cast<size_t>(info[0]) * 1024; // Convert KB to bytes
-
-                // AMD doesn't provide total memory directly, use estimation from GPU info
-                if (m_totalGpuMemory == 0) {
-                    // Try to detect the GPU memory size
-                    const GLubyte* renderer = glGetString(GL_RENDERER);
-                    if (renderer) {
-                        std::string rendererStr(reinterpret_cast<const char*>(renderer));
-
-                        // Very simple heuristic - can be expanded for better accuracy
-                        if (rendererStr.find("Radeon") != std::string::npos) {
-                            // Look for memory hints in the renderer string
-                            if (rendererStr.find("8GB") != std::string::npos) {
-                                m_totalGpuMemory = 8 * GB;
-                            }
-                            else if (rendererStr.find("6GB") != std::string::npos) {
-                                m_totalGpuMemory = 6 * GB;
-                            }
-                            else if (rendererStr.find("4GB") != std::string::npos) {
-                                m_totalGpuMemory = 4 * GB;
-                            }
-                            else {
-                                // Default for modern AMD cards
-                                m_totalGpuMemory = 8 * GB;
-                            }
-                        }
-                        else {
-                            // Generic default
-                            m_totalGpuMemory = 4 * GB;
-                        }
-                    }
-                    else {
-                        // Fallback
-                        m_totalGpuMemory = 4 * GB;
-                    }
-                }
-
-                // Calculate total used memory
-                size_t totalUsedMemory = m_totalGpuMemory > m_availableGpuMemory ?
-                    m_totalGpuMemory - m_availableGpuMemory : 0;
-
-                // Update application GPU usage estimation
-                estimateAppGpuUsage(totalUsedMemory);
-            }
-        }
-        else {
-            // No GPU memory extension available, use hardware detection or fallbacks
-
-            // Try to get GPU info from renderer string if we haven't set total memory yet
-            if (m_totalGpuMemory == 0) {
-                const GLubyte* renderer = glGetString(GL_RENDERER);
-                if (renderer) {
-                    std::string rendererStr(reinterpret_cast<const char*>(renderer));
-
-                    // Simple heuristic based on GPU model name
-                    if (rendererStr.find("RTX") != std::string::npos ||
-                        rendererStr.find("Quadro") != std::string::npos) {
-                        // Higher-end NVIDIA GPUs
-                        m_totalGpuMemory = 8 * GB;
-                    }
-                    else if (rendererStr.find("GTX") != std::string::npos) {
-                        // Mid-range NVIDIA GPUs
-                        m_totalGpuMemory = 6 * GB;
-                    }
-                    else if (rendererStr.find("Radeon") != std::string::npos) {
-                        // AMD GPUs
-                        m_totalGpuMemory = 8 * GB;
-                    }
-                    else {
-                        // Generic fallback
-                        m_totalGpuMemory = 4 * GB;
-                    }
-                }
-                else {
-                    // Fallback if we can't detect
-                    m_totalGpuMemory = 4 * GB;
-                }
-            }
-
-            // Estimate available memory based on user memory usage
-            float memoryUsagePercent = static_cast<float>(m_usedMemory) / static_cast<float>(m_totalMemory);
-            m_availableGpuMemory = static_cast<size_t>(m_totalGpuMemory * (1.0f - (memoryUsagePercent * 0.5f)));
-
-            // Estimate app GPU usage based on system memory usage
-            m_usedGpuMemory = static_cast<size_t>(m_usedMemory * 0.7f); // Rough estimate
-
-            // Make sure available + used memory is consistent
-            if (m_usedGpuMemory > m_totalGpuMemory * 0.8f) {
-                m_usedGpuMemory = static_cast<size_t>(m_totalGpuMemory * 0.8f);
-            }
-
-            if (m_usedGpuMemory + m_availableGpuMemory > m_totalGpuMemory) {
-                m_availableGpuMemory = m_totalGpuMemory > m_usedGpuMemory ?
-                    m_totalGpuMemory - m_usedGpuMemory : 0;
-            }
-        }
-    }
-
-    // Estimate the application's GPU memory usage based on system memory patterns
-    void estimateAppGpuUsage(size_t totalUsedGpuMemory) {
-        // Get current time
-        auto currentTime = std::chrono::steady_clock::now();
-
-        // Use system memory usage as a proxy for GPU usage trend
-        static size_t lastSystemMemoryUsage = m_usedMemory;
-
-        // Calculate memory usage delta
-        bool memoryIncreased = (m_usedMemory > lastSystemMemoryUsage);
-        size_t memoryDelta = memoryIncreased ?
-            m_usedMemory - lastSystemMemoryUsage :
-            lastSystemMemoryUsage - m_usedMemory;
-
-        // If system memory increased significantly, assume GPU memory might have increased too
-        if (memoryIncreased && memoryDelta > 10 * 1024 * 1024) { // 10MB threshold
-            // Estimate that 70% of system memory increase affects GPU
-            size_t estimatedGpuIncrease = static_cast<size_t>(memoryDelta * 0.7f);
-
-            // Add to our tracked app usage, but cap at 80% of total GPU usage
-            size_t maxAppUsage = static_cast<size_t>(totalUsedGpuMemory * 0.8f);
-            m_usedGpuMemory += estimatedGpuIncrease;
-
-            if (m_usedGpuMemory > maxAppUsage) {
-                m_usedGpuMemory = maxAppUsage;
-            }
-
-            m_lastUsageIncrease = currentTime;
-        }
-        // If memory decreased significantly, reduce estimated GPU usage
-        else if (!memoryIncreased && memoryDelta > 20 * 1024 * 1024) { // 20MB threshold
-            // Reduce GPU usage estimate at a slower rate (50% of system memory decrease)
-            size_t estimatedGpuDecrease = static_cast<size_t>(memoryDelta * 0.5f);
-
-            // Ensure we don't go below a minimum level
-            if (m_usedGpuMemory > estimatedGpuDecrease) {
-                m_usedGpuMemory -= estimatedGpuDecrease;
+            DXGI_ADAPTER_DESC adapterDesc = {};
+            hr = m_dxgiAdapter->GetDesc(&adapterDesc);
+            if (SUCCEEDED(hr)) {
+                m_totalGpuMemory = static_cast<size_t>(adapterDesc.DedicatedVideoMemory);
             }
             else {
-                // Minimum baseline app GPU usage (adjust based on your application)
-                m_usedGpuMemory = std::min<size_t>(50 * 1024 * 1024, totalUsedGpuMemory * 0.1f);
+                m_totalGpuMemory = videoMemoryInfo.Budget;
             }
+
+            m_availableGpuMemory = (m_totalGpuMemory > m_usedGpuMemory) ?
+                m_totalGpuMemory - m_usedGpuMemory : 0;
         }
-
-        // If no significant activity for a long time, gradually reduce our estimation
-        auto timeSinceLastIncrease = std::chrono::duration_cast<std::chrono::seconds>(
-            currentTime - m_lastUsageIncrease).count();
-
-        if (timeSinceLastIncrease > 30) { // 30 seconds of no increases
-            // Slowly decay the estimated usage (5% every update)
-            m_usedGpuMemory = static_cast<size_t>(m_usedGpuMemory * 0.95f);
-
-            // Ensure we keep a minimum baseline
-            size_t minBaseline = std::min<size_t>(50 * 1024 * 1024, totalUsedGpuMemory * 0.1f);
-            if (m_usedGpuMemory < minBaseline) {
-                m_usedGpuMemory = minBaseline;
-            }
-        }
-
-        // Update for next comparison
-        lastSystemMemoryUsage = m_usedMemory;
     }
+#endif
 };

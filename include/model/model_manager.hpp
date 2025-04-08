@@ -1727,8 +1727,6 @@ namespace Model
                 backendName = "InferenceEngineLibVulkan.dll";
             }
 
-            SystemMonitor::getInstance().initializeGpuMonitoring(m_isVulkanBackend);
-
 			if (!loadInferenceEngineDynamically(backendName.c_str()))
 			{
 				std::cerr << "[ModelManager] Failed to load inference engine for backend: "
@@ -1790,9 +1788,13 @@ namespace Model
 
                 loadModels();  // blocking
                 m_isVulkanBackend = useVulkanBackend();
-                std::string backendName = m_isVulkanBackend ? "InferenceEngineLibVulkan.dll" : "InferenceEngineLib.dll";
+                std::string backendName = "InferenceEngineLib.dll";
 
-                SystemMonitor::getInstance().initializeGpuMonitoring(m_isVulkanBackend);
+                if (m_isVulkanBackend)
+                {
+					backendName = "InferenceEngineLibVulkan.dll";
+                    SystemMonitor::getInstance().initializeGpuMonitoring();
+                }
 
                 if (!loadInferenceEngineDynamically(backendName)) {
                     std::cerr << "Failed to load inference engine\n";
@@ -1810,7 +1812,10 @@ namespace Model
 
                 if (name.has_value()) {
                     auto future = loadModelIntoEngineAsync(name.value());
-                    future.get();  // wait
+					if (!future.get()) {
+						std::cerr << "Failed to load model into engine\n";
+						resetModelState();
+					}
                 }
 
                 std::unique_lock lock(m_mutex);
