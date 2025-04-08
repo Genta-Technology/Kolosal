@@ -1789,8 +1789,7 @@ namespace Model
                 sysMonitor.update();
 
                 loadModels();  // blocking
-                //m_isVulkanBackend = useVulkanBackend();
-				m_isVulkanBackend = true;
+                m_isVulkanBackend = useVulkanBackend();
                 std::string backendName = m_isVulkanBackend ? "InferenceEngineLibVulkan.dll" : "InferenceEngineLib.dll";
 
                 SystemMonitor::getInstance().initializeGpuMonitoring(m_isVulkanBackend);
