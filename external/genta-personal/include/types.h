@@ -69,7 +69,7 @@ struct LoadingParameters
 	bool warmup = false;
 	int n_parallel = 1;
 	int n_gpu_layers = 100;
-	int n_batch = 4096;
+	int n_batch = 256;
 };
 
 #endif // TYPES_H

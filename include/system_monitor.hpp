@@ -8,6 +8,7 @@
 #include <mutex>
 #include <iostream>
 #include <atomic>
+#include <vector>
 
 // Platform-specific includes
 #ifdef _WIN32
@@ -26,12 +27,8 @@
 #endif
 #endif
 
-#ifdef __has_include
-#  if __has_include(<vulkan/vulkan.h>)
-#    include <vulkan/vulkan.h>
-#    define HAS_VULKAN 1
-#  endif
-#endif
+// OpenGL includes
+#include <glad/glad.h>
 
 constexpr size_t GB = 1024 * 1024 * 1024;
 
@@ -56,7 +53,7 @@ public:
         return m_cpuUsage;
     }
 
-    // GPU Memory statistics - with support for different backends
+    // GPU Memory statistics
     bool hasGpuSupport() const { return m_gpuMonitoringSupported; }
     size_t getTotalGpuMemory() {
         if (!m_gpuMonitoringSupported) return 0;
@@ -71,18 +68,59 @@ public:
         return m_usedGpuMemory;
     }
 
-    // Initialize GPU monitoring for specific backend
-    void initializeGpuMonitoring(bool isVulkanBackend) {
+    // Initialize GPU monitoring using the application's existing OpenGL context
+    void initializeOpenGL() {
         std::lock_guard<std::mutex> lock(m_gpuMutex);
-        m_isVulkanBackend = isVulkanBackend;
-        m_gpuMonitoringSupported = true;
 
-        // Initialize GPU stats immediately
+        // Check if GLAD is initialized (OpenGL is working)
+        if (!gladLoadGL()) {
+            std::cerr << "[SystemMonitor] GPU monitoring failed: GLAD not loaded" << std::endl;
+            return;
+        }
+
+        // Check for OpenGL version
+        GLint majorVersion = 0, minorVersion = 0;
+        glGetIntegerv(GL_MAJOR_VERSION, &majorVersion);
+        glGetIntegerv(GL_MINOR_VERSION, &minorVersion);
+
+        if (glGetError() != GL_NO_ERROR || majorVersion < 3) {
+            std::cerr << "[SystemMonitor] GPU monitoring requires OpenGL 3.0+ (detected "
+                << majorVersion << "." << minorVersion << ")" << std::endl;
+            return;
+        }
+
+        // Check for memory info extensions
+        checkGLExtensions();
+
+        if (!m_hasNvidiaExtension && !m_hasAmdExtension) {
+            std::cout << "[SystemMonitor] No GPU memory extensions found, using estimated values" << std::endl;
+        }
+
+        m_openGLInitialized = true;
+
+        // Get initial GPU memory values
+        updateGpuStats();
+
+        std::cout << "[SystemMonitor] GPU monitoring initialized successfully" << std::endl;
+        std::cout << "[SystemMonitor] Total GPU Memory: " << (m_totalGpuMemory / (1024 * 1024))
+            << " MB, Available: " << (m_availableGpuMemory / (1024 * 1024)) << " MB" << std::endl;
+    }
+
+    void initializeGpuMonitoring(const bool useGpu) {
+        std::lock_guard<std::mutex> lock(m_gpuMutex);
+
+        if (!m_openGLInitialized) {
+            std::cerr << "[SystemMonitor] OpenGL context not initialized. Cannot monitor GPU." << std::endl;
+            return;
+        }
+
+        m_gpuMonitoringSupported = true;
+        // Initial query of GPU stats
         updateGpuStats();
     }
 
     // Calculate if there's enough memory to load a model
-    bool hasEnoughMemoryForModel(size_t modelSizeBytes, size_t kvCacheSizeBytes, bool useGpu) {
+    bool hasEnoughMemoryForModel(size_t modelSizeBytes, size_t kvCacheSizeBytes) {
         // Update stats to get the latest values
         update();
 
@@ -92,7 +130,7 @@ public:
         // Add 20% overhead for safety margin
         totalRequiredMemory = static_cast<size_t>(totalRequiredMemory * 1.2);
 
-        if (useGpu && m_gpuMonitoringSupported) {
+        if (m_gpuMonitoringSupported) {
             // Check if GPU has enough memory
             if (m_availableGpuMemory < totalRequiredMemory) {
                 return false;
@@ -114,12 +152,12 @@ public:
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             currentTime - m_lastCpuMeasurement).count();
 
-        // Only update every 1000ms to avoid excessive CPU usage
-        if (elapsed >= 1000) {
+        // Only update every 500ms to avoid excessive CPU usage
+        if (elapsed >= 500) {
             updateCpuUsage();
             updateMemoryStats();
 
-            if (m_gpuMonitoringSupported) {
+            if (m_gpuMonitoringSupported && m_openGLInitialized) {
                 updateGpuStats();
             }
 
@@ -149,19 +187,14 @@ private:
 
         // Initialize CPU usage tracking
         updateCpuUsage();
-    }
-    ~SystemMonitor() {
-#ifdef HAS_VULKAN
-        if (m_vulkanInitialized) {
-            if (m_vkDevice != VK_NULL_HANDLE) {
-                vkDestroyDevice(m_vkDevice, nullptr);
-            }
 
-            if (m_vkInstance != VK_NULL_HANDLE) {
-                vkDestroyInstance(m_vkInstance, nullptr);
-            }
-        }
-#endif
+        // Initialize GPU monitoring flags
+        m_hasNvidiaExtension = false;
+        m_hasAmdExtension = false;
+    }
+
+    ~SystemMonitor() {
+        // No cleanup needed as we don't own the OpenGL context
     }
 
     // CPU monitoring members
@@ -188,21 +221,18 @@ private:
 
     // GPU monitoring members
     bool m_gpuMonitoringSupported{ false };
-    bool m_isVulkanBackend{ false };
+    bool m_openGLInitialized{ false };
+    bool m_hasNvidiaExtension{ false };
+    bool m_hasAmdExtension{ false };
     std::atomic<size_t> m_totalGpuMemory{ 0 };
     std::atomic<size_t> m_availableGpuMemory{ 0 };
     std::atomic<size_t> m_usedGpuMemory{ 0 };
     std::mutex m_gpuMutex;
 
-	// Vulkan-specific members
-#ifdef HAS_VULKAN
-    VkInstance m_vkInstance{ VK_NULL_HANDLE };
-    VkPhysicalDevice m_vkPhysicalDevice{ VK_NULL_HANDLE };
-    VkDevice m_vkDevice{ VK_NULL_HANDLE };
-    bool m_vulkanInitialized{ false };
-#endif
+    // Memory usage estimation for app
+    std::atomic<size_t> m_lastKnownAppGpuUsage{ 0 };
+    std::chrono::steady_clock::time_point m_lastUsageIncrease;
 
-    // Private helper methods
     void updateCpuUsage() {
 #ifdef _WIN32
         FILETIME sysIdleTime, sysKernelTime, sysUserTime;
@@ -280,6 +310,7 @@ private:
         m_cpuUsage = 0.0f; // Placeholder
 #endif
     }
+
     void updateMemoryStats() {
 #ifdef _WIN32
         MEMORYSTATUSEX memInfo;
@@ -338,130 +369,230 @@ private:
 #endif
     }
 
-    void SystemMonitor::updateGpuStats() {
-        if (!m_gpuMonitoringSupported) return;
+    // Check for available OpenGL extensions
+    void checkGLExtensions() {
+        // Reset extension flags
+        m_hasNvidiaExtension = false;
+        m_hasAmdExtension = false;
 
-        if (m_isVulkanBackend) {
-            updateVulkanGpuStats();
-        }
-        else {
-            // Default to zero values if no specific backend is configured
-            m_totalGpuMemory = 0;
-            m_availableGpuMemory = 0;
-            m_usedGpuMemory = 0;
-        }
-    }
+        // Check for supported extensions
+        GLint numExtensions = 0;
+        glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
 
-    // Vulkan-specific monitoring methods
-    void updateVulkanGpuStats() {
-#ifdef HAS_VULKAN
-        if (!m_vulkanInitialized) {
-            initializeVulkan();
-        }
-
-        if (!m_vulkanInitialized || m_vkPhysicalDevice == VK_NULL_HANDLE) {
-            // Fallback to default values if Vulkan initialization failed
-            m_totalGpuMemory = 8 * 1024 * 1024 * 1024ULL;     // 8 GB example
-            m_availableGpuMemory = 6 * 1024 * 1024 * 1024ULL; // 6 GB example
-            m_usedGpuMemory = 2 * 1024 * 1024 * 1024ULL;      // 2 GB example
+        if (glGetError() != GL_NO_ERROR || numExtensions <= 0) {
             return;
         }
 
-        // Query device memory properties
-        VkPhysicalDeviceMemoryProperties memProperties;
-        vkGetPhysicalDeviceMemoryProperties(m_vkPhysicalDevice, &memProperties);
+        for (GLint i = 0; i < numExtensions; i++) {
+            const GLubyte* extension = glGetStringi(GL_EXTENSIONS, i);
+            if (!extension) continue;
 
-        // Calculate total and used memory across all DEVICE_LOCAL heaps
-        size_t totalMemory = 0;
-        size_t usedMemory = 0;
-
-        for (uint32_t i = 0; i < memProperties.memoryHeapCount; i++) {
-            if (memProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
-                totalMemory += memProperties.memoryHeaps[i].size;
-
-                // We can't directly query memory usage without extensions
-                // For simplicity, estimate 25% usage for device-local memory
-                usedMemory += memProperties.memoryHeaps[i].size / 4;
+            const char* extStr = reinterpret_cast<const char*>(extension);
+            if (strcmp(extStr, "GL_NVX_gpu_memory_info") == 0) {
+                m_hasNvidiaExtension = true;
+            }
+            else if (strcmp(extStr, "GL_ATI_meminfo") == 0) {
+                m_hasAmdExtension = true;
             }
         }
-
-        // Update atomic variables
-        m_totalGpuMemory = totalMemory;
-        m_usedGpuMemory = usedMemory;
-        m_availableGpuMemory = totalMemory > usedMemory ? totalMemory - usedMemory : 0;
-
-        std::cout << "[SystemMonitor] Vulkan GPU stats updated - Total: "
-            << (m_totalGpuMemory / (1024 * 1024)) << " MB, Used: "
-            << (m_usedGpuMemory / (1024 * 1024)) << " MB, Available: "
-            << (m_availableGpuMemory / (1024 * 1024)) << " MB" << std::endl;
-#else
-        // No Vulkan support, use default values
-        m_totalGpuMemory = 8 * 1024 * 1024 * 1024ULL;     // 8 GB example
-        m_availableGpuMemory = 6 * 1024 * 1024 * 1024ULL; // 6 GB example
-        m_usedGpuMemory = 2 * 1024 * 1024 * 1024ULL;      // 2 GB example
-#endif
     }
 
-    void initializeVulkan() {
-#ifdef HAS_VULKAN
-        try {
-            // Create Vulkan instance
-            VkApplicationInfo appInfo = {};
-            appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-            appInfo.pApplicationName = "System Monitor";
-            appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-            appInfo.pEngineName = "No Engine";
-            appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-            appInfo.apiVersion = VK_API_VERSION_1_0;
+    void updateGpuStats() {
+        if (!m_gpuMonitoringSupported || !m_openGLInitialized) return;
 
-            // Just use basic instance creation, no problematic extensions
-            VkInstanceCreateInfo createInfo = {};
-            createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-            createInfo.pApplicationInfo = &appInfo;
+        // Define NVIDIA and AMD extension constants
+        constexpr GLenum GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX = 0x9047;
+        constexpr GLenum GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX = 0x9049;
+        constexpr GLenum GL_TEXTURE_FREE_MEMORY_ATI = 0x87FC;
 
-            // Create Vulkan instance
-            VkResult result = vkCreateInstance(&createInfo, nullptr, &m_vkInstance);
-            if (result != VK_SUCCESS) {
-                std::cerr << "[SystemMonitor] Failed to create Vulkan instance: " << result << std::endl;
-                return;
+        // Try NVIDIA extension first
+        if (m_hasNvidiaExtension) {
+            GLint totalMemKb = 0;
+            glGetIntegerv(GL_GPU_MEMORY_INFO_DEDICATED_VIDMEM_NVX, &totalMemKb);
+
+            if (glGetError() == GL_NO_ERROR && totalMemKb > 0) {
+                m_totalGpuMemory = static_cast<size_t>(totalMemKb) * 1024; // Convert KB to bytes
+
+                GLint availableMemKb = 0;
+                glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &availableMemKb);
+
+                if (glGetError() == GL_NO_ERROR && availableMemKb > 0) {
+                    m_availableGpuMemory = static_cast<size_t>(availableMemKb) * 1024; // Convert KB to bytes
+
+                    // Calculate total used memory (by all applications)
+                    size_t totalUsedMemory = m_totalGpuMemory > m_availableGpuMemory ?
+                        m_totalGpuMemory - m_availableGpuMemory : 0;
+
+                    // Update application GPU usage estimation based on system memory usage
+                    estimateAppGpuUsage(totalUsedMemory);
+                }
             }
-
-            // Find physical devices
-            uint32_t deviceCount = 0;
-            vkEnumeratePhysicalDevices(m_vkInstance, &deviceCount, nullptr);
-
-            if (deviceCount == 0) {
-                std::cerr << "[SystemMonitor] No Vulkan physical devices found" << std::endl;
-                vkDestroyInstance(m_vkInstance, nullptr);
-                m_vkInstance = VK_NULL_HANDLE;
-                return;
-            }
-
-            std::vector<VkPhysicalDevice> devices(deviceCount);
-            vkEnumeratePhysicalDevices(m_vkInstance, &deviceCount, devices.data());
-
-            // Just use the first device for simplicity
-            m_vkPhysicalDevice = devices[0];
-
-            // Query device properties
-            VkPhysicalDeviceProperties deviceProps;
-            vkGetPhysicalDeviceProperties(m_vkPhysicalDevice, &deviceProps);
-
-            std::cout << "[SystemMonitor] Using GPU: " << deviceProps.deviceName << std::endl;
-
-            m_vulkanInitialized = true;
         }
-        catch (const std::exception& e) {
-            std::cerr << "[SystemMonitor] Vulkan initialization failed: " << e.what() << std::endl;
+        // Try AMD extension if NVIDIA is not available
+        else if (m_hasAmdExtension) {
+            GLint info[4];
+            glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, info);
 
-            // Clean up any resources
-            if (m_vkInstance != VK_NULL_HANDLE) {
-                vkDestroyInstance(m_vkInstance, nullptr);
-                m_vkInstance = VK_NULL_HANDLE;
+            if (glGetError() == GL_NO_ERROR && info[0] > 0) {
+                // info[0] is the available memory in KB
+                m_availableGpuMemory = static_cast<size_t>(info[0]) * 1024; // Convert KB to bytes
+
+                // AMD doesn't provide total memory directly, use estimation from GPU info
+                if (m_totalGpuMemory == 0) {
+                    // Try to detect the GPU memory size
+                    const GLubyte* renderer = glGetString(GL_RENDERER);
+                    if (renderer) {
+                        std::string rendererStr(reinterpret_cast<const char*>(renderer));
+
+                        // Very simple heuristic - can be expanded for better accuracy
+                        if (rendererStr.find("Radeon") != std::string::npos) {
+                            // Look for memory hints in the renderer string
+                            if (rendererStr.find("8GB") != std::string::npos) {
+                                m_totalGpuMemory = 8 * GB;
+                            }
+                            else if (rendererStr.find("6GB") != std::string::npos) {
+                                m_totalGpuMemory = 6 * GB;
+                            }
+                            else if (rendererStr.find("4GB") != std::string::npos) {
+                                m_totalGpuMemory = 4 * GB;
+                            }
+                            else {
+                                // Default for modern AMD cards
+                                m_totalGpuMemory = 8 * GB;
+                            }
+                        }
+                        else {
+                            // Generic default
+                            m_totalGpuMemory = 4 * GB;
+                        }
+                    }
+                    else {
+                        // Fallback
+                        m_totalGpuMemory = 4 * GB;
+                    }
+                }
+
+                // Calculate total used memory
+                size_t totalUsedMemory = m_totalGpuMemory > m_availableGpuMemory ?
+                    m_totalGpuMemory - m_availableGpuMemory : 0;
+
+                // Update application GPU usage estimation
+                estimateAppGpuUsage(totalUsedMemory);
+            }
+        }
+        else {
+            // No GPU memory extension available, use hardware detection or fallbacks
+
+            // Try to get GPU info from renderer string if we haven't set total memory yet
+            if (m_totalGpuMemory == 0) {
+                const GLubyte* renderer = glGetString(GL_RENDERER);
+                if (renderer) {
+                    std::string rendererStr(reinterpret_cast<const char*>(renderer));
+
+                    // Simple heuristic based on GPU model name
+                    if (rendererStr.find("RTX") != std::string::npos ||
+                        rendererStr.find("Quadro") != std::string::npos) {
+                        // Higher-end NVIDIA GPUs
+                        m_totalGpuMemory = 8 * GB;
+                    }
+                    else if (rendererStr.find("GTX") != std::string::npos) {
+                        // Mid-range NVIDIA GPUs
+                        m_totalGpuMemory = 6 * GB;
+                    }
+                    else if (rendererStr.find("Radeon") != std::string::npos) {
+                        // AMD GPUs
+                        m_totalGpuMemory = 8 * GB;
+                    }
+                    else {
+                        // Generic fallback
+                        m_totalGpuMemory = 4 * GB;
+                    }
+                }
+                else {
+                    // Fallback if we can't detect
+                    m_totalGpuMemory = 4 * GB;
+                }
             }
 
-            m_vulkanInitialized = false;
+            // Estimate available memory based on user memory usage
+            float memoryUsagePercent = static_cast<float>(m_usedMemory) / static_cast<float>(m_totalMemory);
+            m_availableGpuMemory = static_cast<size_t>(m_totalGpuMemory * (1.0f - (memoryUsagePercent * 0.5f)));
+
+            // Estimate app GPU usage based on system memory usage
+            m_usedGpuMemory = static_cast<size_t>(m_usedMemory * 0.7f); // Rough estimate
+
+            // Make sure available + used memory is consistent
+            if (m_usedGpuMemory > m_totalGpuMemory * 0.8f) {
+                m_usedGpuMemory = static_cast<size_t>(m_totalGpuMemory * 0.8f);
+            }
+
+            if (m_usedGpuMemory + m_availableGpuMemory > m_totalGpuMemory) {
+                m_availableGpuMemory = m_totalGpuMemory > m_usedGpuMemory ?
+                    m_totalGpuMemory - m_usedGpuMemory : 0;
+            }
         }
-#endif
+    }
+
+    // Estimate the application's GPU memory usage based on system memory patterns
+    void estimateAppGpuUsage(size_t totalUsedGpuMemory) {
+        // Get current time
+        auto currentTime = std::chrono::steady_clock::now();
+
+        // Use system memory usage as a proxy for GPU usage trend
+        static size_t lastSystemMemoryUsage = m_usedMemory;
+
+        // Calculate memory usage delta
+        bool memoryIncreased = (m_usedMemory > lastSystemMemoryUsage);
+        size_t memoryDelta = memoryIncreased ?
+            m_usedMemory - lastSystemMemoryUsage :
+            lastSystemMemoryUsage - m_usedMemory;
+
+        // If system memory increased significantly, assume GPU memory might have increased too
+        if (memoryIncreased && memoryDelta > 10 * 1024 * 1024) { // 10MB threshold
+            // Estimate that 70% of system memory increase affects GPU
+            size_t estimatedGpuIncrease = static_cast<size_t>(memoryDelta * 0.7f);
+
+            // Add to our tracked app usage, but cap at 80% of total GPU usage
+            size_t maxAppUsage = static_cast<size_t>(totalUsedGpuMemory * 0.8f);
+            m_usedGpuMemory += estimatedGpuIncrease;
+
+            if (m_usedGpuMemory > maxAppUsage) {
+                m_usedGpuMemory = maxAppUsage;
+            }
+
+            m_lastUsageIncrease = currentTime;
+        }
+        // If memory decreased significantly, reduce estimated GPU usage
+        else if (!memoryIncreased && memoryDelta > 20 * 1024 * 1024) { // 20MB threshold
+            // Reduce GPU usage estimate at a slower rate (50% of system memory decrease)
+            size_t estimatedGpuDecrease = static_cast<size_t>(memoryDelta * 0.5f);
+
+            // Ensure we don't go below a minimum level
+            if (m_usedGpuMemory > estimatedGpuDecrease) {
+                m_usedGpuMemory -= estimatedGpuDecrease;
+            }
+            else {
+                // Minimum baseline app GPU usage (adjust based on your application)
+                m_usedGpuMemory = std::min<size_t>(50 * 1024 * 1024, totalUsedGpuMemory * 0.1f);
+            }
+        }
+
+        // If no significant activity for a long time, gradually reduce our estimation
+        auto timeSinceLastIncrease = std::chrono::duration_cast<std::chrono::seconds>(
+            currentTime - m_lastUsageIncrease).count();
+
+        if (timeSinceLastIncrease > 30) { // 30 seconds of no increases
+            // Slowly decay the estimated usage (5% every update)
+            m_usedGpuMemory = static_cast<size_t>(m_usedGpuMemory * 0.95f);
+
+            // Ensure we keep a minimum baseline
+            size_t minBaseline = std::min<size_t>(50 * 1024 * 1024, totalUsedGpuMemory * 0.1f);
+            if (m_usedGpuMemory < minBaseline) {
+                m_usedGpuMemory = minBaseline;
+            }
+        }
+
+        // Update for next comparison
+        lastSystemMemoryUsage = m_usedMemory;
     }
 };

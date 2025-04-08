@@ -4,11 +4,17 @@
 #include "ui/widgets.hpp"
 #include "ui/markdown.hpp"
 #include "model/model_manager.hpp"
+#include "model/gguf_reader.hpp"
 #include "ui/fonts.hpp"
 #include <string>
 #include <vector>
 #include <functional>
 #include <algorithm>
+#include <map>
+#include <nfd.h>
+#include <filesystem>
+#include <regex>
+#include <curl/curl.h>
 
 namespace ModelManagerConstants {
     constexpr float cardWidth = 200.0f;
@@ -19,6 +25,827 @@ namespace ModelManagerConstants {
     constexpr float sectionSpacing = 20.0f;
     constexpr float sectionHeaderHeight = 30.0f;
 }
+
+class AddCustomModelModalComponent {
+public:
+    AddCustomModelModalComponent() {
+        // Add variant button
+        ButtonConfig addVariantButton;
+        addVariantButton.id = "##confirmAddVariant";
+        addVariantButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
+        addVariantButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
+        addVariantButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
+        addVariantButton.size = ImVec2(130, 0);
+        addVariantButton.onClick = [this]() {
+            if (validateVariantForm()) {
+                Model::ModelVariant variant;
+                variant.type = m_currentVariantName;
+
+                // Determine if input is URL or local path
+                bool isUrl = isUrlInput(m_currentVariantPath);
+
+                if (isUrl) {
+                    // If it's a URL, set downloadLink and generate a local path
+                    variant.downloadLink = m_currentVariantPath;
+
+                    // Extract filename from URL
+                    std::string filename = getFilenameFromPath(m_currentVariantPath);
+
+                    // Generate path in format: models/<model name>/<variant name>/<gguf file name>
+                    variant.path = "models/" + m_modelName + "/" + m_currentVariantName + "/" + filename;
+
+                    // For URL, mark as not downloaded yet
+                    variant.isDownloaded = false;
+                    variant.downloadProgress = 0.0;
+                }
+                else {
+                    // If it's a local path, set path and leave downloadLink empty
+                    variant.path = m_currentVariantPath;
+                    variant.downloadLink = ""; // Empty for local files
+                    variant.isDownloaded = true; // Already available locally
+                    variant.downloadProgress = 100.0;
+                }
+
+                variant.lastSelected = 0;
+                variant.size = getFileSize(m_currentVariantPath, isUrl);
+
+                // Check if we're editing or adding a new variant
+                if (!m_editingVariantName.empty()) {
+                    // If the name changed, remove the old entry
+                    if (m_editingVariantName != m_currentVariantName) {
+                        m_variants.erase(m_editingVariantName);
+                    }
+                    // Add with new or same name
+                    m_variants[m_currentVariantName] = variant;
+                    m_editingVariantName.clear(); // Clear edit mode
+                }
+                else {
+                    // Add new variant
+                    m_variants[m_currentVariantName] = variant;
+                }
+
+                // Clear the form and collapse it
+                m_currentVariantName.clear();
+                m_currentVariantPath.clear();
+                m_variantErrorMessage.clear();
+                m_showVariantForm = false;
+
+                // Reset focus for next time the variant form opens
+                s_focusVariantName = true;
+                s_focusVariantPath = false;
+            }
+            };
+
+        variantButtons.push_back(addVariantButton);
+    }
+
+    void render(bool& openModal) {
+        // Reset model added flag when modal opens
+        if (openModal && !m_wasOpen) {
+            m_modelAdded = false;
+            s_focusAuthor = true;
+            s_focusModelName = false;
+            s_focusVariantName = false;
+            s_focusVariantPath = false;
+        }
+
+        m_wasOpen = openModal;
+
+        ModalConfig config{
+            "Add Custom Model",
+            "Add Custom Model",
+            ImVec2(500, 550),
+            [this]() {
+                ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0, 0, 0, 0));
+                ImGui::BeginChild("##addCustomModelChild", ImVec2(0,
+                    ImGui::GetContentRegionAvail().y - 42), false);
+                renderMainForm();
+                ImGui::EndChild();
+                ImGui::PopStyleColor();
+
+                ButtonConfig submitButton;
+                submitButton.id = "##submitAddCustomModel";
+                submitButton.label = "Submit";
+                submitButton.backgroundColor = RGBAToImVec4(26, 95, 180, 255);
+                submitButton.hoverColor = RGBAToImVec4(53, 132, 228, 255);
+                submitButton.activeColor = RGBAToImVec4(26, 95, 180, 255);
+                submitButton.size = ImVec2(ImGui::GetContentRegionAvail().x - 12.0F, 0);
+                submitButton.onClick = [this]() {
+                    if (validateMainForm()) {
+                        if (submitCustomModel()) {
+                            m_modelAdded = true;
+                            ImGui::CloseCurrentPopup();
+                        }
+                        else {
+                            m_errorMessage = "Failed to add custom model. Check the model file and try again.";
+                        }
+                    }
+                };
+
+                if (m_variants.empty()) {
+                    submitButton.state = ButtonState::DISABLED;
+                }
+
+                ImGui::SetCursorPos(ImVec2(
+                    ImGui::GetCursorPosX() + 6.0F,
+                    ImGui::GetCursorPosY() + ImGui::GetContentRegionAvail().y - 30.0F
+                ));
+                Button::render(submitButton);
+            },
+            openModal
+        };
+        config.padding = ImVec2(16.0f, 16.0f);
+        ModalWindow::render(config);
+
+        if (!ImGui::IsPopupOpen(config.id.c_str())) {
+            openModal = false;
+            if (!m_modelAdded) {
+                clearForm();
+            }
+        }
+    }
+
+    // Check if a model was successfully added in the last session
+    bool wasModelAdded() const {
+        return m_modelAdded;
+    }
+
+    // Reset the model added flag after handling it
+    void resetModelAddedFlag() {
+        m_modelAdded = false;
+    }
+
+private:
+    // Main form data
+    std::string m_authorName;
+    std::string m_modelName;
+    std::map<std::string, Model::ModelVariant> m_variants;
+    std::string m_errorMessage;
+    bool m_wasOpen = false;
+    bool m_modelAdded = false;
+
+    // Variant form data
+    bool m_showVariantForm = false;
+    std::string m_currentVariantName;
+    std::string m_currentVariantPath;
+    std::string m_variantErrorMessage;
+    std::string m_editingVariantName;
+
+    // Static focus control variables
+    static bool s_focusAuthor;
+    static bool s_focusModelName;
+    static bool s_focusVariantName;
+    static bool s_focusVariantPath;
+
+    // Static counter for unique IDs
+    static int s_idCounter;
+
+    // Buttons
+    std::vector<ButtonConfig> variantButtons;
+
+	// GGUF reader
+    GGUFMetadataReader m_ggufReader;
+
+    // Check if input is a URL
+    bool isUrlInput(const std::string& input) {
+        // Simple regex to detect URLs
+        static const std::regex urlPattern(
+            R"(^(https?|ftp)://)"  // protocol
+            R"([^\s/$.?#].[^\s]*$)",  // domain and path
+            std::regex::icase
+        );
+
+        return std::regex_match(input, urlPattern);
+    }
+
+    // Extract filename from path or URL
+    std::string getFilenameFromPath(const std::string& path) {
+        // First try to use filesystem for local paths
+        std::string filename;
+
+        try {
+            // For URLs, extract the last part of the path
+            if (isUrlInput(path)) {
+                // Find the last '/' character
+                size_t lastSlash = path.find_last_of('/');
+                if (lastSlash != std::string::npos && lastSlash < path.length() - 1) {
+                    filename = path.substr(lastSlash + 1);
+
+                    // Handle URL query parameters
+                    size_t queryPos = filename.find('?');
+                    if (queryPos != std::string::npos) {
+                        filename = filename.substr(0, queryPos);
+                    }
+                }
+                else {
+                    // Fallback
+                    filename = "model.gguf";
+                }
+            }
+            else {
+                // For local paths, use std::filesystem
+                std::filesystem::path fsPath(path);
+                filename = fsPath.filename().string();
+            }
+        }
+        catch (...) {
+            // Last resort fallback
+            filename = "model.gguf";
+        }
+
+        // Ensure the filename has .gguf extension
+        if (filename.length() < 5 ||
+            filename.substr(filename.length() - 5) != ".gguf") {
+            filename += ".gguf";
+        }
+
+        return filename;
+    }
+
+    // CURL callback for URL file size check
+    static size_t headerCallback(char* buffer, size_t size, size_t nitems, void* userdata) {
+        size_t totalSize = size * nitems;
+        std::string header(buffer, totalSize);
+
+        // Convert header to lowercase for case-insensitive comparison
+        std::transform(header.begin(), header.end(), header.begin(),
+            [](unsigned char c) { return std::tolower(c); });
+
+        // Check if this is the content-length header
+        if (header.find("content-length:") == 0) {
+            // Extract the size value
+            std::string lengthStr = header.substr(15); // Skip "content-length:"
+            // Trim whitespace
+            lengthStr.erase(0, lengthStr.find_first_not_of(" \t\r\n"));
+            lengthStr.erase(lengthStr.find_last_not_of(" \t\r\n") + 1);
+
+            // Store the size in the userdata pointer
+            if (!lengthStr.empty()) {
+                try {
+                    *(size_t*)userdata = std::stoull(lengthStr);
+                }
+                catch (...) {
+                    // Conversion error, ignore
+                }
+            }
+        }
+
+        return totalSize;
+    }
+
+    // Get file size in GB from URL using a HEAD request
+    float getUrlFileSize(const std::string& url) {
+        size_t fileSizeBytes = 0;
+
+        CURL* curl = curl_easy_init();
+        if (curl) {
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(curl, CURLOPT_NOBODY, 1L); // HEAD request
+            curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, headerCallback);
+            curl_easy_setopt(curl, CURLOPT_HEADERDATA, &fileSizeBytes);
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // Follow redirects
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L); // 10 second timeout
+
+            CURLcode res = curl_easy_perform(curl);
+            curl_easy_cleanup(curl);
+
+            if (res != CURLE_OK) {
+                // Failed to get size, return 0
+                return 0.0f;
+            }
+        }
+
+        // Convert bytes to GB
+        float fileSizeGB = static_cast<float>(fileSizeBytes) / (1024.0f * 1024.0f * 1024.0f);
+        return fileSizeGB;
+    }
+
+    // Get file size in GB from local path
+    float getLocalFileSize(const std::string& path) {
+        try {
+            std::filesystem::path fsPath(path);
+            if (std::filesystem::exists(fsPath) && std::filesystem::is_regular_file(fsPath)) {
+                // Get size in bytes and convert to GB
+                uintmax_t sizeInBytes = std::filesystem::file_size(fsPath);
+                float sizeInGB = static_cast<float>(sizeInBytes) / (1024.0f * 1024.0f * 1024.0f);
+                return sizeInGB;
+            }
+        }
+        catch (...) {
+            // If there's any error, return 0
+        }
+        return 0.0f;
+    }
+
+    // Get file size in GB from either URL or local path
+    float getFileSize(const std::string& path, bool isUrl) {
+        if (isUrl) {
+            return getUrlFileSize(path);
+        }
+        else {
+            return getLocalFileSize(path);
+        }
+    }
+
+    // Generate a unique ID for UI elements
+    std::string generateUniqueId(const std::string& prefix) {
+        return prefix + std::to_string(s_idCounter++);
+    }
+
+    // Start editing a variant
+    void startEditingVariant(const std::string& variantName) {
+        m_editingVariantName = variantName;
+        m_currentVariantName = variantName;
+
+        const auto& variant = m_variants[variantName];
+        // Use downloadLink if available, otherwise use path
+        m_currentVariantPath = !variant.downloadLink.empty()
+            ? variant.downloadLink
+            : variant.path;
+
+        m_showVariantForm = true;
+        s_focusVariantName = true;
+    }
+
+    void renderMainForm() {
+        // Display error message if any
+        if (!m_errorMessage.empty()) {
+            LabelConfig errorLabel;
+            errorLabel.id = "##mainErrorMessage";
+            errorLabel.label = m_errorMessage;
+            errorLabel.size = ImVec2(0, 0);
+            errorLabel.fontType = FontsManager::ITALIC;
+            errorLabel.fontSize = FontsManager::SM;
+            errorLabel.color = ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
+            errorLabel.alignment = Alignment::LEFT;
+            Label::render(errorLabel);
+            ImGui::Spacing();
+        }
+
+        // Author input
+        LabelConfig authorLabel;
+        authorLabel.id = "##modelAuthorLabel";
+        authorLabel.label = "Author";
+        authorLabel.size = ImVec2(0, 0);
+        authorLabel.fontType = FontsManager::REGULAR;
+        authorLabel.fontSize = FontsManager::MD;
+        authorLabel.alignment = Alignment::LEFT;
+        Label::render(authorLabel);
+
+        InputFieldConfig authorFieldConfig(
+            "##modelAuthorInput",
+            ImVec2(ImGui::GetContentRegionAvail().x - 12.0F, 32.0f),
+            m_authorName,
+            s_focusAuthor
+        );
+        // Reset focus flag after use
+        s_focusAuthor = false;
+
+        authorFieldConfig.placeholderText = "Enter author name";
+        authorFieldConfig.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+        authorFieldConfig.hoverColor = RGBAToImVec4(44, 44, 44, 255);
+        authorFieldConfig.activeColor = RGBAToImVec4(54, 54, 54, 255);
+        InputField::render(authorFieldConfig);
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // Model name input
+        LabelConfig nameLabel;
+        nameLabel.id = "##modelNameLabel";
+        nameLabel.label = "Model Name";
+        nameLabel.size = ImVec2(0, 0);
+        nameLabel.fontType = FontsManager::REGULAR;
+        nameLabel.fontSize = FontsManager::MD;
+        nameLabel.alignment = Alignment::LEFT;
+        Label::render(nameLabel);
+
+        InputFieldConfig nameFieldConfig(
+            "##modelNameInput",
+            ImVec2(ImGui::GetContentRegionAvail().x - 12.0F, 32.0f),
+            m_modelName,
+            s_focusModelName
+        );
+        // Reset focus flag after use
+        s_focusModelName = false;
+
+        nameFieldConfig.placeholderText = "Enter model name";
+        nameFieldConfig.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+        nameFieldConfig.hoverColor = RGBAToImVec4(44, 44, 44, 255);
+        nameFieldConfig.activeColor = RGBAToImVec4(54, 54, 54, 255);
+        InputField::render(nameFieldConfig);
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // Variants section
+        LabelConfig variantsLabel;
+        variantsLabel.id = "##modelVariantsLabel";
+        variantsLabel.label = "Variants:";
+        variantsLabel.size = ImVec2(0, 0);
+        variantsLabel.fontType = FontsManager::REGULAR;
+        variantsLabel.fontSize = FontsManager::MD;
+        variantsLabel.alignment = Alignment::LEFT;
+        Label::render(variantsLabel);
+        ImGui::Spacing();
+
+        // Display existing variants in a scrollable area
+        if (!m_variants.empty()) {
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, RGBAToImVec4(26, 26, 26, 255));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 8.0f);
+            ImGui::BeginChild("##variantsList", ImVec2(ImGui::GetContentRegionAvail().x, 180), true);
+
+            int variantIdx = 0;
+            for (auto& [variantName, variant] : m_variants) {
+                std::string variantId = "variant_" + std::to_string(variantIdx++);
+                ImGui::PushID(variantId.c_str());
+
+                // Variant section with border
+                ImGui::BeginGroup();
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, RGBAToImVec4(34, 34, 34, 255));
+                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f);
+                ImGui::BeginChild(("##variantItem_" + variantId).c_str(), ImVec2(ImGui::GetContentRegionAvail().x, 100), true);
+
+                // Variant name - bold
+                LabelConfig variantNameLabel;
+                variantNameLabel.id = "##variant_name_" + variantId;
+                variantNameLabel.label = "Variant: " + variantName;
+                variantNameLabel.fontType = FontsManager::BOLD;
+                variantNameLabel.fontSize = FontsManager::MD;
+                Label::render(variantNameLabel);
+
+                // Show path or URL info
+                std::string locationInfo;
+                if (!variant.downloadLink.empty()) {
+                    locationInfo = "URL: " + variant.downloadLink;
+
+                    // Also show the local path where it will be downloaded
+                    LabelConfig variantPathLabel;
+                    variantPathLabel.id = "##variant_download_path_" + variantId;
+                    variantPathLabel.label = "Download path: " + variant.path;
+                    variantPathLabel.fontType = FontsManager::ITALIC;
+                    variantPathLabel.fontSize = FontsManager::SM;
+                    Label::render(variantPathLabel);
+                }
+                else {
+                    locationInfo = "Path: " + variant.path;
+                }
+
+                // Display the path/URL info
+                LabelConfig variantPathLabel;
+                variantPathLabel.id = "##variant_path_" + variantId;
+                variantPathLabel.label = locationInfo;
+                variantPathLabel.fontType = FontsManager::REGULAR;
+                variantPathLabel.fontSize = FontsManager::SM;
+                Label::render(variantPathLabel);
+
+                // Edit button - at right side
+                ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionAvail().x - 48, 10));
+                ButtonConfig editVariantBtn;
+                editVariantBtn.id = "##editVariant_" + variantId;
+                editVariantBtn.icon = ICON_CI_EDIT;
+                editVariantBtn.size = ImVec2(24, 24);
+                editVariantBtn.tooltip = "Edit variant";
+                editVariantBtn.onClick = [this, variantName]() {
+                    startEditingVariant(variantName);
+                    };
+                Button::render(editVariantBtn);
+
+                // Delete button - small, at the right side
+                ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionAvail().x - 18, 10));
+                ButtonConfig deleteVariantBtn;
+                deleteVariantBtn.id = "##deleteVariant_" + variantId;
+                deleteVariantBtn.icon = ICON_CI_TRASH;
+                deleteVariantBtn.hoverColor = RGBAToImVec4(220, 70, 70, 255);
+                deleteVariantBtn.size = ImVec2(24, 24);
+                deleteVariantBtn.tooltip = "Delete variant";
+                deleteVariantBtn.onClick = [this, variantName]() {
+                    // If we're currently editing this variant, cancel editing
+                    if (m_editingVariantName == variantName) {
+                        m_editingVariantName.clear();
+                        m_currentVariantName.clear();
+                        m_currentVariantPath.clear();
+                        m_showVariantForm = false;
+                    }
+                    m_variants.erase(variantName);
+                    };
+                Button::render(deleteVariantBtn);
+
+                ImGui::EndChild();
+                ImGui::PopStyleVar();
+                ImGui::PopStyleColor();
+                ImGui::EndGroup();
+
+                ImGui::PopID();
+                ImGui::Spacing();
+            }
+
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor();
+        }
+        else {
+            LabelConfig noVariantsLabel;
+            noVariantsLabel.id = "##noVariants";
+            noVariantsLabel.label = "No variants added. Click 'Add New Variant' button below.";
+            noVariantsLabel.fontType = FontsManager::ITALIC;
+            noVariantsLabel.fontSize = FontsManager::SM;
+            noVariantsLabel.color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+            Label::render(noVariantsLabel);
+            ImGui::Spacing();
+        }
+
+        // Collapsible "Add New Variant" section
+        ImGui::Spacing();
+
+        // Determine button label based on whether we're editing or adding
+        std::string buttonLabel = "Add New Variant";
+        if (m_showVariantForm) {
+            buttonLabel = m_editingVariantName.empty() ? "Cancel Adding Variant" : "Cancel Editing Variant";
+        }
+
+        ButtonConfig toggleVariantFormButton;
+        toggleVariantFormButton.id = "##toggleAddNewVariant";
+        toggleVariantFormButton.label = buttonLabel;
+        toggleVariantFormButton.icon = m_showVariantForm ? ICON_CI_CLOSE : ICON_CI_PLUS;
+        toggleVariantFormButton.alignment = Alignment::LEFT;
+        toggleVariantFormButton.size = ImVec2(
+            ImGui::CalcTextSize(buttonLabel.c_str()).x + /*padding + icon size*/ 40.0f, 32.0f);
+        toggleVariantFormButton.onClick = [this]() {
+            if (m_showVariantForm) {
+                // Cancel editing/adding
+                m_showVariantForm = false;
+                m_currentVariantName.clear();
+                m_currentVariantPath.clear();
+                m_variantErrorMessage.clear();
+                m_editingVariantName.clear();
+            }
+            else {
+                // Start adding new
+                m_showVariantForm = true;
+                m_editingVariantName.clear();
+                m_currentVariantName.clear();
+                m_currentVariantPath.clear();
+                s_focusVariantName = true;
+                s_focusVariantPath = false;
+            }
+            };
+        Button::render(toggleVariantFormButton);
+
+        // Render the collapsible variant form if it's visible
+        if (m_showVariantForm) {
+            ImGui::Spacing();
+
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.0F);
+
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, RGBAToImVec4(30, 30, 30, 255));
+            ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 5.0f);
+            ImGui::BeginChild("##variantFormSection", ImVec2(ImGui::GetContentRegionAvail().x, 256), true);
+
+            // Title - changes based on whether we're editing or adding
+            LabelConfig variantFormLabel;
+            variantFormLabel.id = "##addVariantTitle";
+            variantFormLabel.label = m_editingVariantName.empty() ? "Add New Variant" : "Edit Variant";
+            variantFormLabel.fontType = FontsManager::BOLD;
+            variantFormLabel.fontSize = FontsManager::MD;
+            variantFormLabel.alignment = Alignment::LEFT;
+            Label::render(variantFormLabel);
+            ImGui::Spacing();
+
+            // Display error message if any
+            if (!m_variantErrorMessage.empty()) {
+                LabelConfig errorLabel;
+                errorLabel.id = "##variantErrorMessage";
+                errorLabel.label = m_variantErrorMessage;
+                errorLabel.size = ImVec2(0, 0);
+                errorLabel.fontType = FontsManager::ITALIC;
+                errorLabel.fontSize = FontsManager::SM;
+                errorLabel.color = ImVec4(1.0f, 0.3f, 0.3f, 1.0f);
+                errorLabel.alignment = Alignment::LEFT;
+                Label::render(errorLabel);
+                ImGui::Spacing();
+            }
+
+            // Variant Name
+            LabelConfig variantNameLabel;
+            variantNameLabel.id = "##variantNameLabel";
+            variantNameLabel.label = "Variant Name";
+            variantNameLabel.size = ImVec2(0, 0);
+            variantNameLabel.fontType = FontsManager::REGULAR;
+            variantNameLabel.fontSize = FontsManager::MD;
+            variantNameLabel.alignment = Alignment::LEFT;
+            Label::render(variantNameLabel);
+
+            InputFieldConfig variantNameField(
+                "##variantNameInput",
+                ImVec2(ImGui::GetContentRegionAvail().x, 32.0f),
+                m_currentVariantName,
+                s_focusVariantName
+            );
+            // Reset focus flag after use
+            s_focusVariantName = false;
+
+            variantNameField.placeholderText = "e.g., q4_0, f16, etc.";
+            variantNameField.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+            variantNameField.hoverColor = RGBAToImVec4(44, 44, 44, 255);
+            variantNameField.activeColor = RGBAToImVec4(54, 54, 54, 255);
+            InputField::render(variantNameField);
+            ImGui::Spacing();
+
+            // Path / URL
+            LabelConfig variantPathLabel;
+            variantPathLabel.id = "##variantPathLabel";
+            variantPathLabel.label = "Path / URL to GGUF";
+            variantPathLabel.size = ImVec2(0, 0);
+            variantPathLabel.fontType = FontsManager::REGULAR;
+            variantPathLabel.fontSize = FontsManager::MD;
+            variantPathLabel.alignment = Alignment::LEFT;
+            Label::render(variantPathLabel);
+
+            // Add info about URL vs path handling
+            LabelConfig pathInfoLabel;
+            pathInfoLabel.id = "##pathInfoLabel";
+            pathInfoLabel.label = "Enter a URL (https://) to download or a local file path";
+            pathInfoLabel.fontType = FontsManager::ITALIC;
+            pathInfoLabel.fontSize = FontsManager::SM;
+            pathInfoLabel.color = ImVec4(0.7f, 0.7f, 0.7f, 1.0f);
+            Label::render(pathInfoLabel);
+
+            InputFieldConfig variantPathField(
+                "##variantPathInput",
+                ImVec2(ImGui::GetContentRegionAvail().x - 48, 32.0f),
+                m_currentVariantPath,
+                s_focusVariantPath
+            );
+            // Reset focus flag after use
+            s_focusVariantPath = false;
+
+            variantPathField.placeholderText = "Enter path or URL to the model file";
+            variantPathField.backgroundColor = RGBAToImVec4(34, 34, 34, 255);
+            variantPathField.hoverColor = RGBAToImVec4(44, 44, 44, 255);
+            variantPathField.activeColor = RGBAToImVec4(54, 54, 54, 255);
+            InputField::render(variantPathField);
+
+            ImGui::SameLine();
+            ButtonConfig browseButton;
+            browseButton.id = "##browseVariantPath";
+            browseButton.icon = ICON_CI_FOLDER;
+            browseButton.size = ImVec2(38, 38);
+            browseButton.onClick = [this]() {
+                openFileDialog();
+                };
+            Button::render(browseButton);
+
+            ImGui::Spacing();
+
+            // Update Add/Update variant button
+            ButtonConfig actionButton = variantButtons[0]; // Get our base Add Variant button
+            actionButton.id = "##" + std::string(m_editingVariantName.empty() ? "addVariant" : "updateVariant");
+            actionButton.label = m_editingVariantName.empty() ? "Add Variant" : "Update Variant";
+            actionButton.size = ImVec2(ImGui::GetContentRegionAvail().x, 0);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 16.0F);
+            Button::render(actionButton);
+
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
+            ImGui::PopStyleColor();
+        }
+    }
+
+    void openFileDialog() {
+        nfdu8char_t* outPath = nullptr;
+        nfdu8filteritem_t filters[1] = { {"GGUF Models", "gguf"} };
+
+        nfdopendialogu8args_t args{};
+        args.filterList = filters;
+        args.filterCount = 1;
+
+        nfdresult_t result = NFD_OpenDialogU8_With(&outPath, &args);
+
+        if (result == NFD_OKAY) {
+            m_currentVariantPath = (const char*)outPath;
+            NFD_FreePathU8(outPath);
+            s_focusVariantPath = true;
+        }
+        else if (result == NFD_ERROR) {
+            m_variantErrorMessage = "Error opening file dialog: ";
+            m_variantErrorMessage += NFD_GetError();
+        }
+    }
+
+    bool validateMainForm() {
+        m_errorMessage.clear();
+
+        if (m_authorName.empty()) {
+            m_errorMessage = "Error: Author name cannot be empty";
+            s_focusAuthor = true;
+            return false;
+        }
+
+        if (m_modelName.empty()) {
+            m_errorMessage = "Error: Model name cannot be empty";
+            s_focusModelName = true;
+            return false;
+        }
+
+        if (m_variants.empty()) {
+            m_errorMessage = "Error: You must add at least one variant";
+            return false;
+        }
+
+        return true;
+    }
+
+    bool validateVariantForm() {
+        m_variantErrorMessage.clear();
+
+        if (m_currentVariantName.empty()) {
+            m_variantErrorMessage = "Error: Variant name cannot be empty";
+            s_focusVariantName = true;
+            return false;
+        }
+
+        if (m_currentVariantPath.empty()) {
+            m_variantErrorMessage = "Error: Path/URL cannot be empty";
+            s_focusVariantPath = true;
+            return false;
+        }
+
+        // Check if variant already exists (only if we're adding a new one or changing the name)
+        if (m_currentVariantName != m_editingVariantName &&
+            m_variants.find(m_currentVariantName) != m_variants.end()) {
+            m_variantErrorMessage = "Error: A variant with this name already exists";
+            s_focusVariantName = true;
+            return false;
+        }
+
+        return true;
+    }
+
+    bool submitCustomModel() {
+        // Create a new ModelData instance
+        Model::ModelData modelData;
+        modelData.name = m_modelName;
+        modelData.author = m_authorName;
+        modelData.variants = m_variants;
+
+        std::optional<GGUFModelParams> metadata;
+		for (const auto& [variantName, variant] : m_variants) {
+			if (!variant.downloadLink.empty()) {
+				metadata = m_ggufReader.readModelParams(variant.downloadLink, false);
+				break;
+			}
+            else {
+				metadata = m_ggufReader.readModelParams(variant.path, false);
+				break;
+            }
+		}
+
+		if (!metadata.has_value()) {
+            m_errorMessage = "Error: Failed to read model metadata";
+			return false;
+		}
+
+        modelData.hidden_size     = metadata->hidden_size;
+        modelData.attention_heads = metadata->attention_heads;
+        modelData.hidden_layers   = metadata->hidden_layers;
+        modelData.kv_heads        = metadata->kv_heads;
+
+        // Call ModelManager to add the custom model
+        if (!Model::ModelManager::getInstance().addCustomModel(modelData)) {
+            m_errorMessage = "Error: Failed to add custom model. The model may already exist.";
+			return false;
+        }
+
+        // Clear the form
+        clearForm();
+
+        return true;
+    }
+
+    void clearForm() {
+        m_authorName.clear();
+        m_modelName.clear();
+        m_variants.clear();
+        m_errorMessage.clear();
+        m_showVariantForm = false;
+        m_currentVariantName.clear();
+        m_currentVariantPath.clear();
+        m_variantErrorMessage.clear();
+        m_editingVariantName.clear();
+
+        // Reset focus flags
+        s_focusAuthor = true;
+        s_focusModelName = false;
+        s_focusVariantName = false;
+        s_focusVariantPath = false;
+    }
+};
+
+// Initialize static members
+bool AddCustomModelModalComponent::s_focusAuthor        = true;
+bool AddCustomModelModalComponent::s_focusModelName     = false;
+bool AddCustomModelModalComponent::s_focusVariantName   = false;
+bool AddCustomModelModalComponent::s_focusVariantPath   = false;
+int  AddCustomModelModalComponent::s_idCounter          = 0;
 
 class DeleteModelModalComponent {
 public:
@@ -411,11 +1238,6 @@ struct SortableModel {
     }
 };
 
-// TODO: Fix the nested modal
-// when i tried to make the delete modal rendered on top of the model modal, it simply
-// either didn't show up at all, or the model modal closed, and the entire application
-// freezed. I tried to fix it, but I couldn't find a solution. I'm leaving it as is for now.
-// Time wasted: 18 hours.
 class ModelManagerModal {
 public:
     ModelManagerModal() : m_searchText(""), m_shouldFocusSearch(false), m_showSufficientMemoryOnly(false) {}
@@ -440,6 +1262,12 @@ public:
         if (models.size() != m_lastModelCount) {
             // The model count changed
             needsUpdate = true;
+        }
+
+        // Check if a model was added through the custom model form
+        if (m_addCustomModelModal.wasModelAdded()) {
+            needsUpdate = true;
+            m_addCustomModelModal.resetModelAddedFlag();
         }
 
         // Check for changes in downloaded status
@@ -485,7 +1313,29 @@ public:
 
             // Render search field at the top
             renderSearchField();
-            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ModelManagerConstants::sectionSpacing);
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 12.0F);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 12.0F);
+
+            ButtonConfig addCustomModelBtn;
+            addCustomModelBtn.id = "##addCustomModel";
+            addCustomModelBtn.label = "Add Custom Model";
+            addCustomModelBtn.icon = ICON_CI_PLUS;
+			addCustomModelBtn.backgroundColor = ImVec4(0.3, 0.3, 0.3, 0.3);
+			addCustomModelBtn.hoverColor = ImVec4(0.2, 0.2, 0.2, 0.2);
+            addCustomModelBtn.size = ImVec2(180, 32.0f);
+            addCustomModelBtn.onClick = [this]() {
+                m_addCustomModelModalOpen = true;
+                };
+            Button::render(addCustomModelBtn);
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 12.0F);
+
+            if (m_addCustomModelModalOpen) {
+                m_addCustomModelModal.render(m_addCustomModelModalOpen);
+            }
+
+            if (m_deleteModalOpen) {
+                m_deleteModal.render(m_deleteModalOpen);
+            }
 
             LabelConfig downloadedSectionLabel;
             downloadedSectionLabel.id = "##downloadedModelsHeader";
@@ -667,28 +1517,11 @@ public:
         config.padding = ImVec2(ModelManagerConstants::padding, 8.0f);
         ModalWindow::render(config);
 
-        // Render the delete modal if it's open.
-        if (m_deleteModalOpen) {
-            m_deleteModal.render(m_deleteModalOpen);
-
-            // Mark for update on next frame after deletion
-            if (!m_deleteModalOpen && m_wasDeleteModalOpen) {
-                m_needsUpdateAfterDelete = true;
-            }
-        }
-
-        if (m_wasDeleteModalOpen && !m_deleteModalOpen) {
-            showDialog = true;
-            ImGui::OpenPopup(config.id.c_str());
-        }
-
         if (m_needsUpdateAfterDelete && !m_deleteModalOpen) {
             updateSortedModels();
             filterModels(); // Apply search filter after updating models
             m_needsUpdateAfterDelete = false;
         }
-
-        m_wasDeleteModalOpen = m_deleteModalOpen;
 
         if (!ImGui::IsPopupOpen(config.id.c_str())) {
             showDialog = false;
@@ -698,7 +1531,6 @@ public:
 private:
     DeleteModelModalComponent m_deleteModal;
     bool m_deleteModalOpen = false;
-    bool m_wasDeleteModalOpen = false;
     bool m_wasShowing = false;
     bool m_needsUpdateAfterDelete = false;
     size_t m_lastModelCount = 0;
@@ -712,6 +1544,10 @@ private:
 
     // Memory filter checkbox state
     bool m_showSufficientMemoryOnly;
+
+
+    AddCustomModelModalComponent m_addCustomModelModal;
+    bool m_addCustomModelModalOpen = false;
 
     void updateSortedModels() {
         auto& manager = Model::ModelManager::getInstance();

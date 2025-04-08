@@ -175,6 +175,8 @@ public:
         Model::initializeModelManager();
 		Model::initializeModelLoaderConfigManager("model_loader_config.json");
 
+        SystemMonitor::getInstance().initializeOpenGL();
+
         // Initialize Native File Dialog
         NFD_Init();
 

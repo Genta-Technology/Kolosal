@@ -81,15 +81,15 @@ namespace Model
         std::string name;
         std::string author;
         std::map<std::string, ModelVariant> variants;
-        uint16_t hidden_size;
-        uint16_t attention_heads;
-        uint16_t hidden_layers;
-        uint16_t kv_heads;
+        float_t hidden_size;
+        float_t attention_heads;
+        float_t hidden_layers;
+        float_t kv_heads;
 
         // Constructor with no variants
         ModelData(const std::string& name = "", const std::string& author = "",
-            const uint16_t hidden_size = 0, const uint16_t attention_heads = 0,
-            const uint16_t hidden_layers = 0, const uint16_t kv_heads = 0)
+            const float_t hidden_size = 0, const float_t attention_heads = 0,
+            const float_t hidden_layers = 0, const float_t kv_heads = 0)
             : name(name), author(author), hidden_size(hidden_size), attention_heads(attention_heads)
             , hidden_layers(hidden_layers), kv_heads(kv_heads) {
         }

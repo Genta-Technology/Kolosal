@@ -36,6 +36,7 @@ public:
 
         // Get the instance of SystemMonitor
         SystemMonitor& sysMonitor = SystemMonitor::getInstance();
+		sysMonitor.update();
 
         // Only update metrics occasionally to reduce CPU impact
         auto currentTime = std::chrono::steady_clock::now();
@@ -106,6 +107,10 @@ public:
             // Create buttons for GPU metrics if available
             std::vector<ButtonConfig> buttonConfigs = { cpuUsageLabel, memoryUsageLabel };
 
+            // Right-align the time display
+            float contentWidth = ImGui::GetContentRegionAvail().x;
+            float timeWidth = 150;  // Approximate width needed for time display
+
             if (sysMonitor.hasGpuSupport()) {
                 size_t gpuUsageMB = sysMonitor.getUsedGpuMemoryByProcess() / (1024 * 1024);
                 ButtonConfig gpuUsageLabel;
@@ -114,11 +119,8 @@ public:
                 gpuUsageLabel.size = ImVec2(180, 20);
                 gpuUsageLabel.fontSize = FontsManager::SM;
                 buttonConfigs.push_back(gpuUsageLabel);
+                timeWidth += 180;
             }
-
-            // Right-align the time display
-            float contentWidth = ImGui::GetContentRegionAvail().x;
-            float timeWidth = 150;  // Approximate width needed for time display
 
             Button::renderGroup(buttonConfigs, contentWidth - timeWidth,
                 ImGui::GetCursorPosY() - 2, 0);

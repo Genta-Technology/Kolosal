@@ -965,6 +965,8 @@ namespace ModalWindow
         }
         
         ImGui::PushStyleColor(ImGuiCol_ModalWindowDimBg, ImVec4(0.0F, 0.0F, 0.0F, 0.5F));
+        ImGui::PushStyleColor(ImGuiCol_PopupBg,          ImVec4(0.075F, 0.075F, 0.075F, 1.0F));
+        ImGui::PushStyleColor(ImGuiCol_ScrollbarBg,      ImVec4(0, 0, 0, 0));
 
         ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5F, 0.5F));
         ImGui::SetNextWindowSize(config.size);
@@ -1006,7 +1008,7 @@ namespace ModalWindow
             ImGui::EndPopup();
         }
 
-        ImGui::PopStyleColor();
+        ImGui::PopStyleColor(3);
     }
 }
 

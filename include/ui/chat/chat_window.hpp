@@ -365,6 +365,23 @@ private:
                         s.erase(pos, titlePrefix.length());
                     }
 
+					// Remove any thinking tags (e.g., <think>...</think>)
+                    const std::string thinkStart = "<think>";
+                    const std::string thinkEnd = "</think>";
+                    size_t startPos = s.find(thinkStart);
+                    while (startPos != std::string::npos) {
+                        size_t endPos = s.find(thinkEnd, startPos + thinkStart.length());
+                        if (endPos != std::string::npos) {
+                            s.erase(startPos, endPos + thinkEnd.length() - startPos);
+                        }
+                        else {
+                            // If no matching end tag, remove from start tag to end of string
+                            s.erase(startPos);
+                            break;
+                        }
+                        startPos = s.find(thinkStart, startPos);
+                    }
+
                     // Trim whitespace
                     s.erase(0, s.find_first_not_of(" \t\n\r"));
                     if (!s.empty()) {
