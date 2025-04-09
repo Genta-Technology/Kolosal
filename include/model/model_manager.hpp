@@ -2461,7 +2461,7 @@ namespace Model
             return response;
         }
 
-        ThreadPool m_threadPool{ 4 };
+        ThreadPool m_threadPool{ std::max(4u, std::thread::hardware_concurrency() - 1) };
         std::unordered_map<int, std::atomic<bool>> m_activeJobs;
 
         mutable std::shared_mutex                       m_mutex;
