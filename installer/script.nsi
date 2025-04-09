@@ -23,7 +23,7 @@ Var IsUpgrade
 ;-----------------------------------
 ; Embed version info (metadata)
 ;-----------------------------------
-!define VERSION "0.1.7.0"
+!define VERSION "0.1.8.0"
 VIProductVersion "${VERSION}"
 VIAddVersionKey "ProductName" "Kolosal AI Installer"
 VIAddVersionKey "CompanyName" "Genta Technology"
@@ -142,15 +142,15 @@ Section "Kolosal AI" SecKolosalAI
   ; Force overwrite of existing files
   SetOverwrite on
   
-  ; If this is an upgrade, remove old files first (except chat history)
+  ; If this is an upgrade, remove old files first (except chat history and models folder)
   ${If} $IsUpgrade == "true"
     ; Display upgrade message
     DetailPrint "Upgrading from version $OldVersion to $NewVersion"
     
-    ; Remove previous program files but keep the directory structure
+    ; Remove previous program files but keep the models folder intact to preserve user-downloaded models.
     RMDir /r "$INSTDIR\assets"
     RMDir /r "$INSTDIR\fonts"
-    RMDir /r "$INSTDIR\models"
+    ; NOTE: Do NOT remove "$INSTDIR\models" so that any user-downloaded models are not deleted.
     Delete "$INSTDIR\*.dll"
     Delete "$INSTDIR\*.exe"
     Delete "$INSTDIR\LICENSE"
@@ -171,8 +171,8 @@ Section "Kolosal AI" SecKolosalAI
   File "libcrypto-3-x64.dll"
   File "libssl-3-x64.dll"
   File "libcurl.dll"
-  FILE "kolosal_server.dll"
-  FILE "vcomp140.dll"
+  File "kolosal_server.dll"
+  File "vcomp140.dll"
   File "LICENSE"
 
   ; Create and populate subdirectories
@@ -184,11 +184,12 @@ Section "Kolosal AI" SecKolosalAI
   SetOutPath "$INSTDIR\fonts"
   File /r "fonts\*.*"
 
+  ; Update files within models folder without deleting the folder itself
   CreateDirectory "$INSTDIR\models"
   SetOutPath "$INSTDIR\models"
   File /r "models\*.*"
 
-  ; Create chat history directory if it doesn't exist
+  ; Create chat history directory if it doesn't exist (for a new install)
   ${If} $IsUpgrade == "false"
     CreateDirectory "$ChatHistoryDir"
     AccessControl::GrantOnFile "$ChatHistoryDir" "(S-1-5-32-545)" "FullAccess"
@@ -211,9 +212,9 @@ Section "Kolosal AI" SecKolosalAI
   WriteRegStr HKLM "SOFTWARE\KolosalAI" "ChatHistory_Dir" "$ChatHistoryDir"
   WriteRegStr HKLM "SOFTWARE\KolosalAI" "Version" "${VERSION}"
   
-  WriteRegStr HKCU "Software\KolosalAI" "Install_Dir" "$INSTDIR"
-  WriteRegStr HKCU "Software\KolosalAI" "ChatHistory_Dir" "$ChatHistoryDir"
-  WriteRegStr HKCU "Software\KolosalAI" "Version" "${VERSION}"
+  WriteRegStr HKCU "SOFTWARE\KolosalAI" "Install_Dir" "$INSTDIR"
+  WriteRegStr HKCU "SOFTWARE\KolosalAI" "ChatHistory_Dir" "$ChatHistoryDir"
+  WriteRegStr HKCU "SOFTWARE\KolosalAI" "Version" "${VERSION}"
   
   ; Write uninstaller registry information
   WriteRegStr HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KolosalAI" "DisplayName" "Kolosal AI"
@@ -278,7 +279,7 @@ keepChatHistory:
   ; Remove directories and files
   RMDir /r "$INSTDIR\assets"
   RMDir /r "$INSTDIR\fonts"
-  RMDir /r "$INSTDIR\models"
+  RMDir /r "$INSTDIR\models"  ; For uninstallation, the entire models folder is removed.
   Delete "$INSTDIR\*.*"
   RMDir "$INSTDIR"
 
