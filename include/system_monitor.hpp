@@ -84,11 +84,11 @@ public:
         size_t totalRequiredMemory = modelSizeBytes + kvCacheSizeBytes;
 
         // Add 20% overhead for safety margin
-        totalRequiredMemory = static_cast<size_t>(totalRequiredMemory * 1.2);
+        totalRequiredMemory = static_cast<size_t>(totalRequiredMemory);
 
         if (m_gpuMonitoringSupported) {
             // Check if GPU has enough available memory
-            if (m_availableGpuMemory < totalRequiredMemory) {
+            if (m_availableGpuMemory + GB < totalRequiredMemory) {
                 return false;
             }
             return true;
@@ -119,6 +119,10 @@ public:
 
             m_lastCpuMeasurement = currentTime;
         }
+    }
+
+    const std::string getGpuName() const {
+        return m_gpuName;
     }
 
 private:
@@ -179,6 +183,7 @@ private:
 
     // GPU monitoring members
     bool m_gpuMonitoringSupported{ false };
+    std::string         m_gpuName;
     std::atomic<size_t> m_totalGpuMemory{ 0 };
     std::atomic<size_t> m_availableGpuMemory{ 0 };
     std::atomic<size_t> m_usedGpuMemory{ 0 };
@@ -340,9 +345,11 @@ private:
             return;
         }
 
-        // Enumerate adapters and choose a dedicated one (NVIDIA or AMD)
+        // Enumerate all adapters and find the one with the highest memory
         IDXGIAdapter* adapter = nullptr;
-        IDXGIAdapter3* dedicatedAdapter = nullptr;
+        IDXGIAdapter3* highestMemoryAdapter = nullptr;
+        size_t highestMemory = 0;
+
         for (UINT i = 0; m_dxgiFactory->EnumAdapters(i, &adapter) != DXGI_ERROR_NOT_FOUND; i++) {
             IDXGIAdapter3* adapter3 = nullptr;
             hr = adapter->QueryInterface(__uuidof(IDXGIAdapter3), reinterpret_cast<void**>(&adapter3));
@@ -350,27 +357,54 @@ private:
                 DXGI_ADAPTER_DESC desc;
                 hr = adapter3->GetDesc(&desc);
                 if (SUCCEEDED(hr)) {
-                    // Check for NVIDIA (0x10DE) or AMD (0x1002)
-                    if (desc.VendorId == 0x10DE || desc.VendorId == 0x1002) {
-                        dedicatedAdapter = adapter3;
-                        adapter->Release();
-                        break;
+                    // Check the dedicated video memory
+                    size_t adapterMemory = desc.DedicatedVideoMemory;
+
+                    // Only consider adapters with at least 1GB of memory
+                    if (adapterMemory >= GB) {
+                        if (adapterMemory > highestMemory) {
+                            highestMemory = adapterMemory;
+                            if (highestMemoryAdapter) {
+                                highestMemoryAdapter->Release();
+                            }
+                            highestMemoryAdapter = adapter3;
+                        }
+                        else {
+                            adapter3->Release();
+                        }
+                    }
+                    else {
+                        adapter3->Release();
                     }
                 }
-                adapter3->Release();
             }
             adapter->Release();
         }
 
-        if (!dedicatedAdapter) {
-            std::cerr << "[SystemMonitor] No dedicated NVIDIA/AMD GPU found." << std::endl;
+        if (!highestMemoryAdapter) {
+            std::cerr << "[SystemMonitor] No suitable GPU found with at least 1GB of memory." << std::endl;
             m_gpuMonitoringSupported = false;
             return;
         }
 
-        m_dxgiAdapter = dedicatedAdapter;
+        m_dxgiAdapter = highestMemoryAdapter;
         m_gpuMonitoringSupported = true;
         updateDirectXGpuStats();
+
+        // Print GPU name and memory details
+        DXGI_ADAPTER_DESC adapterDesc;
+        hr = m_dxgiAdapter->GetDesc(&adapterDesc);
+        if (SUCCEEDED(hr)) {
+            std::wstring gpuName(adapterDesc.Description);
+            m_gpuName = std::string(gpuName.begin(), gpuName.end());
+
+            std::wcout << L"[SystemMonitor] Selected GPU: " << adapterDesc.Description << std::endl;
+            std::wcout << L"[SystemMonitor] Total GPU Memory: " << (adapterDesc.DedicatedVideoMemory / GB) << L" GB" << std::endl;
+            std::wcout << L"[SystemMonitor] Available GPU Memory: " << (m_availableGpuMemory / GB) << L" GB" << std::endl;
+        }
+        else {
+            std::cerr << "[SystemMonitor] Failed to get GPU description." << std::endl;
+        }
     }
 
     void updateDirectXGpuStats() {

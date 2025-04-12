@@ -36,7 +36,7 @@ public:
 
         // Get the instance of SystemMonitor
         SystemMonitor& sysMonitor = SystemMonitor::getInstance();
-		sysMonitor.update();
+        sysMonitor.update();
 
         // Only update metrics occasionally to reduce CPU impact
         auto currentTime = std::chrono::steady_clock::now();
@@ -69,6 +69,20 @@ public:
         ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.1f, 0.4f));
 
+        // Helper function to format memory size
+        auto formatMemory = [](size_t memorySizeMB) -> std::string {
+            if (memorySizeMB >= 1024) {
+                // Convert to GB with 2 decimal places
+                double memorySizeGB = memorySizeMB / 1024.0;
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << memorySizeGB;
+                return ss.str() + " GB";
+            }
+            else {
+                return std::to_string(memorySizeMB) + " MB";
+            }
+            };
+
         if (ImGui::Begin("##StatusBar", nullptr, window_flags)) {
             // Left side: Version
             LabelConfig versionLabel;
@@ -86,10 +100,29 @@ public:
             // Get metrics from SystemMonitor
             float cpuUsage = sysMonitor.getCpuUsagePercentage();
             size_t memoryUsageMB = sysMonitor.getUsedMemoryByProcess() / (1024 * 1024);
+            size_t memoryTotalMB = sysMonitor.getTotalSystemMemory() / (1024 * 1024);
 
             // Format the CPU usage with one decimal place
             std::stringstream cpuSS;
             cpuSS << std::fixed << std::setprecision(1) << cpuUsage;
+
+            // Right-align the time display
+            float contentWidth = ImGui::GetContentRegionAvail().x;
+            float timeWidth = 180;  // Approximate width needed for time display
+
+            std::vector<ButtonConfig> buttonConfigs;
+
+            if (sysMonitor.hasGpuSupport()) {
+                ButtonConfig gpuLabel;
+                gpuLabel.id = "##gpuLabel";
+                gpuLabel.label = "Using " + sysMonitor.getGpuName();
+                gpuLabel.size = ImVec2(300, 20);
+                gpuLabel.fontSize = FontsManager::SM;
+
+                buttonConfigs.push_back(gpuLabel);
+
+                timeWidth += 300;
+            }
 
             // Prepare buttons for system metrics
             ButtonConfig cpuUsageLabel;
@@ -98,28 +131,26 @@ public:
             cpuUsageLabel.size = ImVec2(100, 20);
             cpuUsageLabel.fontSize = FontsManager::SM;
 
+            buttonConfigs.push_back(cpuUsageLabel);
+
             ButtonConfig memoryUsageLabel;
             memoryUsageLabel.id = "##memoryUsageLabel";
-            memoryUsageLabel.label = "Memory: " + std::to_string(memoryUsageMB) + " MB";
-            memoryUsageLabel.size = ImVec2(150, 20);
+            memoryUsageLabel.label = "Memory: " + formatMemory(memoryUsageMB) + " / " + formatMemory(memoryTotalMB);
+            memoryUsageLabel.size = ImVec2(170, 20);  // Adjusted size to accommodate GB format
             memoryUsageLabel.fontSize = FontsManager::SM;
 
-            // Create buttons for GPU metrics if available
-            std::vector<ButtonConfig> buttonConfigs = { cpuUsageLabel, memoryUsageLabel };
-
-            // Right-align the time display
-            float contentWidth = ImGui::GetContentRegionAvail().x;
-            float timeWidth = 150;  // Approximate width needed for time display
+            buttonConfigs.push_back(memoryUsageLabel);
 
             if (sysMonitor.hasGpuSupport()) {
                 size_t gpuUsageMB = sysMonitor.getUsedGpuMemoryByProcess() / (1024 * 1024);
+                size_t gpuTotalMB = sysMonitor.getTotalGpuMemory() / (1024 * 1024);
                 ButtonConfig gpuUsageLabel;
                 gpuUsageLabel.id = "##gpuUsageLabel";
-                gpuUsageLabel.label = "GPU Memory: " + std::to_string(gpuUsageMB) + " MB";
-                gpuUsageLabel.size = ImVec2(180, 20);
+                gpuUsageLabel.label = "GPU Memory: " + formatMemory(gpuUsageMB) + " / " + formatMemory(gpuTotalMB);
+                gpuUsageLabel.size = ImVec2(245, 20);  // Adjusted size to accommodate GB format
                 gpuUsageLabel.fontSize = FontsManager::SM;
                 buttonConfigs.push_back(gpuUsageLabel);
-                timeWidth += 180;
+                timeWidth += 255;
             }
 
             Button::renderGroup(buttonConfigs, contentWidth - timeWidth,

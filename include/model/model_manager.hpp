@@ -116,6 +116,13 @@ namespace Model
                 return false; // Model not found
             }
 
+            // Save previous model name (if any) for potential unloading
+            std::string prevModelName = m_currentModelName.value_or("");
+            bool shouldUnloadPrevious = m_modelLoaded &&
+                                        !prevModelName.empty() &&
+                                        prevModelName != modelName &&
+                                        m_inferenceEngines.count(prevModelName) > 0;
+
             // Update state with the new model/variant
             m_currentModelName = modelName;
             m_currentVariantType = variantType;
@@ -134,23 +141,58 @@ namespace Model
             }
 
             // Prevent concurrent model loading
-            if (!m_loadInProgress.empty()) {
-                std::cerr << "[ModelManager] Already loading a model, cannot switch now\n";
+            if (!m_loadInProgress.empty() || !m_unloadInProgress.empty()) {
+                std::cerr << "[ModelManager] Already loading or unloading a model, cannot switch now\n";
                 return false;
             }
 
             m_loadInProgress = modelName;
 
+            // If we have a previous model to unload, mark it for unloading
+            if (shouldUnloadPrevious) {
+                m_unloadInProgress = prevModelName;
+            }
+
             // Release lock before async operations
             lock.unlock();
 
-            // Start async loading process
-            auto loadFuture = loadModelIntoEngineAsync(modelName);
-
-            // Handle load completion
+            // Start async loading process with unload first if needed
             m_loadFutures.emplace_back(std::async(std::launch::async,
-                [this, modelName, loadFuture = std::move(loadFuture), variant]() mutable {
+                [this, modelName, prevModelName, shouldUnloadPrevious, variant]() mutable {
+                    bool unloadSuccessful = true;
+
+                    // Step 1: Unload previous model if needed
+                    if (shouldUnloadPrevious) {
+                        std::cout << "[ModelManager] Unloading previous model before loading new one\n";
+
+                        auto unloadFuture = unloadModelAsync(prevModelName);
+
+                        try {
+                            unloadSuccessful = unloadFuture.get();
+                        }
+                        catch (const std::exception& e) {
+                            std::cerr << "[ModelManager] Error unloading previous model: " << e.what() << "\n";
+                            unloadSuccessful = false;
+                        }
+
+                        {
+                            std::unique_lock<std::shared_mutex> lock(m_mutex);
+                            m_unloadInProgress = "";
+
+                            if (!unloadSuccessful) {
+                                m_loadInProgress = "";
+                                std::cerr << "[ModelManager] Failed to unload previous model, aborting switch\n";
+                                return;
+                            }
+                        }
+
+                        std::cout << "[ModelManager] Successfully unloaded previous model\n";
+                    }
+
+                    // Step 2: Load the new model
                     bool success = false;
+                    auto loadFuture = loadModelIntoEngineAsync(modelName);
+
                     try {
                         success = loadFuture.get();
                     }
@@ -1788,6 +1830,7 @@ namespace Model
 
                 loadModels();  // blocking
                 m_isVulkanBackend = useVulkanBackend();
+                //m_isVulkanBackend = true;
                 std::string backendName = "InferenceEngineLib.dll";
 
                 if (m_isVulkanBackend)
@@ -2316,18 +2359,25 @@ namespace Model
                 auto engine = m_createInferenceEnginePtr();
                 if (!engine) return false;
 
-                bool success = engine->loadModel(modelDir->c_str(), ModelLoaderConfigManager::getInstance().getConfig());
-                if (success) {
-                    std::unique_lock lock(m_mutex);
-                    m_inferenceEngines[modelName] = engine;
-                    std::cout << "[ModelManager] size of inference engines: " << sizeof(m_inferenceEngines) << std::endl;
-                    m_modelLoaded = true;
-                }
-                else {
-                    std::cerr << "Model load failed\n";
-                }
+                try {
+                    bool success = engine->loadModel(modelDir->c_str(), ModelLoaderConfigManager::getInstance().getConfig());
 
-                return success;
+                    if (success) {
+                        std::unique_lock lock(m_mutex);
+                        m_inferenceEngines[modelName] = engine;
+                        std::cout << "[ModelManager] size of inference engines: " << sizeof(m_inferenceEngines) << std::endl;
+                        m_modelLoaded = true;
+                    }
+                    else {
+                        std::cerr << "Model load failed\n";
+                    }
+
+                    return success;
+				}
+				catch (const std::exception& e) {
+					std::cerr << "[ModelManager] Exception while loading model: " << e.what() << "\n";
+					return false;
+				}
                 });
         }
 

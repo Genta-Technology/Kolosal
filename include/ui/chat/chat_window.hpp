@@ -180,6 +180,9 @@ public:
         clearChatButtonConfig.tooltip = "Clear Chat";
         clearChatButtonConfig.onClick = [this]() { clearChatModal.open(); };
 
+        addFilesButtonConfig.id = "##addFilesButton";
+        
+
         sendButtonConfig.id = "##sendButton";
         sendButtonConfig.icon = ICON_CI_SEND;
         sendButtonConfig.size = ImVec2(24, 0);
@@ -589,6 +592,7 @@ private:
     ButtonConfig renameButtonConfig;
     ButtonConfig openModelManagerConfig;
     ButtonConfig clearChatButtonConfig;
+    ButtonConfig addFilesButtonConfig;
     ButtonConfig sendButtonConfig;
     std::string inputPlaceholderText;
 
