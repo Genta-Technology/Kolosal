@@ -1003,8 +1003,19 @@ public:
             }
         }
         else {
-            bool isLoadingSelected = manager.isLoadInProgress() && m_model.name == manager.getCurrentOnLoadingModel();
-			bool isUnloading = manager.isUnloadInProgress() && m_model.name == manager.getCurrentOnUnloadingModel();
+			std::string loadingModel = manager.getCurrentOnLoadingModel();
+			std::string unloadingModel = manager.getCurrentOnUnloadingModel();
+
+			// get model name only from modelName:variant format on loading/unloading model
+			if (loadingModel.find(':') != std::string::npos) {
+				loadingModel = loadingModel.substr(0, loadingModel.find(':'));
+			}
+			if (unloadingModel.find(':') != std::string::npos) {
+				unloadingModel = unloadingModel.substr(0, unloadingModel.find(':'));
+			}
+
+            bool isLoadingSelected = manager.isLoadInProgress() && m_model.name == loadingModel;
+			bool isUnloading = manager.isUnloadInProgress() && m_model.name == unloadingModel;
 
             // Configure button label and base state
             if (isLoadingSelected || isUnloading) {

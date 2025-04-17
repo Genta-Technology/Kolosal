@@ -83,12 +83,38 @@ public:
 				nameLabel.alignment = Alignment::LEFT;
 				Label::render(nameLabel);
 
+                // Add reload button if model params have changed
+                if (serverState.haveModelParamsChanged(modelId)) {
+                    ButtonConfig reloadModelButtonConfig;
+                    reloadModelButtonConfig.id = "##reload_model_button" + modelId;
+                    reloadModelButtonConfig.icon = ICON_CI_REFRESH;
+                    reloadModelButtonConfig.tooltip = "Reload model with new parameters";
+                    reloadModelButtonConfig.size = ImVec2(24, 24);
+                    reloadModelButtonConfig.alignment = Alignment::CENTER;
+                    reloadModelButtonConfig.backgroundColor = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
+                    reloadModelButtonConfig.onClick = [this, &modelName, &modelVariant, &modelId, &modelManager, &serverState]() {
+						// unload, wait, then load the model again
+						modelManager.reloadModel(modelName, modelVariant);
+                        serverState.resetModelParamsChanged(modelId);
+                        };
+
+                    // Disable the reload button if server is running or model is loading
+                    if (serverState.isServerRunning() || serverState.isModelLoadInProgress()) {
+                        reloadModelButtonConfig.state = ButtonState::DISABLED;
+                    }
+
+                    ImGui::SameLine();
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 30);
+                    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
+                    Button::render(reloadModelButtonConfig);
+                }
+
                 // name id
                 ButtonConfig nameButton;
                 nameButton.id = "##modelNameId" + modelId;
                 nameButton.label = modelId;
                 nameButton.icon = ICON_CI_COPY;
-                nameButton.size = ImVec2(ImGui::GetContentRegionAvail().x - (serverState.haveModelParamsChanged() ? 28 : 0), 0);
+                nameButton.size = ImVec2(ImGui::GetContentRegionAvail().x, 0);
                 nameButton.fontType = FontsManager::BOLD;
                 nameButton.fontSize = FontsManager::SM;
                 nameButton.alignment = Alignment::LEFT;
@@ -132,37 +158,10 @@ public:
 					ImGui::EndGroup();
                 }
 
-                // Add reload button if model params have changed
-                if (serverState.haveModelParamsChanged()) {
-                    ButtonConfig reloadModelButtonConfig;
-                    reloadModelButtonConfig.id = "##reload_model_button" + modelId;
-                    reloadModelButtonConfig.icon = ICON_CI_REFRESH;
-                    reloadModelButtonConfig.tooltip = "Reload model with new parameters";
-                    reloadModelButtonConfig.size = ImVec2(24, 24);
-                    reloadModelButtonConfig.alignment = Alignment::CENTER;
-                    reloadModelButtonConfig.backgroundColor = ImVec4(0.2f, 0.2f, 0.2f, 1.0f);
-                    reloadModelButtonConfig.onClick = [this, &modelData, &modelManager, &serverState]() {
-                        modelManager.switchModel(
-                            modelData->name,
-							modelManager.getCurrentVariantForModel(modelData->name),
-							true // Force reload
-                        );
-                        serverState.resetModelParamsChanged();
-                        };
-
-                    // Disable the reload button if server is running or model is loading
-                    if (serverState.isServerRunning() || serverState.isModelLoadInProgress()) {
-                        reloadModelButtonConfig.state = ButtonState::DISABLED;
-                    }
-
-                    ImGui::SameLine();
-                    ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
-					Button::render(reloadModelButtonConfig);
-                }
-
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
 
-                if (modelManager.isLoadInProgress() && modelData->name == modelManager.getCurrentOnLoadingModel())
+                if ((modelManager.isLoadInProgress() && modelId == modelManager.getCurrentOnLoadingModel()) ||
+                    (modelManager.isUnloadInProgress() && modelId == modelManager.getCurrentOnUnloadingModel()))
                 {
                     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ImGui::GetContentRegionAvail().y - 40);
 					ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4);

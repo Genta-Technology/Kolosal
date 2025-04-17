@@ -40,14 +40,30 @@ public:
     }
 
     // Model parameters change tracking
-    bool haveModelParamsChanged() const { return m_modelParamsChanged; }
-    void setModelParamsChanged(bool changed) { m_modelParamsChanged = changed; }
-    void resetModelParamsChanged() { m_modelParamsChanged = false; }
+    bool haveModelParamsChanged(const std::string modelId) const { 
+		return std::find(m_modelNeedsReload.begin(), m_modelNeedsReload.end(), modelId) != m_modelNeedsReload.end();
+    }
+
+    void setModelParamsChanged() { 
+		auto& modelManager = Model::ModelManager::getInstance();
+		auto models = modelManager.getModelIds();
+		for (const auto& modelData : models) {
+			m_modelNeedsReload.push_back(modelData);
+		}
+    }
+
+    void resetModelParamsChanged(const std::string modelId) { 
+		if (m_modelNeedsReload.size() > 0) {
+			auto it = std::remove(m_modelNeedsReload.begin(), m_modelNeedsReload.end(), modelId);
+			m_modelNeedsReload.erase(it, m_modelNeedsReload.end());
+		}
+    }
 
 private:
-    ServerStateManager() : m_serverRunning(false), m_serverPort(8080), m_modelParamsChanged(false) {}
+    ServerStateManager() : m_serverRunning(false), m_serverPort(8080) {}
+
+	std::vector<std::string> m_modelNeedsReload;
 
     bool m_serverRunning;
-    int m_serverPort;
-    bool m_modelParamsChanged;
+    int  m_serverPort;
 };

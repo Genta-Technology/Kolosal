@@ -109,6 +109,103 @@ namespace Model
                 }));
         }
 
+		bool reloadModel(const std::string modelName, const std::string variant)
+		{
+			std::unique_lock<std::shared_mutex> lock(m_mutex);
+			std::string modelId = modelName + ":" + variant;
+			if (m_inferenceEngines.find(modelId) == m_inferenceEngines.end())
+			{
+				std::cerr << "[ModelManager] Model not loaded, cannot reload, model id: " << modelId << std::endl;
+				return false;
+			}
+			// Check if model is already loading
+			if (!m_loadInProgress.empty())
+			{
+				std::cerr << "[ModelManager] Load already in progress\n";
+				return false;
+			}
+			// Check if model is already unloading
+			if (!m_unloadInProgress.empty())
+			{
+				std::cerr << "[ModelManager] Unload already in progress\n";
+				return false;
+			}
+			// Check if model is not loaded
+			if (m_inferenceEngines.find(modelId) == m_inferenceEngines.end())
+			{
+				std::cerr << "[ModelManager] Model not loaded, cannot reload, model id: " << modelId << std::endl;
+				return false;
+			}
+
+			// unload then load
+			m_unloadInProgress = modelId;
+			lock.unlock();
+			
+			m_loadFutures.emplace_back(std::async(std::launch::async,
+                [this, modelId, modelName, variant]() mutable {
+					bool unloadSuccessful = false;
+
+                    {
+                        auto unloadFuture = unloadModelAsync(modelName, variant);
+
+                        try {
+                            unloadSuccessful = unloadFuture.get();
+                        }
+                        catch (const std::exception& e) {
+                            std::cerr << "[ModelManager] Error unloading model: " << e.what() << "\n";
+                            unloadSuccessful = false;
+                        }
+
+                        {
+                            std::unique_lock<std::shared_mutex> lock(m_mutex);
+                            m_unloadInProgress = "";
+
+                            if (!unloadSuccessful) {
+                                std::cerr << "[ModelManager] Failed to unload model, aborting reload\n";
+                                return;
+                            }
+                        }
+
+						std::cout << "[ModelManager] Successfully unloaded model\n";
+                    }
+
+					m_loadInProgress = modelId;
+
+                    {
+						// Start async loading process
+						auto loadFuture = loadModelIntoEngineAsync(modelName + ":" + variant);
+						bool success = false;
+						try {
+							success = loadFuture.get();
+						}
+						catch (const std::exception& e) {
+							std::cerr << "[ModelManager] Model load error: " << e.what() << "\n";
+						}
+						{
+							std::unique_lock<std::shared_mutex> lock(m_mutex);
+							m_loadInProgress = "";
+							if (success) {
+								std::cout << "[ModelManager] Successfully reloaded model\n";
+							}
+							else {
+								// Clean up the failed engine
+								cleanupFailedEngine(modelName);
+								std::cerr << "[ModelManager] Failed to reload model\n";
+							}
+						}
+                    }
+
+					// Cleanup completed futures
+					m_loadFutures.erase(
+						std::remove_if(m_loadFutures.begin(), m_loadFutures.end(),
+							[](const std::future<void>& f) {
+								return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+							}),
+						m_loadFutures.end()
+					);
+				}));
+		}
+
         // Switch to a specific model variant. If not downloaded, trigger download.
         bool switchModel(const std::string& modelName, const std::string& variantType, const bool forceUnload = false)
         {
@@ -153,7 +250,7 @@ namespace Model
                 return false;
             }
 
-            m_loadInProgress = modelName;
+            m_loadInProgress = modelName + ":" + variantType;
 
             // If we have a previous model to unload, mark it for unloading
             if (shouldUnloadPrevious) {
@@ -393,6 +490,17 @@ namespace Model
         {
             std::shared_lock<std::shared_mutex> lock(m_mutex);
             return m_models;
+        }
+
+        std::vector<std::string> getModelIds() const
+        {
+			std::shared_lock<std::shared_mutex> lock(m_mutex);
+			std::vector<std::string> modelIds;
+			modelIds.reserve(m_inferenceEngines.size());
+            for (const auto& pair : m_inferenceEngines) {
+                modelIds.push_back(pair.first);
+            }
+			return modelIds;
         }
 
         std::optional<std::string> getCurrentModelName() const
@@ -1940,11 +2048,6 @@ namespace Model
 		std::string getCurrentOnLoadingModel() const
 		{
 			std::shared_lock<std::shared_mutex> lock(m_mutex);
-			// get the model name only from model_name:variant_type format
-			auto pos = m_loadInProgress.find(':');
-			if (pos != std::string::npos) {
-				return m_loadInProgress.substr(0, pos);
-			}
 			return m_loadInProgress;
 		}
 
@@ -1957,11 +2060,6 @@ namespace Model
 		std::string getCurrentOnUnloadingModel() const
 		{
 			std::shared_lock<std::shared_mutex> lock(m_mutex);
-			// get the model name only from model_name:variant_type format
-			auto pos = m_unloadInProgress.find(':');
-			if (pos != std::string::npos) {
-				return m_unloadInProgress.substr(0, pos);
-			}
 			return m_unloadInProgress;
 		}
 
@@ -2403,7 +2501,7 @@ namespace Model
                             // Unlock before loading the model.
                             lock.unlock();
 
-                            auto loadFuture = loadModelIntoEngineAsync(modelName);
+                            auto loadFuture = loadModelIntoEngineAsync(modelName + ":" + variantType);
                             if (!loadFuture.get())
                             {
                                 std::unique_lock<std::shared_mutex> restoreLock(m_mutex);
@@ -2665,15 +2763,23 @@ namespace Model
             return true;
         }
 
-        std::future<bool> loadModelIntoEngineAsync(const std::string& modelName) {
-            std::string modelNameCleaned = modelName;
-            if (modelNameCleaned.find(":") != std::string::npos) {
-                size_t pos = modelNameCleaned.find(":");
-                modelNameCleaned = modelName.substr(0, pos);
-            }
+        std::future<bool> loadModelIntoEngineAsync(const std::string& modelId) {
+            std::string modelName;
+            std::string modelVariant;
+			std::string::size_type pos = modelId.find(':');
+			if (pos != std::string::npos) {
+				modelName = modelId.substr(0, pos);
+				modelVariant = modelId.substr(pos + 1);
+			}
+			else {
+				std::cerr << "[ModelManager] Invalid model ID format: " << modelId << "\n";
+				std::promise<bool> promise;
+				promise.set_value(false);
+				return promise.get_future();
+			}
 
-            if (!hasEnoughMemoryForModel(modelNameCleaned)) {
-				std::cerr << "[ModelManager] Not enough memory for model: " << modelName << "\n";
+            if (!hasEnoughMemoryForModel(modelName)) {
+				std::cerr << "[ModelManager] Not enough memory for model: " << modelId << "\n";
                 std::promise<bool> promise;
                 promise.set_value(false);
                 return promise.get_future();
@@ -2682,7 +2788,7 @@ namespace Model
 			// if model is already in m_inferenceEngines, return true
 			{
 				std::shared_lock lock(m_mutex);
-				if (m_inferenceEngines.find(modelName) != m_inferenceEngines.end()) {
+				if (m_inferenceEngines.find(modelId) != m_inferenceEngines.end()) {
 					std::cout << "[ModelManager] Model already loaded\n";
 					std::promise<bool> promise;
 					promise.set_value(true);
@@ -2694,8 +2800,8 @@ namespace Model
             Model::ModelVariant* variant;
             {
                 std::shared_lock lock(m_mutex);
-                int index = m_modelNameToIndex[modelNameCleaned];
-                variant = getVariantLocked(index, getCurrentVariantForModel(modelNameCleaned));
+                int index = m_modelNameToIndex[modelName];
+                variant = getVariantLocked(index, getCurrentVariantForModel(modelName));
                 if (!variant || !variant->isDownloaded) {
 					std::cout << "[ModelManager] Model not downloaded or variant not found\n";
                     std::promise<bool> promise;
@@ -2707,7 +2813,7 @@ namespace Model
                     variant->path.substr(0, variant->path.find_last_of("/\\"))).string();
             }
 
-            return m_threadPool.enqueue([this, modelName = modelNameCleaned, variantName = variant->type, modelDir]() {
+            return m_threadPool.enqueue([this, modelName = modelName, variantName = variant->type, modelDir]() {
 				std::cout << "[ModelManager] size of inference engines: " << sizeof(m_inferenceEngines) << std::endl;
 
                 auto engine = m_createInferenceEnginePtr();

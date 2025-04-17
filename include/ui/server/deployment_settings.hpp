@@ -59,7 +59,7 @@ public:
                 }
 
                 configManager.saveConfig(); // Auto-save on change
-                serverState.setModelParamsChanged(true); // Mark params as changed
+                serverState.setModelParamsChanged(); // Mark params as changed
             }
         }
 
@@ -72,7 +72,7 @@ public:
             if (new_n_keep != n_keep) {
                 configManager.setKeepSize(new_n_keep);
                 configManager.saveConfig(); // Auto-save on change
-                serverState.setModelParamsChanged(true); // Mark params as changed
+                serverState.setModelParamsChanged(); // Mark params as changed
             }
         }
 
@@ -85,7 +85,7 @@ public:
             if (new_n_gpu_layers != n_gpu_layers) {
                 configManager.setGpuLayers(new_n_gpu_layers);
                 configManager.saveConfig(); // Auto-save on change
-                serverState.setModelParamsChanged(true); // Mark params as changed
+                serverState.setModelParamsChanged(); // Mark params as changed
             }
         }
 
@@ -94,7 +94,7 @@ public:
             [&configManager, &serverState](bool value) {
                 configManager.setUseMlock(value);
                 configManager.saveConfig();
-                serverState.setModelParamsChanged(true); // Mark params as changed
+                serverState.setModelParamsChanged(); // Mark params as changed
             },
             "Locks memory to prevent swapping to disk");
 
@@ -103,7 +103,7 @@ public:
             [&configManager, &serverState](bool value) {
                 configManager.setUseMmap(value);
                 configManager.saveConfig();
-                serverState.setModelParamsChanged(true); // Mark params as changed
+                serverState.setModelParamsChanged(); // Mark params as changed
             },
             "Use memory mapping for model weights");
 
@@ -114,7 +114,7 @@ public:
         if (n_parallel != configManager.getParallelCount()) {
             configManager.setParallelCount(n_parallel);
             configManager.saveConfig();
-            serverState.setModelParamsChanged(true); // Mark params as changed
+            serverState.setModelParamsChanged(); // Mark params as changed
         }
 
 		// n_batch slider (max number of tokens to process at each iteration) - using float for slider then converting back to int
@@ -126,7 +126,7 @@ public:
 			if (new_n_batch != n_batch) {
 				configManager.setBatchSize(new_n_batch);
 				configManager.saveConfig(); // Auto-save on change
-				serverState.setModelParamsChanged(true); // Mark params as changed
+				serverState.setModelParamsChanged(); // Mark params as changed
 			}
 		}
 
@@ -135,7 +135,7 @@ public:
             [&configManager, &serverState](bool value) {
                 configManager.setContinuousBatching(value);
                 configManager.saveConfig();
-                serverState.setModelParamsChanged(true); // Mark params as changed
+                serverState.setModelParamsChanged(); // Mark params as changed
             },
             "Enable continuous batching for better performance");
 
@@ -144,7 +144,7 @@ public:
             [&configManager, &serverState](bool value) {
                 configManager.setWarmup(value);
                 configManager.saveConfig();
-                serverState.setModelParamsChanged(true); // Mark params as changed
+                serverState.setModelParamsChanged(); // Mark params as changed
             },
             "Run model warmup at initialization");
     }
