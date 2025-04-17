@@ -23,7 +23,7 @@ Var IsUpgrade
 ;-----------------------------------
 ; Embed version info (metadata)
 ;-----------------------------------
-!define VERSION "0.1.8.0"
+!define VERSION "0.1.9.0"
 VIProductVersion "${VERSION}"
 VIAddVersionKey "ProductName" "Kolosal AI Installer"
 VIAddVersionKey "CompanyName" "Genta Technology"

@@ -6,8 +6,8 @@
   "hidden_layers": 16,
   "kv_heads": 8,
   "variants": {
-    "Full Precision": {
-      "type": "Full Precision",
+    "fp16": {
+      "type": "fp16",
       "path": "models/llama-3.2-1B/fp16/Llama-3.2-1B-Instruct-f16.gguf",
       "downloadLink": "https://huggingface.co/kolosal/llama-3.2-1b/resolve/main/Llama-3.2-1B-Instruct-f16.gguf",
       "isDownloaded": false,
@@ -15,8 +15,8 @@
       "lastSelected": 0,
       "size": 2.48
     },
-    "8-bit Quantized": {
-      "type": "8-bit Quantized",
+    "8-bit": {
+      "type": "8-bit",
       "path": "models/llama-3.2-1B/int8/Llama-3.2-1B-Instruct-Q8_0.gguf",
       "downloadLink": "https://huggingface.co/kolosal/llama-3.2-1b/resolve/main/Llama-3.2-1B-Instruct-Q8_0.gguf",
       "isDownloaded": false,
@@ -24,8 +24,8 @@
       "lastSelected": 0,
       "size": 1.32
     },
-    "4-bit Quantized": {
-      "type": "4-bit Quantized",
+    "4-bit": {
+      "type": "4-bit",
       "path": "models/llama-3.2-1B/int4/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
       "downloadLink": "https://huggingface.co/kolosal/llama-3.2-1b/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
       "isDownloaded": false,

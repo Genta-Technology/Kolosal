@@ -352,7 +352,7 @@ private:
             auto& chatManager = Chat::ChatManager::getInstance();
 
             // Generate the title (synchronous call)
-            CompletionResult titleResult = modelManager.chatCompleteSync(titleParams, modelManager.getCurrentModelName().value(), false);
+            CompletionResult titleResult = modelManager.chatCompleteSync(titleParams, modelManager.getCurrentModelName().value(), modelManager.getCurrentVariantType(), false);
 
             if (!titleResult.text.empty()) {
                 // Clean up the generated title
@@ -463,7 +463,7 @@ private:
 
         auto& modelManager = Model::ModelManager::getInstance();
         int jobId = modelManager.startChatCompletionJob(completionParams, chatStreamingCallback,
-            modelManager.getCurrentModelName().value());
+            modelManager.getCurrentModelName().value(), modelManager.getCurrentVariantType());
         if (!chatManager.setCurrentJobId(jobId)) {
             std::cerr << "[ChatSection] Failed to set the current job ID.\n";
         }
@@ -531,7 +531,8 @@ private:
             sendButtonConfig.onClick = []() {
                 Model::ModelManager::getInstance().stopJob(
                     Chat::ChatManager::getInstance().getCurrentJobId(),
-					Model::ModelManager::getInstance().getCurrentModelName().value()
+					Model::ModelManager::getInstance().getCurrentModelName().value(),
+					Model::ModelManager::getInstance().getCurrentVariantType()
                 );
                 };
             sendButtonConfig.state = ButtonState::NORMAL;

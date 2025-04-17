@@ -916,7 +916,7 @@ private:
 
 class ModelCardRenderer {
 public:
-    ModelCardRenderer(int index, const Model::ModelData& modelData,
+    ModelCardRenderer(const int index, const Model::ModelData& modelData,
         std::function<void(int, const std::string&)> onDeleteRequested, std::string id = "", bool allowSwitching = true)
         : m_index(index), m_model(modelData), m_onDeleteRequested(onDeleteRequested), m_id(id)
     {
@@ -1018,7 +1018,7 @@ public:
                     selectButton.label = isSelected ? "Selected" : "Select";
                 }
                 else {
-                    selectButton.label = manager.isModelLoaded(m_model.name)
+                    selectButton.label = manager.isModelInServer(m_model.name, manager.getCurrentVariantForModel(m_model.name))
                         ? "Unload" : "Load Model";
                 }
             }
@@ -1033,33 +1033,36 @@ public:
 
             // Common properties
             selectButton.onClick = [this, &manager]() {
+                std::string variant = manager.getCurrentVariantForModel(m_model.name);
+
                 if (m_allowSwitching)
                 {
-                    std::string variant = manager.getCurrentVariantForModel(m_model.name);
                     manager.switchModel(m_model.name, variant);
                 }
                 else
                 {
-                    if (manager.isModelLoaded(m_model.name))
+                    if (manager.isModelInServer(m_model.name, variant))
                     {
-						manager.unloadModel(m_model.name);
-					}
+                        if (manager.unloadModel(m_model.name, variant))
+                            manager.removeModelFromServer(m_model.name, variant);
+                    }
                     else
                     {
-                        manager.loadModelIntoEngine(m_model.name);
+						if (manager.loadModelIntoEngine(m_model.name, variant))
+							manager.addModelToServer(m_model.name, variant);
                     }
                 }
                 };
             selectButton.size = ImVec2(ModelManagerConstants::cardWidth - 18 - 5 - 24, 0);
 
             // Selected state styling (only if not loading)
-            if (isSelected && !isLoadingSelected) {
+            if (isSelected && !isLoadingSelected && m_allowSwitching) {
                 selectButton.borderColor = RGBAToImVec4(172, 131, 255, 255 / 4);
                 selectButton.borderSize = 1.0f;
                 selectButton.state = ButtonState::NORMAL;
                 selectButton.tooltip = "Click to unload model from memory";
                 selectButton.onClick = [this, &manager]() {
-                    manager.unloadModel(m_model.name);
+                    manager.unloadModel(m_model.name, manager.getCurrentVariantForModel(m_model.name));
                     };
             }
 
@@ -1083,13 +1086,13 @@ public:
             else
                 deleteButton.state = ButtonState::NORMAL;
 
-            if (manager.isModelLoaded(m_model.name))
+            if (manager.isModelLoaded(m_model.name, manager.getCurrentVariantForModel(m_model.name)))
             {
                 deleteButton.icon = ICON_CI_ARROW_UP;
 				deleteButton.tooltip = "Click to unload model";
 				deleteButton.onClick = [this, &manager]() {
 					std::cout << "[ModelManagerModal] Unloading model from delete button: " << m_model.name << "\n";
-					manager.unloadModel(m_model.name);
+					manager.unloadModel(m_model.name, manager.getCurrentVariantForModel(m_model.name));
 					};
 			}
 			else
@@ -1106,7 +1109,7 @@ public:
         }
 
         ImGui::EndChild();
-        if (ImGui::IsItemHovered() || isSelected) {
+        if (ImGui::IsItemHovered() || (isSelected && m_allowSwitching)) {
             ImVec2 min = ImGui::GetItemRectMin();
             ImVec2 max = ImGui::GetItemRectMax();
             ImU32 borderColor = IM_COL32(172, 131, 255, 255 / 2);
@@ -1142,7 +1145,7 @@ private:
         memorySufficientButton.id = "##memorySufficient" + std::to_string(m_index) + m_id;
         memorySufficientButton.icon = ICON_CI_PASS_FILLED;
         memorySufficientButton.size = ImVec2(24, 0);
-        memorySufficientButton.tooltip = "Sufficient memory available\n\nmodel: "
+        memorySufficientButton.tooltip = "Model is compatible\n\nmodel: "
             + std::to_string(static_cast<int>(modelMemoryRequirement)) + " MB\nkv cache: "
             + std::to_string(static_cast<int>(kvramMemoryRequirement)) + " MB";
 
@@ -1354,7 +1357,7 @@ public:
 
             LabelConfig memoryFilterLabel;
             memoryFilterLabel.id = "##memoryFilterCheckbox_label";
-            memoryFilterLabel.label = "Show sufficient memory only";
+            memoryFilterLabel.label = "Show compatible model only";
             memoryFilterLabel.size = ImVec2(0, 0);
             memoryFilterLabel.fontType = FontsManager::REGULAR;
             memoryFilterLabel.fontSize = FontsManager::MD;
@@ -1472,7 +1475,7 @@ public:
                     noModelsLabel.label = "No models match your search. Try a different search term.";
                 }
                 else if (m_showSufficientMemoryOnly) {
-                    noModelsLabel.label = "No models with sufficient memory found. Try disabling the memory filter.";
+                    noModelsLabel.label = "No models with high compatibility found. Try disabling the compatibility filter.";
                 }
                 else {
                     noModelsLabel.label = "No models available.";

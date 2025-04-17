@@ -6,8 +6,8 @@
   "hidden_layers": 32,
   "kv_heads": 8,
   "variants": {
-    "Full Precision": {
-      "type": "Full Precision",
+    "fp16": {
+      "type": "fp16",
       "path": "models/deepseek-r1-llama-8b/fp16/DeepSeek-R1-Distill-Llama-8B-f16.gguf",
       "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Llama-8B/resolve/main/DeepSeek-R1-Distill-Llama-8B-f16.gguf",
       "isDownloaded": false,
@@ -15,8 +15,8 @@
       "lastSelected": 0,
       "size": 16.1
     },
-    "8-bit Quantized": {
-      "type": "8-bit Quantized",
+    "8-bit": {
+      "type": "8-bit",
       "path": "models/deepseek-r1-llama-8b/int8/DeepSeek-R1-Distill-Llama-8B-Q8_0.gguf",
       "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Llama-8B/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q8_0.gguf",
       "isDownloaded": false,
@@ -24,8 +24,8 @@
       "lastSelected": 0,
       "size": 8.54
     },
-    "4-bit Quantized": {
-      "type": "4-bit Quantized",
+    "4-bit": {
+      "type": "4-bit",
       "path": "models/deepseek-r1-llama-8b/int4/DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf",
       "downloadLink": "https://huggingface.co/kolosal/Deepseek-R1-Llama-8B/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf",
       "isDownloaded": false,

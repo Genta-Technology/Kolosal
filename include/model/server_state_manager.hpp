@@ -32,7 +32,7 @@ public:
     }
 
     bool isModelLoaded() const {
-        return Model::ModelManager::getInstance().isModelLoaded();
+        return !Model::ModelManager::getInstance().getModelNamesInServer().empty();
     }
 
     std::optional<std::string> getCurrentModelName() const {

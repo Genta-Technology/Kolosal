@@ -2,7 +2,7 @@
 
 #include <imgui.h>
 
-#define APP_VERSION "0.1.8"
+#define APP_VERSION "0.1.9"
 
 // TODO: Need to refactor this to use json file that is modifiable by the user in realtime
 //       Set up a system to save and load the settings from a json file

@@ -6,8 +6,8 @@
   "hidden_layers": 26,
   "kv_heads": 4,
   "variants": {
-    "Full Precision": {
-      "type": "Full Precision",
+    "fp16": {
+      "type": "fp16",
       "path": "models/gemma-2-2b/fp16/gemma-2-2b-it-f32.gguf",
       "downloadLink": "https://huggingface.co/kolosal/gemma-2-2b/resolve/main/gemma-2-2b-it-f32.gguf",
       "isDownloaded": false,
@@ -15,8 +15,8 @@
       "lastSelected": 0,
       "size": 10.5
     },
-    "8-bit Quantized": {
-      "type": "8-bit Quantized",
+    "8-bit": {
+      "type": "8-bit",
       "path": "models/gemma-2-2b/int8/gemma-2-2b-it-Q8_0.gguf",
       "downloadLink": "https://huggingface.co/kolosal/gemma-2-2b/resolve/main/gemma-2-2b-it-Q8_0.gguf",
       "isDownloaded": false,
@@ -24,8 +24,8 @@
       "lastSelected": 0,
       "size": 2.78
     },
-    "4-bit Quantized": {
-      "type": "4-bit Quantized",
+    "4-bit": {
+      "type": "4-bit",
       "path": "models/gemma-2-2b/int4/gemma-2-2b-it-Q4_K_M.gguf",
       "downloadLink": "https://huggingface.co/kolosal/gemma-2-2b/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
       "isDownloaded": false,

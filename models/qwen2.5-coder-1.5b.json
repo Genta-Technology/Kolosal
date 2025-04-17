@@ -6,8 +6,8 @@
   "hidden_layers": 28,
   "kv_heads": 2,
   "variants": {
-    "Full Precision": {
-      "type": "Full Precision",
+    "fp16": {
+      "type": "fp16",
       "path": "models/qwen-coder-1.5b/fp16/ggml-model-f16.gguf",
       "downloadLink": "https://huggingface.co/neopolita/qwen2.5-coder-1.5b-gguf/resolve/main/ggml-model-f16.gguf",
       "isDownloaded": false,
@@ -15,8 +15,8 @@
       "lastSelected": 0,
       "size": 3.09
     },
-    "8-bit Quantized": {
-      "type": "8-bit Quantized",
+    "8-bit": {
+      "type": "8-bit",
       "path": "models/qwen-coder-1.5b/int8/qwen2.5-coder-0.5b-instruct-q8_0.gguf",
       "downloadLink": "https://huggingface.co/kolosal/qwen2.5-coder-1.5b/resolve/main/qwen2.5-coder-1.5b-instruct-q8_0.gguf",
       "isDownloaded": false,
@@ -24,8 +24,8 @@
       "lastSelected": 0,
       "size": 1.65
     },
-    "4-bit Quantized": {
-      "type": "4-bit Quantized",
+    "4-bit": {
+      "type": "4-bit",
       "path": "models/qwen-coder-1.5b/int4/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
       "downloadLink": "https://huggingface.co/kolosal/qwen2.5-coder-1.5b/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
       "isDownloaded": false,
