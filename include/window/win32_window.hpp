@@ -4,7 +4,9 @@
 #define NOMINMAX
 #include <windows.h>
 #include <windowsx.h>
-#include <glad/glad.h>
+#include <d3d10_1.h>
+#include <d3d10.h>
+#include <dxgi.h>
 #include <string>
 #include <system_error>
 #include <dwmapi.h>
@@ -15,6 +17,8 @@
 #include "config.hpp"
 #include "window.hpp"
 #include "window_composition_attribute.hpp"
+#include "dx10_context.hpp"
+#include "ui/fonts.hpp"
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -30,7 +34,8 @@ public:
         , borderless(true)
         , borderless_shadow(false)
         , borderless_drag(false)
-        , borderless_resize(true) {
+        , borderless_resize(true)
+        , dxContext(nullptr) {
     }
 
     ~Win32Window()
@@ -57,6 +62,35 @@ public:
 
         // Apply visual effect (acrylic or fallback)
         applyVisualEffect();
+    }
+
+    // Set DirectX context for resize notifications
+    void setDXContext(DX10Context* context) {
+        dxContext = context;
+    }
+
+    // Handle window resize for DirectX
+    void notifyResize(UINT width, UINT height) {
+        // Store for internal tracking
+        this->width = width;
+        this->height = height;
+
+        // The actual resize operation will be handled in the Application class
+        pendingResize = true;
+        pendingResizeWidth = width;
+        pendingResizeHeight = height;
+    }
+
+    // Check if a resize is pending
+    bool hasPendingResize() const {
+        return pendingResize;
+    }
+
+    // Get pending resize dimensions
+    void getPendingResizeSize(UINT& outWidth, UINT& outHeight) {
+        outWidth = pendingResizeWidth;
+        outHeight = pendingResizeHeight;
+        pendingResize = false;  // Clear the flag after reading
     }
 
     void applyVisualEffect()
@@ -253,6 +287,28 @@ public:
 
         if (window) {
             switch (msg) {
+            case WM_ENTERSIZEMOVE: {
+                // Window moving/resizing starts
+                window->isMoving = true;
+                if (window->dxContext) {
+                    // Notify DirectX context to reduce rendering
+                    static_cast<DX10Context*>(window->dxContext)->setWindowMoving(true);
+                }
+                break;
+            }
+            case WM_EXITSIZEMOVE: {
+                // Window moving/resizing ends
+                window->isMoving = false;
+                if (window->dxContext) {
+                    // Restore normal rendering
+                    static_cast<DX10Context*>(window->dxContext)->setWindowMoving(false);
+
+                    // Force a repaint to update the window contents immediately
+                    InvalidateRect(hwnd, NULL, FALSE);
+                    UpdateWindow(hwnd);
+                }
+                break;
+            }
             case WM_NCCALCSIZE: {
                 if (wParam == TRUE && window->borderless) {
                     auto& params = *reinterpret_cast<NCCALCSIZE_PARAMS*>(lParam);
@@ -279,9 +335,41 @@ public:
                 break;
             }
             case WM_SIZE: {
+                // Handle DirectX-specific resize event
+                if (wParam != SIZE_MINIMIZED) {
+                    UINT width = LOWORD(lParam);
+                    UINT height = HIWORD(lParam);
+                    window->notifyResize(width, height);
+                }
+
                 // Reapply visual effect when the window is resized
                 window->applyVisualEffect();
                 break;
+            }
+            case WM_DPICHANGED:
+            {
+                // Update window position and size based on the suggested rect
+                RECT* rect = (RECT*)lParam;
+                SetWindowPos(hwnd,
+                    NULL,
+                    rect->left,
+                    rect->top,
+                    rect->right - rect->left,
+                    rect->bottom - rect->top,
+                    SWP_NOZORDER | SWP_NOACTIVATE);
+
+                // Extract the new DPI scale
+                // LOWORD(wParam) is the new DPI, typically HIWORD(wParam) is the same value
+                // 96 is the default/reference DPI
+                float newDpiScale = (float)LOWORD(wParam) / 96.0f;
+
+                // Update fonts for the new DPI scale
+                FontsManager::GetInstance().UpdateForDpiChange(newDpiScale);
+
+                // Refresh visual effects since DPI changed
+                window->applyVisualEffect();
+
+                return 0;
             }
             case WM_DWMCOLORIZATIONCOLORCHANGED: {
                 // System accent color changed, reapply visual effect
@@ -294,6 +382,18 @@ public:
             }
             case WM_DESTROY: {
                 ::PostQuitMessage(0);
+                return 0;
+            }
+            case WM_PAINT: {
+                PAINTSTRUCT ps;
+                BeginPaint(hwnd, &ps);
+                EndPaint(hwnd, &ps);
+
+                // If we're not actively moving the window, force a redraw
+                if (!window->isMoving && window->dxContext) {
+                    // This will cause the main render loop to do a full redraw
+                    static_cast<DX10Context*>(window->dxContext)->setWindowMoving(false);
+                }
                 return 0;
             }
             default:
@@ -312,7 +412,12 @@ private:
     int height;
     std::string title;
     bool should_close;
+    bool isMoving = false;
     float tabButtonWidths;
+    DX10Context* dxContext;
+    bool pendingResize = false;
+    UINT pendingResizeWidth = 0;
+    UINT pendingResizeHeight = 0;
 
     // Borderless window specific
     bool borderless;

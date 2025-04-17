@@ -1,7 +1,8 @@
 #pragma once
 
-#include <glad/glad.h>
 #include <imgui.h>
+#include <d3d10_1.h>
+#include <d3d10.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -9,39 +10,60 @@
 
 #include "tab_manager.hpp"
 #include "widgets.hpp"
+#include "window/dx10_context.hpp"
 
-GLuint LoadTextureFromFile(const char* filename)
+// DirectX texture loading function
+ID3D10ShaderResourceView* LoadTextureFromFile(const char* filename, ID3D10Device* device)
 {
+    // Load from disk into a raw RGBA buffer
     int width, height, channels;
     unsigned char* data = stbi_load(filename, &width, &height, &channels, 4); // Force RGBA
     if (!data)
     {
         fprintf(stderr, "Failed to load texture: %s\n", filename);
-        return 0;
+        return nullptr;
     }
 
-    GLuint texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
+    // Create texture
+    ID3D10Texture2D* pTexture = nullptr;
+    D3D10_TEXTURE2D_DESC desc;
+    ZeroMemory(&desc, sizeof(desc));
+    desc.Width = width;
+    desc.Height = height;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D10_USAGE_DEFAULT;
+    desc.BindFlags = D3D10_BIND_SHADER_RESOURCE;
 
-    // Load texture data into OpenGL
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    D3D10_SUBRESOURCE_DATA subResource;
+    subResource.pSysMem = data;
+    subResource.SysMemPitch = width * 4;
+    subResource.SysMemSlicePitch = 0;
 
-    // Set texture parameters for scaling
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    device->CreateTexture2D(&desc, &subResource, &pTexture);
 
-    // Optional: Prevent texture wrapping (clamp to edges)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // Create texture view
+    ID3D10ShaderResourceView* textureView = nullptr;
+    if (pTexture) {
+        D3D10_SHADER_RESOURCE_VIEW_DESC srvDesc;
+        ZeroMemory(&srvDesc, sizeof(srvDesc));
+        srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        srvDesc.ViewDimension = D3D10_SRV_DIMENSION_TEXTURE2D;
+        srvDesc.Texture2D.MipLevels = desc.MipLevels;
+        srvDesc.Texture2D.MostDetailedMip = 0;
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+        device->CreateShaderResourceView(pTexture, &srvDesc, &textureView);
+        pTexture->Release(); // Release texture as we only need the view
+    }
+
     stbi_image_free(data);
-
-    return texture;
+    return textureView;
 }
 
-void titleBar(void* handler, TabManager& tabManager)
+// Updated function signature to include DX10Context parameter
+void titleBar(void* handler, TabManager& tabManager, DX10Context* dxContext)
 {
 #ifdef _WIN32
     // Cast the HWND
@@ -68,12 +90,14 @@ void titleBar(void* handler, TabManager& tabManager)
 
     // Render the logo
     {
-        static GLuint logoTexture = 0;
+        static ID3D10ShaderResourceView* logoTexture = nullptr;
         static bool textureLoaded = false;
 
-        if (!textureLoaded)
+        if (!textureLoaded && dxContext) // Use the passed dxContext instead of global
         {
-            logoTexture = LoadTextureFromFile(KOLOSAL_LOGO_PATH);
+            // Get the DirectX device from the context
+            ID3D10Device* device = dxContext->getDevice();
+            logoTexture = LoadTextureFromFile(KOLOSAL_LOGO_PATH, device);
             textureLoaded = true;
         }
 
@@ -81,7 +105,7 @@ void titleBar(void* handler, TabManager& tabManager)
         {
             const float logoWidth = 20.0F;
             ImGui::SetCursorPos(ImVec2(18, (Config::TITLE_BAR_HEIGHT - logoWidth) / 2)); // Position the logo (adjust as needed)
-            ImGui::Image((ImTextureID)(uintptr_t)logoTexture, ImVec2(logoWidth, logoWidth)); // Adjust size as needed
+            ImGui::Image((ImTextureID)logoTexture, ImVec2(logoWidth, logoWidth)); // Adjust size as needed
             ImGui::SameLine();
         }
     }

@@ -35,9 +35,8 @@ message(STATUS "    - OpenSSL Libraries: ${OPENSSL_LIBRARIES}")
 set(OPENSSL_DLL_DIR "${OPENSSL_INCLUDE_DIR}/../bin")
 message(STATUS "    - OpenSSL DLL Directory: ${OPENSSL_DLL_DIR}")
 
-# GLAD
-add_library(glad STATIC ${EXTERNAL_DIR}/glad/src/glad.c)
-target_include_directories(glad PUBLIC ${EXTERNAL_DIR}/glad/include)
+# DirectX SDK (using Windows SDK)
+# DirectX 10 components are included in Windows SDK, no need for separate find_package
 
 # Native File Dialog Extended
 add_subdirectory(${EXTERNAL_DIR}/nativefiledialog-extended)
@@ -75,7 +74,7 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
     ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_dx10.cpp  # Changed from OpenGL3 to DirectX 10
 )
 
 # ==== Font Definitions ====
@@ -105,7 +104,6 @@ target_compile_definitions(kolosal_lib PUBLIC
 target_include_directories(kolosal_lib PUBLIC
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
-    ${EXTERNAL_DIR}/glad/include
     ${EXTERNAL_DIR}/icons
     ${EXTERNAL_DIR}/nlohmann
     ${EXTERNAL_DIR}/nativefiledialog-extended/src/include
@@ -123,12 +121,12 @@ target_include_directories(kolosal_lib PUBLIC
 # Platform-specific library dependencies
 if(WIN32)
     target_link_libraries(kolosal_lib PUBLIC
-        glad
         nfd
         Dwmapi
         UxTheme
         Shcore
-        opengl32
+        d3d10        # DirectX 10 library
+        dxgi         # DXGI library
         user32
         gdi32
         shell32
@@ -137,20 +135,17 @@ if(WIN32)
     )
     
     target_compile_definitions(kolosal_lib PUBLIC
-        IMGUI_IMPL_OPENGL_LOADER_GLAD
         UNICODE
         ${FONT_DEFINITIONS}
         KOLOSAL_LOGO_PATH="assets/logo.png"
     )
 else()
     target_link_libraries(kolosal_lib PUBLIC
-        glad
         nfd
         OpenSSL::SSL
     )
 
     target_compile_definitions(kolosal_lib PUBLIC
-        IMGUI_IMPL_OPENGL_LOADER_GLAD
         ${FONT_DEFINITIONS}
         KOLOSAL_LOGO_PATH="assets/logo.png"
     )

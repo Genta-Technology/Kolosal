@@ -1,17 +1,18 @@
 #pragma once
 
-#include "wgl_context.hpp"
+#include "dx10_context.hpp"
 
 #include <memory>
 
 class GraphicContextFactory {
 public:
-    static std::unique_ptr<GraphicsContext> createOpenGLContext()
+    static std::unique_ptr<GraphicsContext> createDirectXContext()
     {
 #ifdef _WIN32
-        return std::make_unique<WGLContext>();
+        return std::make_unique<DX10Context>();
 #else
-        // Implement for other platforms
+        // Implement for other platforms if needed
+        throw std::runtime_error("DirectX is only available on Windows");
 #endif
     }
 };
