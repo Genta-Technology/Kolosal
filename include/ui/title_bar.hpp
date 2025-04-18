@@ -198,9 +198,9 @@ void titleBar(void* handler, TabManager& tabManager, DX10Context* dxContext)
                 iconPos.y += (buttonHeight - ImGui::CalcTextSize(icon).y) / 2.0f;
 
                 // Select icon font
-                ImGui::PushFont(FontsManager::GetInstance().GetIconFont());
+                FontsManager::GetInstance().PushIconFont();
                 draw_list->AddText(iconPos, IM_COL32(255, 255, 255, 255), icon);
-                ImGui::PopFont();
+				FontsManager::GetInstance().PopIconFont();
             }
 
             ImGui::PopID();
@@ -239,9 +239,9 @@ void titleBar(void* handler, TabManager& tabManager, DX10Context* dxContext)
                 iconPos.y += (buttonHeight - ImGui::CalcTextSize(icon).y) / 2.0f;
 
                 // Select icon font
-                ImGui::PushFont(FontsManager::GetInstance().GetIconFont());
+				FontsManager::GetInstance().PushIconFont();
                 draw_list->AddText(iconPos, IM_COL32(255, 255, 255, 255), icon);
-                ImGui::PopFont();
+                FontsManager::GetInstance().PopIconFont();
             }
 
             ImGui::PopID();
@@ -276,9 +276,9 @@ void titleBar(void* handler, TabManager& tabManager, DX10Context* dxContext)
                 iconPos.y += (buttonHeight - ImGui::CalcTextSize(icon).y) / 2.0f;
 
                 // Select icon font
-                ImGui::PushFont(FontsManager::GetInstance().GetIconFont());
+				FontsManager::GetInstance().PushIconFont();
                 draw_list->AddText(iconPos, IM_COL32(255, 255, 255, 255), icon);
-                ImGui::PopFont();
+                FontsManager::GetInstance().PopIconFont();
             }
 
             ImGui::PopID();

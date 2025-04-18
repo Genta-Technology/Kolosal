@@ -292,14 +292,7 @@ void imgui_md::set_href(bool e, const MD_ATTRIBUTE& src)
 	}
 }
 
-void imgui_md::set_font(bool e)
-{
-	if (e) {
-		ImGui::PushFont(get_font());
-	} else {
-		ImGui::PopFont();
-	}
-}
+void imgui_md::set_font(bool e) {}
 
 void imgui_md::set_color(bool e)
 {
@@ -762,28 +755,7 @@ int imgui_md::print(const char* str, const char* str_end)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-ImFont* imgui_md::get_font() const
-{
-	return nullptr;//default font
-
-	//Example:
-#if 0
-	if (m_is_table_header) {
-		return g_font_bold;
-	}
-
-	switch (m_hlevel)
-	{
-	case 0:
-		return m_is_strong ? g_font_bold : g_font_regular;
-	case 1:
-		return g_font_bold_large;
-	default:
-		return g_font_bold;
-	}
-#endif
-
-};
+void imgui_md::push_font() const { };
 
 ImVec4 imgui_md::get_color() const
 {
@@ -799,7 +771,7 @@ bool imgui_md::get_image(image_info& nfo) const
 	//Use m_href to identify images
 	
 	//Example - Imgui font texture
-	nfo.texture_id = ImGui::GetIO().Fonts->TexID;
+	nfo.texture_id = ImGui::GetIO().Fonts->TexRef;
 	nfo.size = { 100,50 };
 	nfo.uv0 = { 0,0 };
 	nfo.uv1 = { 1,1 };

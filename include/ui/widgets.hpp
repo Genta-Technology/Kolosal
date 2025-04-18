@@ -153,8 +153,7 @@ namespace Label
 
         if (hasIcon)
         {
-            ImFont *iconFont = FontsManager::GetInstance().GetIconFont(config.iconType.value(), config.fontSize.value());
-            ImGui::PushFont(iconFont);
+			FontsManager::GetInstance().PushIconFont(config.iconType.value(), config.fontSize.value());
 
             // Set icon color
             ImGui::PushStyleColor(ImGuiCol_Text, config.color.value());
@@ -163,19 +162,19 @@ namespace Label
             ImGui::Text("%s", config.icon.value().c_str());
             ImGui::SameLine(0, (config.size.x / 4) + config.gap.value());
 
-            ImGui::PopFont();       // Pop icon font
+            FontsManager::GetInstance().PopIconFont();       // Pop icon font
             ImGui::PopStyleColor(); // Pop icon color
         }
 
         // Render label text with specified font type
-        ImGui::PushFont(FontsManager::GetInstance().GetMarkdownFont(config.fontType.value(), config.fontSize.value()));
+		FontsManager::GetInstance().PushFont(config.fontType.value(), config.fontSize.value());
 
         // Set label color
         ImGui::PushStyleColor(ImGuiCol_Text, config.color.value());
 
         ImGui::Text("%s", config.label.c_str());
 
-        ImGui::PopFont();
+		FontsManager::GetInstance().PopFont();
         ImGui::PopStyleColor();
     }
 
@@ -204,10 +203,10 @@ namespace Label
         float iconPlusGapWidth = 0.0f;
         if (hasIcon)
         {
-            ImGui::PushFont(FontsManager::GetInstance().GetIconFont(config.iconType.value(), config.fontSize.value()));
+			FontsManager::GetInstance().PushIconFont(config.iconType.value(), config.fontSize.value());
 
             iconSize = ImGui::CalcTextSize(config.icon.value().c_str());
-            ImGui::PopFont();
+            FontsManager::GetInstance().PopIconFont();
 
             // Add gap to icon width if we have both icon and label
             iconPlusGapWidth = hasLabel ? (iconSize.x + config.gap.value_or(0.0f)) : iconSize.x;
@@ -221,7 +220,7 @@ namespace Label
         std::string truncatedLabel;
         if (hasLabel)
         {
-            ImGui::PushFont(FontsManager::GetInstance().GetMarkdownFont(config.fontType.value(), config.fontSize.value()));
+			FontsManager::GetInstance().PushFont(config.fontType.value(), config.fontSize.value());
 
             labelSize = ImGui::CalcTextSize(config.label.c_str());
 
@@ -260,7 +259,7 @@ namespace Label
                 truncatedLabel = config.label;
             }
 
-            ImGui::PopFont();
+			FontsManager::GetInstance().PopFont();
         }
 
         // Calculate total content width and height
@@ -292,7 +291,7 @@ namespace Label
         // Now render the icon and/or label
         if (hasIcon)
         {
-            ImGui::PushFont(FontsManager::GetInstance().GetIconFont(config.iconType.value(), config.fontSize.value()));
+			FontsManager::GetInstance().PushIconFont(config.iconType.value(), config.fontSize.value());
 
             // Set icon color
             ImGui::PushStyleColor(ImGuiCol_Text, config.color.value());
@@ -303,20 +302,20 @@ namespace Label
                 ImGui::SameLine(0.0f, config.gap.value_or(0.0f));
             }
 
-            ImGui::PopFont();
+            FontsManager::GetInstance().PopIconFont();
             ImGui::PopStyleColor();
         }
 
         // Render truncated label text with specified font weight, if it exists
         if (hasLabel)
         {
-            ImGui::PushFont(FontsManager::GetInstance().GetMarkdownFont(config.fontType.value(), config.fontSize.value()));
+			FontsManager::GetInstance().PushFont(config.fontType.value(), config.fontSize.value());
 
             // Set label color
             ImGui::PushStyleColor(ImGuiCol_Text, config.color.value());
 
             ImGui::TextUnformatted(truncatedLabel.c_str());
-            ImGui::PopFont();
+            FontsManager::GetInstance().PopFont();
             ImGui::PopStyleColor();
         }
 
@@ -333,9 +332,7 @@ namespace Label
 
         if (hasIcon)
         {
-            ImFont *iconFont = FontsManager::GetInstance().GetIconFont(
-                config.iconType.value(), config.fontSize.value());
-            ImGui::PushFont(iconFont);
+			FontsManager::GetInstance().PushIconFont(config.iconType.value(), config.fontSize.value());
 
             // Set icon color
             ImGui::PushStyleColor(ImGuiCol_Text, config.color.value());
@@ -344,13 +341,11 @@ namespace Label
             ImGui::Text("%s", config.icon.value().c_str());
             ImGui::SameLine(0, config.gap.value());
 
-            ImGui::PopFont();
+            FontsManager::GetInstance().PopIconFont();
             ImGui::PopStyleColor();
         }
 
-        ImFont *markdownFont = FontsManager::GetInstance().GetMarkdownFont(
-            config.fontType.value(), config.fontSize.value());
-        ImGui::PushFont(markdownFont);
+		FontsManager::GetInstance().PushFont(config.fontType.value(), config.fontSize.value());
 
         float wrap_width = (config.size.x > 0) ? config.size.x : ImGui::GetContentRegionAvail().x;
 
@@ -421,7 +416,7 @@ namespace Label
             ImGui::PopTextWrapPos();
         }
 
-        ImGui::PopFont();
+        FontsManager::GetInstance().PopFont();
     }
 } // namespace Label
 
@@ -620,8 +615,8 @@ namespace InputField
         if (ImGui::InputTextMultiline(config.id.c_str(), config.inputTextBuffer.data(), Config::InputField::TEXT_SIZE, config.size, config.flags) && config.processInput)
         {
             InputField::handleSubmission(config.inputTextBuffer.data(), config.focusInputField, config.processInput,
-                                         (config.flags & ImGuiInputTextFlags_CtrlEnterForNewLine) ||
-                                             (config.flags & ImGuiInputTextFlags_ShiftEnterForNewLine));
+                                        (config.flags & ImGuiInputTextFlags_CtrlEnterForNewLine) ||
+                                        (config.flags & ImGuiInputTextFlags_ShiftEnterForNewLine));
         }
 
         ImGui::PopTextWrapPos();

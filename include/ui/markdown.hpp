@@ -26,7 +26,7 @@ public:
 
 protected:
     // Override how fonts are selected
-    ImFont* get_font() const override
+    void push_font() const override
     {
         // A reference to your FontsManager singleton
         auto& fm = FontsManager::GetInstance();
@@ -35,14 +35,16 @@ protected:
         if (m_is_table_header)
         {
             // Return BOLD in Medium size, for example
-            return fm.GetMarkdownFont(FontsManager::BOLD, FontsManager::MD);
+            fm.PushFont(FontsManager::BOLD, FontsManager::MD);
+            return;
         }
 
         // If we are inside a code block or inline code:
         if (m_is_code)
         {
             // Return code font in Medium size
-            return fm.GetMarkdownFont(FontsManager::CODE, FontsManager::MD);
+            fm.PushFont(FontsManager::CODE, FontsManager::MD);
+            return;
         }
 
         if (m_hlevel >= 1 && m_hlevel <= 4)
@@ -51,36 +53,59 @@ protected:
             {
             case 1:
                 // e.g., BOLD in XL
-                return fm.GetMarkdownFont(FontsManager::BOLD, FontsManager::LG);
+                fm.PushFont(FontsManager::BOLD, FontsManager::LG);
+                return;
             case 2:
                 // e.g., BOLD in LG
-                return fm.GetMarkdownFont(FontsManager::BOLD, FontsManager::LG);
+                fm.PushFont(FontsManager::BOLD, FontsManager::LG);
+                return;
             case 3:
                 // e.g., BOLD in MD
-                return fm.GetMarkdownFont(FontsManager::BOLD, FontsManager::MD);
+                fm.PushFont(FontsManager::BOLD, FontsManager::MD);
+                return;
             case 4:
             default:
                 // e.g., BOLD in SM
-                return fm.GetMarkdownFont(FontsManager::BOLD, FontsManager::SM);
+                fm.PushFont(FontsManager::BOLD, FontsManager::SM);
+                return;
             }
         }
 
         if (m_is_strong && m_is_em)
         {
-            return fm.GetMarkdownFont(FontsManager::BOLDITALIC, FontsManager::MD);
+            fm.PushFont(FontsManager::BOLDITALIC, FontsManager::MD);
+            return;
         }
         if (m_is_strong)
         {
-            return fm.GetMarkdownFont(FontsManager::BOLD, FontsManager::MD);
+            fm.PushFont(FontsManager::BOLD, FontsManager::MD);
+            return;
         }
         if (m_is_em)
         {
-            return fm.GetMarkdownFont(FontsManager::ITALIC, FontsManager::MD);
+            fm.PushFont(FontsManager::ITALIC, FontsManager::MD);
+            return;
         }
 
         // Otherwise, just return regular MD font
-        return fm.GetMarkdownFont(FontsManager::REGULAR, FontsManager::MD);
+        fm.PushFont(FontsManager::REGULAR, FontsManager::MD);
+        return;
     }
+
+    // Override set_font to handle font changes
+	void set_font(bool e) override
+	{
+		if (e)
+		{
+			// Push the font based on the current state
+			push_font();
+		}
+		else
+		{
+			// Pop the font when leaving the scope
+			FontsManager::GetInstance().PopFont();
+		}
+	}
 
     bool get_image(image_info& nfo) const override
     {
@@ -141,8 +166,7 @@ protected:
             block.render_id = chatCounter + (m_code_id++);
             m_code_stack.push_back(block);
 
-            ImGui::PushFont(FontsManager::GetInstance().GetMarkdownFont(
-                FontsManager::CODE, FontsManager::MD));
+			FontsManager::GetInstance().PushFont(FontsManager::CODE, FontsManager::MD);
 
 			m_is_code_block = true;
         }
@@ -223,7 +247,7 @@ protected:
 
                 m_code_stack.pop_back();
             }
-            ImGui::PopFont();
+			FontsManager::GetInstance().PopFont();
             
 			m_is_code_block = false;
         }
@@ -232,13 +256,12 @@ protected:
     void SPAN_CODE(bool e) override
 	{
 		if (e) {
-			ImGui::PushFont(FontsManager::GetInstance().GetMarkdownFont(
-				FontsManager::CODE, FontsManager::MD));
+			FontsManager::GetInstance().PushFont(FontsManager::CODE, FontsManager::MD);
             ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(180, 230, 180, 255)); // Greenish text
 		}
 		else {
             ImGui::PopStyleColor();
-			ImGui::PopFont();
+			FontsManager::GetInstance().PopFont();
 		}
 	}
 };

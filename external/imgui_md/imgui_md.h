@@ -87,7 +87,7 @@ protected:
 
 	struct image_info
 	{
-		ImTextureID	texture_id;
+		ImTextureRef	texture_id;
 		ImVec2	size;
 		ImVec2	uv0;
 		ImVec2	uv1;
@@ -98,7 +98,8 @@ protected:
 	//use m_href to identify image
 	virtual bool get_image(image_info& nfo) const;
 
-	virtual ImFont* get_font() const;
+	virtual void push_font() const;
+	virtual void set_font(bool e);
 	virtual ImVec4 get_color() const;
 
 
@@ -151,7 +152,6 @@ private:
 
 	void render_text(const char* str, const char* str_end);
 	
-	void set_font(bool e);
 	void set_color(bool e);
 	void set_href(bool e, const MD_ATTRIBUTE& src);
 

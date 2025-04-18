@@ -42,18 +42,59 @@ public:
         SIZE_COUNT
     };
 
+    // Use font with dynamic scaling based on size level
+    void PushFont(const FontType style, SizeLevel sizeLevel = MD)
+    {
+        ImFont* font = GetBaseFont(style);
+        if (font) {
+            float scaleFactor = SIZE_MULTIPLIERS[sizeLevel] * GetTotalScaleFactor();
+            ImGui::PushFont(font);
+            ImGui::PushFontSize(BASE_FONT_SIZE * scaleFactor);
+        }
+        else {
+            ImGui::PushFont(ImGui::GetIO().FontDefault);
+        }
+    }
+
+    // Pop font and its scaling
+    void PopFont()
+    {
+        ImGui::PopFontSize();
+        ImGui::PopFont();
+    }
+
+    // Use icon font with dynamic scaling
+    void PushIconFont(const IconType style = CODICON, SizeLevel sizeLevel = MD)
+    {
+        ImFont* font = GetBaseIconFont(style);
+        if (font) {
+            float scaleFactor = SIZE_MULTIPLIERS[sizeLevel] * GetTotalScaleFactor();
+            ImGui::PushFont(font);
+            ImGui::PushFontSize(BASE_FONT_SIZE * scaleFactor);
+        }
+        else {
+            ImGui::PushFont(ImGui::GetIO().FontDefault);
+        }
+    }
+
+    // Pop icon font and its scaling
+    void PopIconFont()
+    {
+        ImGui::PopFontSize();
+        ImGui::PopFont();
+    }
+
+    // For compatibility with legacy code that expects to receive an ImFont*
     ImFont* GetMarkdownFont(const FontType style, SizeLevel sizeLevel = MD) const
     {
-        // Get the scaled font or fallback to regular if not available
-        if (scaledFonts.find(style) != scaledFonts.end() &&
-            scaledFonts.at(style)[sizeLevel] != nullptr) {
-            return scaledFonts.at(style)[sizeLevel];
+        // Return the base font - dynamic sizing will be handled by PushFont/PushFontSize
+        if (fonts.find(style) != fonts.end() && fonts.at(style) != nullptr) {
+            return fonts.at(style);
         }
 
-        // Fallback to regular MD font if available
-        if (scaledFonts.find(REGULAR) != scaledFonts.end() &&
-            scaledFonts.at(REGULAR)[MD] != nullptr) {
-            return scaledFonts.at(REGULAR)[MD];
+        // Fallback to regular font if available
+        if (fonts.find(REGULAR) != fonts.end() && fonts.at(REGULAR) != nullptr) {
+            return fonts.at(REGULAR);
         }
 
         // Last resort fallback to ImGui default font
@@ -62,9 +103,8 @@ public:
 
     ImFont* GetIconFont(const IconType style = CODICON, SizeLevel sizeLevel = MD) const
     {
-        if (scaledIconFonts.find(style) != scaledIconFonts.end() &&
-            scaledIconFonts.at(style)[sizeLevel] != nullptr) {
-            return scaledIconFonts.at(style)[sizeLevel];
+        if (iconFonts.find(style) != iconFonts.end() && iconFonts.at(style) != nullptr) {
+            return iconFonts.at(style);
         }
 
         // Fallback to regular font if icon font not available
@@ -79,38 +119,22 @@ public:
         }
 
         currentDpiScale = newDpiScale;
-        pendingRebuild = true;
+        // No need to rebuild fonts with the dynamic system
     }
 
     // Adjust font size using zoom factor (for Ctrl+Scroll)
     void AdjustFontSize(float zoomDelta)
     {
         // Apply zoom delta with limits to prevent fonts from becoming too small or too large
-        float newZoom = std::clamp(userZoomFactor + zoomDelta, MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR);
-
-        // Only mark for rebuild if the change is significant
-        if (std::abs(newZoom - userZoomFactor) > 0.05f) {
-            userZoomFactor = newZoom;
-            pendingRebuild = true;
-        }
+        userZoomFactor = std::clamp(userZoomFactor + zoomDelta, MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR);
+        // No need to rebuild fonts with the dynamic system
     }
 
     // Reset font size to default
     void ResetFontSize()
     {
-        if (userZoomFactor != 1.0f) {
-            userZoomFactor = 1.0f;
-            pendingRebuild = true;
-        }
-    }
-
-    // Process any pending font rebuilds - call this at a safe point in your render loop
-    void ProcessPendingFontRebuild()
-    {
-        if (pendingRebuild) {
-            RebuildFonts();
-            pendingRebuild = false;
-        }
+        userZoomFactor = 1.0f;
+        // No need to rebuild fonts with the dynamic system
     }
 
     // Get the current DPI scale factor
@@ -123,21 +147,50 @@ public:
     float GetTotalScaleFactor() const { return currentDpiScale * userZoomFactor; }
 
 private:
+    // Get base font without scaling
+    ImFont* GetBaseFont(const FontType style) const
+    {
+        if (fonts.find(style) != fonts.end() && fonts.at(style) != nullptr) {
+            return fonts.at(style);
+        }
+
+        // Fallback to regular font
+        if (style != REGULAR && fonts.find(REGULAR) != fonts.end() && fonts.at(REGULAR) != nullptr) {
+            return fonts.at(REGULAR);
+        }
+
+        // Last resort fallback to ImGui default font
+        return ImGui::GetIO().Fonts->Fonts[0];
+    }
+
+    // Get base icon font without scaling
+    ImFont* GetBaseIconFont(const IconType style) const
+    {
+        if (iconFonts.find(style) != iconFonts.end() && iconFonts.at(style) != nullptr) {
+            return iconFonts.at(style);
+        }
+
+        // Fallback to regular font if icon font not available
+        return GetBaseFont(REGULAR);
+    }
+
     // Private constructor that initializes the font system
     FontsManager() :
         currentDpiScale(1.0f),
-        userZoomFactor(1.0f),
-        pendingRebuild(false)
+        userZoomFactor(1.0f)
     {
         // Get ImGui IO
         ImGuiIO& io = ImGui::GetIO();
+
+        // Make sure the backend supports dynamic fonts
+        io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
 
         // Add default font first (as fallback)
         io.Fonts->AddFontDefault();
 
         // Detect initial DPI scale
 #ifdef _WIN32
-// Check if ImGui_ImplWin32_GetDpiScaleForHwnd is available
+        // Check if ImGui_ImplWin32_GetDpiScaleForHwnd is available
         HWND hwnd = GetActiveWindow();
         if (hwnd != NULL) {
             // Try to use the DPI aware value if available (Win10+)
@@ -145,37 +198,13 @@ private:
         }
 #endif
 
-        // Load fonts with the current DPI scale
+        // Load fonts
         LoadFonts(io);
     }
 
-    // Rebuild fonts with current scale factors
-    void RebuildFonts()
-    {
-        ImGuiIO& io = ImGui::GetIO();
-
-        // Tell ImGui_ImplDX10 that we're about to rebuild fonts
-        // We need ImGui_ImplDX10_InvalidateDeviceObjects to be called
-        // before clearing the font atlas to release DirectX resources
-        extern void ImGui_ImplDX10_InvalidateDeviceObjects();
-        ImGui_ImplDX10_InvalidateDeviceObjects();
-
-        // Now it's safe to clear the font atlas
-        io.Fonts->Clear();
-
-        // Set default font first so it's at index 0
-        io.Fonts->AddFontDefault();
-
-        // Reload all fonts with the current scale settings
-        LoadFonts(io);
-
-        // Build the font atlas - this creates the font texture data
-        io.Fonts->Build();
-
-        // Now tell ImGui_ImplDX10 to recreate DirectX resources
-        extern bool ImGui_ImplDX10_CreateDeviceObjects();
-        ImGui_ImplDX10_CreateDeviceObjects();
-    }
+    // Delete copy constructor and assignment operator
+    FontsManager(const FontsManager&) = delete;
+    FontsManager& operator=(const FontsManager&) = delete;
 
     // Get DPI scale for a window (Windows-specific implementation)
 #ifdef _WIN32
@@ -213,28 +242,22 @@ private:
     float GetDpiScaleForWindow(void* hwnd) { return 1.0f; }
 #endif
 
-    // Delete copy constructor and assignment operator
-    FontsManager(const FontsManager&) = delete;
-    FontsManager& operator=(const FontsManager&) = delete;
-
-    // Font data storage
-    using FontSizeArray = std::array<ImFont*, SizeLevel::SIZE_COUNT>;
-    mutable std::unordered_map<int, FontSizeArray> scaledFonts;     // Font style -> array of scaled fonts
-    mutable std::unordered_map<int, FontSizeArray> scaledIconFonts; // Icon style -> array of scaled fonts
+    // Font data storage - with dynamic fonts, we just store one instance of each font
+    mutable std::unordered_map<int, ImFont*> fonts;        // Font style -> font object
+    mutable std::unordered_map<int, ImFont*> iconFonts;    // Icon style -> font object
 
     // Scale factors
     float currentDpiScale;   // DPI-based scaling (system controlled)
     float userZoomFactor;    // User-controlled zoom level via Ctrl+Scroll
-    bool pendingRebuild;     // Flag to indicate fonts need rebuilding
 
     // Zoom factor limits
     static constexpr float MIN_ZOOM_FACTOR = 0.5f;
     static constexpr float MAX_ZOOM_FACTOR = 2.5f;
 
-    // Base font sizes (these will be multiplied by DPI scale and size factors)
+    // Base font size (the reference size that will be scaled)
     static constexpr float BASE_FONT_SIZE = 16.0f;
 
-    // Size multipliers for different size levels
+    // Size multipliers for different size levels (same as before)
     static constexpr std::array<float, SizeLevel::SIZE_COUNT> SIZE_MULTIPLIERS = {
         0.875f, // SM (14px at standard DPI and BASE_FONT_SIZE=16)
         1.0f,   // MD (16px at standard DPI)
@@ -255,98 +278,55 @@ private:
 
         const char* iconFontPath = IMGUI_FONT_PATH_CODICON;
 
-        // Clear existing font mappings
-        scaledFonts.clear();
-        scaledIconFonts.clear();
+        // With dynamic fonts, we don't need to load each font at multiple sizes
+        // Just load each font at the base size with good quality settings
 
-        // Calculate total scale factor (DPI * user zoom)
-        float totalScale = currentDpiScale * userZoomFactor;
-
-        // For each font type (regular, bold, etc.), load master font and create references
+        // Load each font type once
         for (int fontType = REGULAR; fontType <= CODE; ++fontType)
         {
-            // Create a storage array for this font type
-            FontSizeArray& fontArray = scaledFonts[fontType];
+            ImFontConfig fontConfig;
+            fontConfig.OversampleH = 2;
+            fontConfig.OversampleV = 2;
 
-            // Load fonts at each size level with appropriate parameters
-            for (int8_t sizeLevel = SizeLevel::SM; sizeLevel < SizeLevel::SIZE_COUNT; ++sizeLevel)
-            {
-                // Calculate final font size based on base size, total scale, and size multiplier
-                float fontSize = BASE_FONT_SIZE * totalScale * SIZE_MULTIPLIERS[sizeLevel];
+            // No need to specify glyph ranges with the new dynamic font system
+            // The font will load glyphs as needed
 
-                // Configure improved font quality based on size and total scale
-                ImFontConfig fontConfig;
-                fontConfig.OversampleH = fontSize < 20.0f ? 2 : 1;
-                fontConfig.OversampleV = fontSize < 20.0f ? 2 : 1;
-                fontConfig.PixelSnapH = fontSize < 20.0f ? false : true;
-
-                // For high DPI or large zoom, increase oversampling
-                if (totalScale > 1.5f) {
-                    fontConfig.OversampleH = 3;
-                    fontConfig.OversampleV = 3;
-                }
-
-                // Adjust rasterizing based on scale
-                if (totalScale > 2.0f) {
-                    fontConfig.RasterizerMultiply = 0.9f;
-                }
-                else if (totalScale > 1.0f) {
-                    fontConfig.RasterizerMultiply = 1.1f;
-                }
-
-                // Load the font with the calculated size and quality settings
-                fontArray[sizeLevel] = io.Fonts->AddFontFromFileTTF(
-                    mdFontPaths[fontType],
-                    fontSize,
-                    &fontConfig
-                );
-
-                // If loading failed, log an error
-                if (!fontArray[sizeLevel]) {
-                    std::cerr << "Failed to load font: " << mdFontPaths[fontType]
-                        << " at size " << fontSize << std::endl;
-                }
-            }
-        }
-
-        // Load icon fonts with similar approach
-        FontSizeArray& iconArray = scaledIconFonts[CODICON];
-        for (int8_t sizeLevel = SizeLevel::SM; sizeLevel < SizeLevel::SIZE_COUNT; ++sizeLevel)
-        {
-            float fontSize = BASE_FONT_SIZE * totalScale * SIZE_MULTIPLIERS[sizeLevel];
-
-            ImFontConfig icons_config;
-            icons_config.MergeMode = false;
-            icons_config.PixelSnapH = true;
-            icons_config.GlyphMinAdvanceX = fontSize;
-
-            if (totalScale > 1.5f) {
-                icons_config.OversampleH = 3;
-                icons_config.OversampleV = 3;
-            }
-            else {
-                icons_config.OversampleH = 2;
-                icons_config.OversampleV = 2;
-            }
-
-            // Load the icon font
-            static const ImWchar icons_ranges[] = { ICON_MIN_CI, ICON_MAX_CI, 0 };
-            iconArray[sizeLevel] = io.Fonts->AddFontFromFileTTF(
-                iconFontPath,
-                fontSize,
-                &icons_config,
-                icons_ranges
+            // Load the font - use the base size which will be scaled dynamically
+            fonts[fontType] = io.Fonts->AddFontFromFileTTF(
+                mdFontPaths[fontType],
+                BASE_FONT_SIZE,
+                &fontConfig
             );
 
-            if (!iconArray[sizeLevel]) {
-                std::cerr << "Failed to load icon font: " << iconFontPath
-                    << " at size " << fontSize << std::endl;
+            // If loading failed, log an error
+            if (!fonts[fontType]) {
+                std::cerr << "Failed to load font: " << mdFontPaths[fontType] << std::endl;
             }
         }
 
-        // Set the default font to regular medium size
-        if (scaledFonts[REGULAR][SizeLevel::MD] != nullptr) {
-            io.FontDefault = scaledFonts[REGULAR][SizeLevel::MD];
+        // Load icon font - just once at the base size
+        ImFontConfig icons_config;
+        icons_config.PixelSnapH = true;
+        icons_config.GlyphMinAdvanceX = BASE_FONT_SIZE; // Maintain consistent width
+
+        // No need to specify glyph ranges with new dynamic font system, but 
+        // we still need to do it for icon fonts as they use a specific range
+        static const ImWchar icons_ranges[] = { ICON_MIN_CI, ICON_MAX_CI, 0 };
+
+        iconFonts[CODICON] = io.Fonts->AddFontFromFileTTF(
+            iconFontPath,
+            BASE_FONT_SIZE,
+            &icons_config,
+            icons_ranges
+        );
+
+        if (!iconFonts[CODICON]) {
+            std::cerr << "Failed to load icon font: " << iconFontPath << std::endl;
+        }
+
+        // Set the default font to regular
+        if (fonts[REGULAR] != nullptr) {
+            io.FontDefault = fonts[REGULAR];
         }
     }
 };
