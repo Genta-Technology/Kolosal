@@ -287,6 +287,27 @@ public:
 
         if (window) {
             switch (msg) {
+            case WM_MOUSEWHEEL: {
+                // Check if Ctrl key is pressed for font size adjustment
+                bool ctrlPressed = (GET_KEYSTATE_WPARAM(wParam) & MK_CONTROL) != 0;
+                if (ctrlPressed) {
+                    // Get scroll direction and convert to zoom delta
+                    // A positive value means the wheel was rotated forward (away from the user)
+                    // A negative value means the wheel was rotated backward (toward the user)
+                    int wheelDelta = GET_WHEEL_DELTA_WPARAM(wParam);
+                    float zoomDelta = (wheelDelta > 0) ? 0.1f : -0.1f;
+
+                    // Adjust font size using the FontManager
+                    FontsManager::GetInstance().AdjustFontSize(zoomDelta);
+
+                    // Force window redraw to reflect the size change
+                    InvalidateRect(hwnd, NULL, FALSE);
+
+                    // Prevent normal scrolling
+                    return 0;
+                }
+                break;
+            }
             case WM_ENTERSIZEMOVE: {
                 // Window moving/resizing starts
                 window->isMoving = true;

@@ -112,6 +112,23 @@ public:
 
             std::vector<ButtonConfig> buttonConfigs;
 
+            // Get font scale factor from FontsManager
+            float fontScale = FontsManager::GetInstance().GetTotalScaleFactor();
+
+            // Format font scale with one decimal place
+            std::stringstream fontSS;
+            fontSS << std::fixed << std::setprecision(1) << fontScale << "x";
+
+            // Create font scale button
+            ButtonConfig fontScaleLabel;
+            fontScaleLabel.id = "##fontScaleLabel";
+            fontScaleLabel.label = "Zoom : " + fontSS.str();
+            fontScaleLabel.size = ImVec2(110, 20);
+            fontScaleLabel.fontSize = FontsManager::SM;
+
+            buttonConfigs.push_back(fontScaleLabel);
+            timeWidth += 120; // Add width for the font scale display
+
             if (sysMonitor.hasGpuSupport()) {
                 ButtonConfig gpuLabel;
                 gpuLabel.id = "##gpuLabel";

@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <imgui.h>
+#include <misc/freetype/imgui_freetype.h>
 #include <array>
 #include <algorithm>
 #include <memory>
@@ -47,7 +48,9 @@ public:
     {
         ImFont* font = GetBaseFont(style);
         if (font) {
-            float scaleFactor = SIZE_MULTIPLIERS[sizeLevel] * GetTotalScaleFactor();
+            // Apply only the SIZE_MULTIPLIER scaling
+            // The global scale factor is now handled by FontGlobalScale
+            float scaleFactor = SIZE_MULTIPLIERS[sizeLevel];
             ImGui::PushFont(font);
             ImGui::PushFontSize(BASE_FONT_SIZE * scaleFactor);
         }
@@ -68,7 +71,9 @@ public:
     {
         ImFont* font = GetBaseIconFont(style);
         if (font) {
-            float scaleFactor = SIZE_MULTIPLIERS[sizeLevel] * GetTotalScaleFactor();
+            // Apply only the SIZE_MULTIPLIER scaling
+            // The global scale factor is now handled by FontGlobalScale
+            float scaleFactor = SIZE_MULTIPLIERS[sizeLevel];
             ImGui::PushFont(font);
             ImGui::PushFontSize(BASE_FONT_SIZE * scaleFactor);
         }
@@ -119,7 +124,8 @@ public:
         }
 
         currentDpiScale = newDpiScale;
-        // No need to rebuild fonts with the dynamic system
+        // Update global scale for all fonts
+        UpdateGlobalFontScale();
     }
 
     // Adjust font size using zoom factor (for Ctrl+Scroll)
@@ -127,14 +133,18 @@ public:
     {
         // Apply zoom delta with limits to prevent fonts from becoming too small or too large
         userZoomFactor = std::clamp(userZoomFactor + zoomDelta, MIN_ZOOM_FACTOR, MAX_ZOOM_FACTOR);
-        // No need to rebuild fonts with the dynamic system
+
+        // Update global scale for all fonts
+        UpdateGlobalFontScale();
     }
 
     // Reset font size to default
     void ResetFontSize()
     {
         userZoomFactor = 1.0f;
-        // No need to rebuild fonts with the dynamic system
+
+        // Update global scale for all fonts
+        UpdateGlobalFontScale();
     }
 
     // Get the current DPI scale factor
@@ -147,6 +157,13 @@ public:
     float GetTotalScaleFactor() const { return currentDpiScale * userZoomFactor; }
 
 private:
+    // Update the global font scale for all ImGui elements
+    void UpdateGlobalFontScale()
+    {
+        float totalScale = GetTotalScaleFactor();
+        ImGui::GetIO().FontGlobalScale = totalScale;
+    }
+
     // Get base font without scaling
     ImFont* GetBaseFont(const FontType style) const
     {
@@ -200,6 +217,9 @@ private:
 
         // Load fonts
         LoadFonts(io);
+
+        // Initialize global font scale
+        UpdateGlobalFontScale();
     }
 
     // Delete copy constructor and assignment operator
@@ -277,9 +297,7 @@ private:
         };
 
         const char* iconFontPath = IMGUI_FONT_PATH_CODICON;
-
-        // With dynamic fonts, we don't need to load each font at multiple sizes
-        // Just load each font at the base size with good quality settings
+        const char* emojiFontPath = IMGUI_FONT_PATH_NOTO_EMOJI;
 
         // Load each font type once
         for (int fontType = REGULAR; fontType <= CODE; ++fontType)
@@ -287,9 +305,6 @@ private:
             ImFontConfig fontConfig;
             fontConfig.OversampleH = 2;
             fontConfig.OversampleV = 2;
-
-            // No need to specify glyph ranges with the new dynamic font system
-            // The font will load glyphs as needed
 
             // Load the font - use the base size which will be scaled dynamically
             fonts[fontType] = io.Fonts->AddFontFromFileTTF(
@@ -301,7 +316,28 @@ private:
             // If loading failed, log an error
             if (!fonts[fontType]) {
                 std::cerr << "Failed to load font: " << mdFontPaths[fontType] << std::endl;
+                continue;
             }
+
+            if (!(fontType == REGULAR))
+                continue;
+
+            // Now merge Noto Emoji font with this font
+            ImFontConfig emojiConfig;
+            emojiConfig.MergeMode = true;
+            emojiConfig.OversampleH = 1;
+            emojiConfig.OversampleV = 1;
+            emojiConfig.FontBuilderFlags |= ImGuiFreeTypeBuilderFlags_LoadColor;
+
+            static ImWchar ranges[] = { 0x1F000, 0x1FFFF, 0 };
+
+            // Merge the emoji font with the current font
+            io.Fonts->AddFontFromFileTTF(
+                emojiFontPath,
+                BASE_FONT_SIZE,
+                &emojiConfig,
+                ranges
+            );
         }
 
         // Load icon font - just once at the base size
@@ -316,8 +352,8 @@ private:
         iconFonts[CODICON] = io.Fonts->AddFontFromFileTTF(
             iconFontPath,
             BASE_FONT_SIZE,
-            &icons_config,
-            icons_ranges
+            &icons_config
+            //icons_ranges
         );
 
         if (!iconFonts[CODICON]) {

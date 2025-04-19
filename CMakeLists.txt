@@ -24,6 +24,17 @@ option(DEBUG "Build with debugging information" OFF)
 
 # ==== External Dependencies ====
 
+# Freetype (./external/freetype/lib ./external/freetype/include ./external/freetype/bin)
+set(CMAKE_PREFIX_PATH "${EXTERNAL_DIR}/freetype" ${CMAKE_PREFIX_PATH})
+find_package(Freetype REQUIRED)
+if(NOT FREETYPE_FOUND)
+    message(FATAL_ERROR "Freetype not found")
+endif()
+message(STATUS "Found Freetype: ${FREETYPE_INCLUDE_DIRS}")
+message(STATUS "    - Freetype Libraries: ${FREETYPE_LIBRARIES}")
+set(FREETYPE_DLL_DIR "${FREETYPE_INCLUDE_DIRS}/../bin")
+message(STATUS "    - Freetype DLL Directory: ${FREETYPE_DLL_DIR}")
+
 # OpenSSL
 find_package(OpenSSL REQUIRED)
 if(NOT OpenSSL_FOUND)
@@ -66,6 +77,11 @@ set(MARKDOWN_RENDERER
     ${EXTERNAL_DIR}/imgui_md/imgui_md.cpp
 )
 
+# ImGuiTextSelect
+set(IMGUI_TEXT_SELECT
+    ${EXTERNAL_DIR}/ImGuiTextSelect/textselect.cpp
+)
+
 # ==== ImGui Configuration ====
 set(IMGUI_SOURCES
     ${IMGUI_DIR}/imgui.cpp
@@ -73,6 +89,7 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/misc/freetype/imgui_freetype.cpp
     ${IMGUI_DIR}/backends/imgui_impl_win32.cpp
     ${IMGUI_DIR}/backends/imgui_impl_dx10.cpp  # Changed from OpenGL3 to DirectX 10
 )
@@ -80,11 +97,12 @@ set(IMGUI_SOURCES
 # ==== Font Definitions ====
 set(FONT_DEFINITIONS
     IMGUI_FONT_PATH_INTER_REGULAR="fonts/Inter-Regular.ttf"
-    IMGUI_FONT_PATH_FIRACODE_REGULAR="fonts/FiraCode-Regular.ttf"
     IMGUI_FONT_PATH_INTER_BOLD="fonts/Inter-Bold.ttf"
     IMGUI_FONT_PATH_INTER_BOLDITALIC="fonts/Inter-BoldItalic.ttf"
     IMGUI_FONT_PATH_INTER_ITALIC="fonts/Inter-Italic.ttf"
+    IMGUI_FONT_PATH_FIRACODE_REGULAR="fonts/FiraCode-Regular.ttf"
     IMGUI_FONT_PATH_CODICON="fonts/codicon.ttf"
+    IMGUI_FONT_PATH_NOTO_EMOJI="fonts/seguiemj-1.35-flat.ttf"
 )
 
 # ==== Kolosal Library ====
@@ -112,9 +130,11 @@ target_include_directories(kolosal_lib PUBLIC
     ${EXTERNAL_DIR}/md4c/src
     ${EXTERNAL_DIR}/imgui_md
     ${EXTERNAL_DIR}/imspinner
+    ${EXTERNAL_DIR}/ImGuiTextSelect
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/assets
     ${CMAKE_SOURCE_DIR}/kolosal-server/include
+    ${FREETYPE_INCLUDE_DIRS}
     ${CURL_INCLUDE_DIR}
 )
 
@@ -131,6 +151,8 @@ if(WIN32)
         gdi32
         shell32
         OpenSSL::SSL
+        ${IMGUI_TEXT_SELECT}
+        ${FREETYPE_LIBRARIES}
         ${CURL_LIBRARIES}
     )
     
@@ -229,4 +251,13 @@ add_custom_command(
         "${EXTERNAL_DIR}/genta-personal/bin/InferenceEngineLibVulkan.dll"
         "$<TARGET_FILE_DIR:KolosalDesktop>"
     COMMENT "Copying Inference Engine DLLs to output directory"
+)
+
+# Copy Freetype DLLs
+add_custom_command(
+    TARGET KolosalDesktop POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${FREETYPE_DLL_DIR}/freetype.dll"
+        "$<TARGET_FILE_DIR:KolosalDesktop>"
+    COMMENT "Copying Freetype DLLs to output directory"
 )

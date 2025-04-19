@@ -1273,7 +1273,7 @@ enum ImGuiInputTextFlags_
     ImGuiInputTextFlags_EnterReturnsTrue    = 1 << 6,   // Return 'true' when Enter is pressed (as opposed to every time the value was modified). Consider using IsItemDeactivatedAfterEdit() instead!
     ImGuiInputTextFlags_EscapeClearsAll     = 1 << 7,   // Escape key clears content if not empty, and deactivate otherwise (contrast to default behavior of Escape to revert)
     ImGuiInputTextFlags_CtrlEnterForNewLine = 1 << 8,   // In multi-line mode, validate with Enter, add new line with Ctrl+Enter (default is opposite: validate with Ctrl+Enter, add line with Enter).
-    ImGuiInputTextFlags_ShiftEnterForNewLine= 1 << 23,  // In multi-line mode, validate with Enter, add new line with Shift+Enter (default is opposite: validate with Shift+Enter, add line with Enter).
+    ImGuiInputTextFlags_ShiftEnterForNewLine= 1 << 24,  // In multi-line mode, validate with Enter, add new line with Shift+Enter (default is opposite: validate with Shift+Enter, add line with Enter).
 
     // Other options
     ImGuiInputTextFlags_ReadOnly            = 1 << 9,   // Read-only mode

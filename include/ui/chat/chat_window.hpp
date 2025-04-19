@@ -157,6 +157,7 @@ private:
     ButtonConfig confirmButtonConfig;
 };
 
+
 class ChatWindow {
 public:
     ChatWindow() {
@@ -181,7 +182,6 @@ public:
         clearChatButtonConfig.onClick = [this]() { clearChatModal.open(); };
 
         addFilesButtonConfig.id = "##addFilesButton";
-        
 
         sendButtonConfig.id = "##sendButton";
         sendButtonConfig.icon = ICON_CI_SEND;
@@ -195,6 +195,8 @@ public:
         m_shouldAutoScroll = true;
         m_wasAtBottom = true;
         m_lastContentHeight = 0.0f;
+
+        inputTextBuffer.reserve(Config::InputField::TEXT_SIZE);
     }
 
     void render(float leftSidebarWidth, float rightSidebarWidth) {
@@ -255,7 +257,7 @@ private:
         // Begin the child window for chat history
         ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, ImVec4(0, 0, 0, 0));
         ImGui::BeginChild(chatHistoryId, ImVec2(-1, availableHeight), false);
-		ImGui::PopStyleColor();
+        ImGui::PopStyleColor();
 
         // Check if we were at the bottom before rendering new content
         float scrollY = ImGui::GetScrollY();
@@ -368,7 +370,7 @@ private:
                         s.erase(pos, titlePrefix.length());
                     }
 
-					// Remove any thinking tags (e.g., <think>...</think>)
+                    // Remove any thinking tags (e.g., <think>...</think>)
                     const std::string thinkStart = "<think>";
                     const std::string thinkEnd = "</think>";
                     size_t startPos = s.find(thinkStart);
@@ -409,7 +411,7 @@ private:
     void renderChatFeatureButtons(float baseX, float baseY) {
         Model::ModelManager& modelManager = Model::ModelManager::getInstance();
 
-        // Update the open-model manager button’s label dynamically.
+        // Update the open-model manager button's label dynamically.
         openModelManagerConfig.label =
             modelManager.getCurrentModelName().value_or("Select Model");
         openModelManagerConfig.tooltip =
@@ -505,17 +507,37 @@ private:
                 ImGuiInputTextFlags_CtrlEnterForNewLine |
                 ImGuiInputTextFlags_ShiftEnterForNewLine;
             inputConfig.processInput = [this](const std::string& input) {
-                handleUserMessage(input);
+                std::string trimmedInput = input;
+                // Trim null characters and whitespace
+                trimmedInput.erase(0, trimmedInput.find_first_not_of("\0 \t\n\r"));
+                if (!trimmedInput.empty()) {
+                    trimmedInput.erase(trimmedInput.find_last_not_of("\0 \t\n\r") + 1);
+                }
+
+                if (!trimmedInput.empty()) {
+                    handleUserMessage(trimmedInput);
+                }
                 };
 
             // Configure the send button for starting generation.
             sendButtonConfig.icon = ICON_CI_SEND;
             sendButtonConfig.tooltip = "Start generation";
             sendButtonConfig.onClick = [this]() {
-                handleUserMessage(inputTextBuffer);
+                std::string trimmedInput = inputTextBuffer;
+                // Trim null characters and whitespace
+                trimmedInput.erase(0, trimmedInput.find_first_not_of("\0 \t\n\r"));
+                if (!trimmedInput.empty()) {
+                    trimmedInput.erase(trimmedInput.find_last_not_of("\0 \t\n\r") + 1);
+                }
+
+                if (!trimmedInput.empty()) {
+                    handleUserMessage(trimmedInput);
+                }
                 };
 
-            sendButtonConfig.state = (strlen(inputTextBuffer.data()) == 0)
+            // Check if input is only whitespace or null characters
+			bool isEmpty = inputTextBuffer.empty() || (inputTextBuffer.find_first_not_of(" \t\n\r") == std::string::npos);
+            sendButtonConfig.state = isEmpty
                 ? ButtonState::DISABLED
                 : ButtonState::NORMAL;
         }
@@ -531,8 +553,8 @@ private:
             sendButtonConfig.onClick = []() {
                 Model::ModelManager::getInstance().stopJob(
                     Chat::ChatManager::getInstance().getCurrentJobId(),
-					Model::ModelManager::getInstance().getCurrentModelName().value(),
-					Model::ModelManager::getInstance().getCurrentVariantType()
+                    Model::ModelManager::getInstance().getCurrentModelName().value(),
+                    Model::ModelManager::getInstance().getCurrentVariantType()
                 );
                 };
             sendButtonConfig.state = ButtonState::NORMAL;
@@ -561,7 +583,16 @@ private:
 
     void renderInputField(const float inputWidth) {
         auto processInput = [this](const std::string& input) {
-            handleUserMessage(input);
+            std::string trimmedInput = input;
+            // Trim null characters and whitespace
+            trimmedInput.erase(0, trimmedInput.find_first_not_of("\0 \t\n\r"));
+            if (!trimmedInput.empty()) {
+                trimmedInput.erase(trimmedInput.find_last_not_of("\0 \t\n\r") + 1);
+            }
+
+            if (!trimmedInput.empty()) {
+                handleUserMessage(trimmedInput);
+            }
             };
 
         InputFieldConfig inputConfig = createInputFieldConfig(inputWidth, processInput);
@@ -585,7 +616,9 @@ private:
         Button::render(sendButtonConfig);
         ImGui::EndGroup();
 
-        inputTextBuffer.resize(Config::InputField::TEXT_SIZE, '\0');
+        // Reset the focus after the first render
+        if (focusInputField)
+            focusInputField = false;
     }
 
 private:
@@ -600,7 +633,7 @@ private:
     // State variables.
     bool showRenameChatDialog = false;
     bool openModelSelectionModal = false;
-    std::string inputTextBuffer = std::string(Config::InputField::TEXT_SIZE, '\0');
+    std::string inputTextBuffer;
     bool focusInputField = true;
     float m_inputHeight = Config::INPUT_HEIGHT;
 
