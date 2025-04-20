@@ -24,6 +24,15 @@ option(DEBUG "Build with debugging information" OFF)
 
 # ==== External Dependencies ====
 
+# utfcpp
+include(FetchContent)
+FetchContent_Declare(
+    utfcpp
+    GIT_REPOSITORY https://github.com/nemtrif/utfcpp.git
+    GIT_TAG v4.0.6
+)
+FetchContent_MakeAvailable(utfcpp)
+
 # Freetype (./external/freetype/lib ./external/freetype/include ./external/freetype/bin)
 set(CMAKE_PREFIX_PATH "${EXTERNAL_DIR}/freetype" ${CMAKE_PREFIX_PATH})
 find_package(Freetype REQUIRED)
@@ -109,6 +118,7 @@ set(FONT_DEFINITIONS
 add_library(kolosal_lib STATIC
     ${IMGUI_SOURCES}
     ${MARKDOWN_RENDERER}
+    ${IMGUI_TEXT_SELECT}
 )
 
 # Set definitions
@@ -151,7 +161,7 @@ if(WIN32)
         gdi32
         shell32
         OpenSSL::SSL
-        ${IMGUI_TEXT_SELECT}
+        utf8cpp
         ${FREETYPE_LIBRARIES}
         ${CURL_LIBRARIES}
     )

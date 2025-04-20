@@ -8,6 +8,7 @@
 #include <cmath>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -45,7 +46,7 @@ static std::size_t utf8Length(std::string_view s) {
     return utf8::unchecked::distance(s.begin(), s.end());
 }
 
-// Gets the display width of a substring.
+// Gets the display width of a substring, using the current font.
 static float substringSizeX(std::string_view s, std::size_t start, std::size_t length = std::string_view::npos) {
     // For an empty string, data() or begin() == end()
     if (s.empty()) {
@@ -68,50 +69,197 @@ static float substringSizeX(std::string_view s, std::size_t start, std::size_t l
     // because of that, we need to get the pointer value manually if stringEnd == s.end().
     const char* endPtr = stringEnd == s.end() ? s.data() + s.size() : &*stringEnd;
 
-    // Calculate text size between start and end
+    // Calculate text size between start and end using the current font
     return ImGui::CalcTextSize(&*stringStart, endPtr).x;
 }
 
-// Gets the index of the character the mouse cursor is over.
-static std::size_t getCharIndex(std::string_view s, float cursorPosX, std::size_t start, std::size_t end) {
+// Character width cache to handle different font styles
+struct CharWidthCache {
+    // Cache character positions and widths
+    std::vector<float> charPositions;
+    bool initialized = false;
+
+    // Build the character position cache for a line
+    void build(std::string_view line) {
+        if (line.empty()) {
+            charPositions.clear();
+            charPositions.push_back(0.0f);
+            initialized = true;
+            return;
+        }
+
+        // Calculate position for each character
+        charPositions.clear();
+        charPositions.reserve(utf8Length(line) + 1);
+        charPositions.push_back(0.0f); // Initial position
+
+        // We need to handle the string character by character to account for non-uniform widths
+        auto it = line.begin();
+        auto end = line.end();
+        float currentPos = 0.0f;
+
+        while (it != end) {
+            // Get the next UTF-8 character
+            char32_t codepoint;
+            try {
+                codepoint = utf8::unchecked::next(it);
+            }
+            catch (...) {
+                break; // Break if we encounter invalid UTF-8
+            }
+
+            // Calculate the width of this single character
+            // Convert the codepoint back to UTF-8 for width measurement
+            char utf8Char[5] = { 0 }; // Space for up to 4 UTF-8 bytes plus null terminator
+            char* p = utf8Char;
+            utf8::unchecked::append(codepoint, p);
+
+            // Calculate width of this character
+            float charWidth = ImGui::CalcTextSize(utf8Char).x;
+            currentPos += charWidth;
+
+            // Store the position after this character
+            charPositions.push_back(currentPos);
+        }
+
+        initialized = true;
+    }
+
+    // Build the character position cache for a line with font segments
+    void buildWithFontInfo(const TextLine& line) {
+        if (line.segments.empty()) {
+            charPositions.clear();
+            charPositions.push_back(0.0f);
+            initialized = true;
+            return;
+        }
+
+        // Calculate positions for each character accounting for font changes
+        charPositions.clear();
+
+        // Count total characters to reserve space
+        size_t totalChars = 0;
+        for (const auto& segment : line.segments) {
+            totalChars += utf8Length(segment.text);
+        }
+
+        charPositions.reserve(totalChars + 1);
+        charPositions.push_back(0.0f); // Initial position
+
+        // Process each segment with its own font
+        for (const auto& segment : line.segments) {
+            ImFont* oldFont = ImGui::GetFont();
+
+            // Use segment's font if available
+            if (segment.font) {
+                ImGui::PushFont(segment.font);
+            }
+
+            std::string_view text = segment.text;
+            auto it = text.begin();
+            auto end = text.end();
+
+            while (it != end) {
+                // Get the next UTF-8 character
+                char32_t codepoint;
+                try {
+                    codepoint = utf8::unchecked::next(it);
+                }
+                catch (...) {
+                    break;
+                }
+
+                // Convert codepoint back to UTF-8 for width measurement
+                char utf8Char[5] = { 0 };
+                char* p = utf8Char;
+                utf8::unchecked::append(codepoint, p);
+
+                // Calculate width using current font
+                float charWidth = ImGui::CalcTextSize(utf8Char).x;
+                float currentPos = charPositions.back() + charWidth;
+
+                // Store the position after this character
+                charPositions.push_back(currentPos);
+            }
+
+            // Restore previous font if we pushed one
+            if (segment.font) {
+                ImGui::PopFont();
+            }
+        }
+
+        initialized = true;
+    }
+
+    // Get the character index at a given X position
+    std::size_t getCharIndexAtPos(float xPos) {
+        if (!initialized || charPositions.empty()) {
+            return 0;
+        }
+
+        // Binary search to find the closest character position
+        auto it = std::lower_bound(charPositions.begin(), charPositions.end(), xPos);
+
+        if (it == charPositions.begin()) {
+            return 0;
+        }
+
+        if (it == charPositions.end()) {
+            return charPositions.size() - 1;
+        }
+
+        // Check which character boundary we're closer to
+        std::size_t idx = std::distance(charPositions.begin(), it);
+        float prevPos = *(it - 1);
+        float currPos = *it;
+
+        // If we're closer to the previous character, use that index
+        if (xPos - prevPos < currPos - xPos) {
+            return idx - 1;
+        }
+
+        return idx;
+    }
+};
+
+// Modified getCharIndex using the width cache
+static std::size_t getCharIndex(std::string_view s, float cursorPosX) {
     // Ignore cursor position when it is invalid
     if (cursorPosX < 0) {
         return 0;
     }
 
-    // Check for exit conditions
+    // Check for empty strings
     if (s.empty()) {
         return 0;
     }
-    if (end < start) {
-        return utf8Length(s);
-    }
 
-    // Midpoint of given string range
-    std::size_t midIdx = midpoint(start, end);
+    // Build the character position cache
+    static CharWidthCache cache;
+    cache.build(s);
 
-    // Display width of the entire string up to the midpoint, gives the x-position where the (midIdx + 1)th char starts
-    float widthToMid = substringSizeX(s, 0, midIdx + 1);
-
-    // Same as above but exclusive, gives the x-position where the (midIdx)th char starts
-    float widthToMidEx = substringSizeX(s, 0, midIdx);
-
-    // Perform a recursive binary search to find the correct index
-    // If the mouse position is between the (midIdx)th and (midIdx + 1)th character positions, the search ends
-    if (cursorPosX < widthToMidEx) {
-        return getCharIndex(s, cursorPosX, start, midIdx - 1);
-    }
-    else if (cursorPosX > widthToMid) {
-        return getCharIndex(s, cursorPosX, midIdx + 1, end);
-    }
-    else {
-        return midIdx;
-    }
+    // Use the cache to find the character index
+    return cache.getCharIndexAtPos(cursorPosX);
 }
 
-// Wrapper for getCharIndex providing the initial bounds.
-static std::size_t getCharIndex(std::string_view s, float cursorPosX) {
-    return getCharIndex(s, cursorPosX, 0, utf8Length(s));
+// Gets character index using font information
+std::size_t TextSelect::getCharIndexWithFontInfo(const TextLine& line, float cursorPosX) const {
+    // Ignore cursor position when it is invalid
+    if (cursorPosX < 0) {
+        return 0;
+    }
+
+    // Handle empty lines
+    if (line.segments.empty()) {
+        return 0;
+    }
+
+    // Build the character position cache with font info
+    static CharWidthCache cache;
+    cache.buildWithFontInfo(line);
+
+    // Use the cache to find the character index
+    return cache.getCharIndexAtPos(cursorPosX);
 }
 
 // Gets the scroll delta for the given cursor position and window bounds.
@@ -152,16 +300,34 @@ void TextSelect::handleMouseDown(const ImVec2& cursorPosStart) {
     }
 
     const float textHeight = ImGui::GetTextLineHeightWithSpacing();
-    ImVec2 mousePos = ImGui::GetMousePos() - cursorPosStart;
+
+    // Get mouse position in window coordinates, then adjust by cursor position
+    // This ensures the position is relative to the text's starting position
+    ImVec2 mousePos = ImGui::GetMousePos();
+    mousePos.x -= cursorPosStart.x;
+    mousePos.y -= cursorPosStart.y;
+
+    // Apply vertical offset
+    mousePos.y -= verticalOffset;
 
     // Get Y position of mouse cursor, in terms of line number (clamped to the valid range)
     std::size_t y = static_cast<std::size_t>(std::min(std::max(std::floor(mousePos.y / textHeight), 0.0f), static_cast<float>(numLines - 1)));
 
-    std::string_view currentLine = getLineAtIdx(y);
-    std::size_t x = getCharIndex(currentLine, mousePos.x);
+    // Calculate the X character position using font information if available
+    std::size_t x;
+    if (hasFontInfo && getLineWithFontInfo) {
+        TextLine line = getLineWithFontInfo(y);
+        x = getCharIndexWithFontInfo(line, mousePos.x);
+    }
+    else {
+        std::string_view currentLine = getLineAtIdx(y);
+        x = getCharIndex(currentLine, mousePos.x);
+    }
 
     // Get mouse click count and determine action
     if (int mouseClicks = ImGui::GetMouseClickedCount(ImGuiMouseButton_Left); mouseClicks > 0) {
+        std::string_view currentLine = getLineAtIdx(y);
+
         if (mouseClicks % 3 == 0) {
             // Triple click - select line
             bool atLastLine = y == (numLines - 1);
@@ -173,15 +339,27 @@ void TextSelect::handleMouseDown(const ImVec2& cursorPosStart) {
             // Initialize start and end iterators to current cursor position
             utf8::unchecked::iterator startIt{ currentLine.data() };
             utf8::unchecked::iterator endIt{ currentLine.data() };
-            for (std::size_t i = 0; i < x; i++) {
+            for (std::size_t i = 0; i < x && i < utf8Length(currentLine); i++) {
                 startIt++;
                 endIt++;
             }
 
-            bool isCurrentBoundary = isBoundary(*startIt);
+            // Handle edge cases for double-click at end of line
+            char32_t currentChar = 0;
+            if (x < utf8Length(currentLine)) {
+                currentChar = *startIt;
+            }
+            else if (!currentLine.empty()) {
+                // If at end of line, use last character
+                utf8::unchecked::iterator lastChar{ currentLine.data() };
+                utf8::unchecked::advance(lastChar, utf8Length(currentLine) - 1);
+                currentChar = *lastChar;
+            }
+
+            bool isCurrentBoundary = isBoundary(currentChar);
 
             // Scan to left until a word boundary is reached
-            for (std::size_t startInv = 0; startInv <= x; startInv++) {
+            for (std::size_t startInv = 0; startInv <= x && startIt.base() > currentLine.data(); startInv++) {
                 if (isBoundary(*startIt) != isCurrentBoundary) {
                     break;
                 }
@@ -192,7 +370,7 @@ void TextSelect::handleMouseDown(const ImVec2& cursorPosStart) {
             // Scan to right until a word boundary is reached
             for (std::size_t end = x; end <= utf8Length(currentLine); end++) {
                 selectEnd = { end, y };
-                if (isBoundary(*endIt) != isCurrentBoundary) {
+                if (end == utf8Length(currentLine) || isBoundary(*endIt) != isCurrentBoundary) {
                     break;
                 }
                 endIt++;
@@ -268,31 +446,132 @@ void TextSelect::drawSelection(const ImVec2& cursorPosStart) const {
         return;
     }
 
+    // Track cumulative height for proper line positioning
+    float cumulativeHeight = 0.0f;
+    const float baseTextHeight = ImGui::GetTextLineHeightWithSpacing();
+
     // Add a rectangle to the draw list for each line contained in the selection
-    for (std::size_t i = startY; i <= endY; i++) {
-        std::string_view line = getLineAtIdx(i);
+    for (std::size_t i = 0; i <= endY; i++) {
+        // Calculate height multiplier for this line
+        float heightMultiplier = 1.0f; // Default multiplier
 
-        // Display sizes
-        // The width of the space character is used for the width of newlines.
-        const float newlineWidth = ImGui::CalcTextSize(" ").x;
-        const float textHeight = ImGui::GetTextLineHeightWithSpacing();
+        if (hasFontInfo && getLineWithFontInfo) {
+            TextLine line = getLineWithFontInfo(i);
+            heightMultiplier = line.heightMultiplier;
+        }
 
-        // The first and last rectangles should only extend to the selection boundaries
-        // The middle rectangles (if any) enclose the entire line + some extra width for the newline.
-        float minX = i == startY ? substringSizeX(line, 0, startX) : 0;
-        float maxX = i == endY ? substringSizeX(line, 0, endX) : substringSizeX(line, 0) + newlineWidth;
+        // Skip lines before selection starts
+        if (i < startY) {
+            // Still accumulate height for positioning
+            cumulativeHeight += baseTextHeight * heightMultiplier;
+            continue;
+        }
 
-        // Rectangle height equals text height
-        float minY = static_cast<float>(i) * textHeight;
-        float maxY = static_cast<float>(i + 1) * textHeight;
+        if (hasFontInfo && getLineWithFontInfo) {
+            // Use font information to draw more accurate selections
+            TextLine line = getLineWithFontInfo(i);
 
-        // Get rectangle corner points offset from the cursor's start position in the window
-        ImVec2 rectMin = cursorPosStart + ImVec2{ minX, minY };
-        ImVec2 rectMax = cursorPosStart + ImVec2{ maxX, maxY };
+            // Get the height multiplier for this line (for headers)
+            heightMultiplier = line.heightMultiplier;
 
-        // Draw the rectangle
-        ImU32 color = ImGui::GetColorU32(ImGuiCol_TextSelectedBg);
-        ImGui::GetWindowDrawList()->AddRectFilled(rectMin, rectMax, color);
+            if (line.segments.empty()) {
+                // For empty lines, draw a small rectangle
+                float minY = cumulativeHeight + verticalOffset;
+                float maxY = minY + (baseTextHeight * heightMultiplier);
+
+                ImVec2 rectMin = cursorPosStart + ImVec2{ 0.0f, minY };
+                ImVec2 rectMax = cursorPosStart + ImVec2{ ImGui::CalcTextSize(" ").x * 2, maxY };
+
+                ImU32 color = ImGui::GetColorU32(ImGuiCol_TextSelectedBg);
+                ImGui::GetWindowDrawList()->AddRectFilled(rectMin, rectMax, color);
+
+                // Add this line's height to cumulative height
+                cumulativeHeight += baseTextHeight * heightMultiplier;
+                continue;
+            }
+
+            // Build position cache for accurate character indices
+            static CharWidthCache cache;
+            cache.buildWithFontInfo(line);
+
+            // Get precise start and end positions from the cache
+            float selStartX = 0.0f;
+            float selEndX = line.totalWidth;
+
+            // First line starts at selection start
+            if (i == startY) {
+                selStartX = startX < cache.charPositions.size() ?
+                    cache.charPositions[startX] : 0.0f;
+            }
+
+            // Last line ends at selection end
+            if (i == endY) {
+                selEndX = endX < cache.charPositions.size() ?
+                    cache.charPositions[endX] : cache.charPositions.back();
+            }
+
+            // Draw the selection rectangle with adjusted height and position
+            float minY = cumulativeHeight + verticalOffset;
+            float maxY = minY + (baseTextHeight * heightMultiplier);
+
+            ImVec2 rectMin = cursorPosStart + ImVec2{ selStartX, minY };
+            ImVec2 rectMax = cursorPosStart + ImVec2{ selEndX, maxY };
+
+            ImU32 color = ImGui::GetColorU32(ImGuiCol_TextSelectedBg);
+            ImGui::GetWindowDrawList()->AddRectFilled(rectMin, rectMax, color);
+        }
+        else {
+            // Fallback to the original implementation if font info is not available
+            std::string_view line = getLineAtIdx(i);
+
+            // Build character position cache for this line
+            static CharWidthCache cache;
+            cache.build(line);
+
+            // Display sizes
+            const float newlineWidth = ImGui::CalcTextSize(" ").x;
+
+            // Get precise X positions from the cache
+            float minX = 0.0f;
+            float maxX = 0.0f;
+
+            if (!line.empty() && cache.initialized) {
+                // For first line, start at the selection start position
+                if (i == startY) {
+                    minX = startX < cache.charPositions.size() ? cache.charPositions[startX] : 0.0f;
+                }
+                else {
+                    minX = 0.0f;
+                }
+
+                // For last line, end at the selection end position
+                if (i == endY) {
+                    maxX = endX < cache.charPositions.size() ? cache.charPositions[endX] : cache.charPositions.back();
+                }
+                else {
+                    maxX = cache.charPositions.back() + newlineWidth;
+                }
+            }
+            else {
+                // For empty lines, use a small but visible width
+                maxX = newlineWidth * 2;
+            }
+
+            // Rectangle position based on cumulative height
+            float minY = cumulativeHeight + verticalOffset;
+            float maxY = minY + baseTextHeight;
+
+            // Get rectangle corner points offset from the cursor's start position in the window
+            ImVec2 rectMin = cursorPosStart + ImVec2{ minX, minY };
+            ImVec2 rectMax = cursorPosStart + ImVec2{ maxX, maxY };
+
+            // Draw the rectangle
+            ImU32 color = ImGui::GetColorU32(ImGuiCol_TextSelectedBg);
+            ImGui::GetWindowDrawList()->AddRectFilled(rectMin, rectMax, color);
+        }
+
+        // Accumulate height for proper positioning of next line
+        cumulativeHeight += baseTextHeight * heightMultiplier;
     }
 }
 
@@ -311,12 +590,23 @@ void TextSelect::copy() const {
         std::size_t subStart = i == startY ? startX : 0;
         std::string_view line = getLineAtIdx(i);
 
+        // Handle empty lines properly
+        if (line.empty()) {
+            // If this is not the last line of the selection, add a newline
+            if (i < endY) {
+                selectedText += '\n';
+            }
+            continue;
+        }
+
         auto stringStart = line.begin();
-        utf8::unchecked::advance(stringStart, subStart);
+        utf8::unchecked::advance(stringStart, std::min(subStart, utf8Length(line)));
 
         auto stringEnd = stringStart;
         if (i == endY) {
-            utf8::unchecked::advance(stringEnd, endX - subStart);
+            // Make sure we don't go past the end of the string
+            std::size_t charsToAdvance = std::min(endX, utf8Length(line)) - std::min(subStart, utf8Length(line));
+            utf8::unchecked::advance(stringEnd, charsToAdvance);
         }
         else {
             stringEnd = line.end();
@@ -343,10 +633,7 @@ void TextSelect::selectAll() {
     selectEnd = { utf8Length(lastLine), lastLineIdx };
 }
 
-void TextSelect::update() {
-    // ImGui::GetCursorStartPos() is in window coordinates so it is added to the window position
-    ImVec2 cursorPosStart = ImGui::GetWindowPos() + ImGui::GetCursorStartPos();
-
+void TextSelect::update(const ImVec2& cursorPosStart) {
     // Switch cursors if the window is hovered
     bool hovered = ImGui::IsWindowHovered();
     if (hovered) {
@@ -382,4 +669,10 @@ void TextSelect::update() {
     else if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_C)) {
         copy();
     }
+}
+
+void TextSelect::update() {
+    // Use window position plus cursor start position
+    ImVec2 cursorPosStart = ImGui::GetWindowPos() + ImGui::GetCursorStartPos();
+    update(cursorPosStart);
 }

@@ -419,7 +419,7 @@ private:
                 modelNameConfig.id = "##modelNameMessage" + std::to_string(index);
                 modelNameConfig.label = msg.modelName;
                 modelNameConfig.icon = ICON_CI_SPARKLE;
-                modelNameConfig.size = ImVec2(modelNameWidth, 0);
+                modelNameConfig.size = ImVec2(modelNameWidth + 24.0F, 0);
                 modelNameConfig.fontSize = FontsManager::SM;
                 modelNameConfig.alignment = Alignment::LEFT;
                 modelNameConfig.state = ButtonState::DISABLED;

@@ -135,7 +135,6 @@ void imgui_md::BLOCK_H(const MD_BLOCK_H_DETAIL* d, bool e)
 	if (!e) {
 		if (d->level <= 2) {
 			ImGui::NewLine();
-			ImGui::Separator();
 		}
 	}
 }

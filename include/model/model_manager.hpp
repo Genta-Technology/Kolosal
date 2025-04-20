@@ -1026,7 +1026,7 @@ namespace Model
             }
 
             // Use thread pool instead of creating a detached thread
-            m_threadPool.enqueue([this, jobId, streamingCallback, saveChat, modelId]() {
+            std::thread([this, jobId, streamingCallback, saveChat, modelId]() {
                 // Poll while job is running or until the engine says it's done
                 while (true)
                 {
@@ -1070,7 +1070,7 @@ namespace Model
                         std::cerr << "[ModelManager] Failed to remove job id from chat manager.\n";
                     }
                 }
-                });
+                }).detach();
 
             return jobId;
         }
@@ -1108,7 +1108,7 @@ namespace Model
             }
 
             // Use thread pool instead of creating a detached thread
-            m_threadPool.enqueue([this, jobId, streamingCallback, saveChat, modelId]() {
+            std::thread([this, jobId, streamingCallback, saveChat, modelId]() {
                 while (true)
                 {
                     // Check if job was stopped externally
@@ -1164,7 +1164,7 @@ namespace Model
                         }
                     }
                 }
-                });
+                }).detach();
 
             return jobId;
         }
@@ -1416,7 +1416,7 @@ namespace Model
                 }
 
                 // Use thread pool instead of detached thread
-                m_threadPool.enqueue([this, jobId, request, requestId, ctx]() {
+                std::thread([this, jobId, request, requestId, ctx]() {
                     std::string lastText;
                     auto startTime = std::chrono::steady_clock::now();
 
@@ -1508,7 +1508,7 @@ namespace Model
                             this->m_jobIds.end());
                         m_activeJobs.erase(jobId);
                     }
-                    });
+                    }).detach();
             }
 
             if (chunkIndex == 0) {
@@ -1695,7 +1695,7 @@ namespace Model
                 }
 
                 // Use thread pool instead of detached thread
-                m_threadPool.enqueue([this, jobId, request, requestId, ctx]() {
+                std::thread([this, jobId, request, requestId, ctx]() {
                     std::string lastText;
                     auto startTime = std::chrono::steady_clock::now();
 
@@ -1788,7 +1788,7 @@ namespace Model
                             this->m_jobIds.end());
                         m_activeJobs.erase(jobId);
                     }
-                    });
+                    }).detach();
             }
 
             // Prepare the chunk response
@@ -2282,7 +2282,7 @@ namespace Model
         }
 
         void startAsyncInitialization() {
-            m_initializationFuture = m_threadPool.enqueue([this]() {
+            m_initializationFuture = std::async(std::launch::async, [this]() {
                 auto& sysMonitor = SystemMonitor::getInstance();
                 sysMonitor.update();
 
@@ -2813,7 +2813,7 @@ namespace Model
                     variant->path.substr(0, variant->path.find_last_of("/\\"))).string();
             }
 
-            return m_threadPool.enqueue([this, modelName = modelName, variantName = variant->type, modelDir]() {
+            return std::async(std::launch::async, [this, modelName = modelName, variantName = variant->type, modelDir]() {
 				std::cout << "[ModelManager] size of inference engines: " << sizeof(m_inferenceEngines) << std::endl;
 
                 auto engine = m_createInferenceEnginePtr();
@@ -3021,7 +3021,6 @@ namespace Model
             return response;
         }
 
-        ThreadPool m_threadPool{ std::max(4u, std::thread::hardware_concurrency() - 1) };
         std::unordered_map<int, std::atomic<bool>> m_activeJobs;
 
         mutable std::shared_mutex                       m_mutex;

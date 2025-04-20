@@ -102,6 +102,7 @@ protected:
 	virtual void set_font(bool e);
 	virtual ImVec4 get_color() const;
 
+	virtual void render_text(const char* str, const char* str_end);
 
 	//url == m_href
 	virtual void open_url() const;
@@ -144,13 +145,9 @@ protected:
 	std::vector<CodeBlock> m_code_stack;
 	int m_code_id = 0; // Replaces static counter
 	
-private:
-
 	int text(MD_TEXTTYPE type, const char* str, const char* str_end);
 	int block(MD_BLOCKTYPE type, void* d, bool e);
 	int span(MD_SPANTYPE type, void* d, bool e);
-
-	void render_text(const char* str, const char* str_end);
 	
 	void set_color(bool e);
 	void set_href(bool e, const MD_ATTRIBUTE& src);
