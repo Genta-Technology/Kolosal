@@ -576,6 +576,9 @@ protected:
             finishCurrentLine();
             sameLineSequence = false;
             textWrapped = false;
+
+            ImGui::Unindent();
+            ImGui::Indent(21);
         }
         else {
             if (!m_code_stack.empty()) {
