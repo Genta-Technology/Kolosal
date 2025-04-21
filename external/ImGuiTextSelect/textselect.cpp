@@ -475,17 +475,7 @@ void TextSelect::drawSelection(const ImVec2& cursorPosStart) const {
             heightMultiplier = line.heightMultiplier;
 
             if (line.segments.empty()) {
-                // For empty lines, draw a small rectangle
-                float minY = cumulativeHeight + verticalOffset;
-                float maxY = minY + (baseTextHeight * heightMultiplier);
-
-                ImVec2 rectMin = cursorPosStart + ImVec2{ 0.0f, minY };
-                ImVec2 rectMax = cursorPosStart + ImVec2{ ImGui::CalcTextSize(" ").x * 2, maxY };
-
-                ImU32 color = ImGui::GetColorU32(ImGuiCol_TextSelectedBg);
-                ImGui::GetWindowDrawList()->AddRectFilled(rectMin, rectMax, color);
-
-                // Add this line's height to cumulative height
+                // For empty lines, just accumulate height but don't draw
                 cumulativeHeight += baseTextHeight * heightMultiplier;
                 continue;
             }
@@ -524,6 +514,12 @@ void TextSelect::drawSelection(const ImVec2& cursorPosStart) const {
             // Fallback to the original implementation if font info is not available
             std::string_view line = getLineAtIdx(i);
 
+            // Skip drawing for empty lines, but maintain selection behavior
+            if (line.empty()) {
+                cumulativeHeight += baseTextHeight;
+                continue;
+            }
+
             // Build character position cache for this line
             static CharWidthCache cache;
             cache.build(line);
@@ -535,7 +531,7 @@ void TextSelect::drawSelection(const ImVec2& cursorPosStart) const {
             float minX = 0.0f;
             float maxX = 0.0f;
 
-            if (!line.empty() && cache.initialized) {
+            if (cache.initialized) {
                 // For first line, start at the selection start position
                 if (i == startY) {
                     minX = startX < cache.charPositions.size() ? cache.charPositions[startX] : 0.0f;
@@ -551,10 +547,6 @@ void TextSelect::drawSelection(const ImVec2& cursorPosStart) const {
                 else {
                     maxX = cache.charPositions.back() + newlineWidth;
                 }
-            }
-            else {
-                // For empty lines, use a small but visible width
-                maxX = newlineWidth * 2;
             }
 
             // Rectangle position based on cumulative height

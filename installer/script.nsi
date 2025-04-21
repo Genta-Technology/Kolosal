@@ -174,6 +174,9 @@ Section "Kolosal AI" SecKolosalAI
   File "kolosal_server.dll"
   File "vcomp140.dll"
   File "LICENSE"
+  File "freetype.dll"
+  File "ucrtbased.dll"
+  File "vcruntime140d.dll"
 
   ; Create and populate subdirectories
   CreateDirectory "$INSTDIR\assets"

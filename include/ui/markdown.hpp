@@ -590,6 +590,21 @@ protected:
                 const int   line_count = std::count(block.content.begin(), block.content.end(), '\n') + 2;
                 const float total_height = line_height * line_count;
 
+                // Add blank line with height multiplier equal to the
+                // code block headers
+                textLines.push_back("wololo");
+                StyledTextLine styledLine;
+                StyledTextSegment spaceSegment;
+                spaceSegment.text = "wololo";
+                spaceSegment.font = currentFont;
+                spaceSegment.isBold = false;
+                spaceSegment.startX = 0;
+                styledLine.segments.push_back(spaceSegment);
+                styledLine.totalWidth = 0;
+                styledLine.heightMultiplier = (total_height + 44 + (!block.lang.empty() ? 4 : 0) + ImGui::GetTextLineHeightWithSpacing()) /
+                    ImGui::GetTextLineHeightWithSpacing();
+                styledLines.push_back(styledLine);
+
                 // Setup styling
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 24);
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, Config::InputField::INPUT_FIELD_BG_COLOR);
@@ -646,6 +661,7 @@ protected:
                 );
                 input_cfg.frameRounding = 4.0f;
                 input_cfg.flags = ImGuiInputTextFlags_ReadOnly;
+				input_cfg.backgroundColor = ImVec4(0, 0, 0, 0);
                 InputField::renderMultiline(input_cfg);
 
                 ImGui::EndChild();
@@ -654,43 +670,7 @@ protected:
 
                 m_code_stack.pop_back();
 
-                // Add code text to text selection - preserve lines
-                std::istringstream codeStream(block.content);
-                std::string codeLine;
-                while (std::getline(codeStream, codeLine)) {
-                    if (inListItem) {
-                        applyListIndent(codeLine);
-                    }
-
-                    // Create a styled line for code text
-                    StyledTextLine styledLine;
-                    StyledTextSegment codeSegment;
-                    codeSegment.text = codeLine;
-                    codeSegment.font = currentFont;
-                    codeSegment.isBold = false;
-                    codeSegment.startX = 0;
-
-                    // Calculate width
-                    ImFont* oldFont = ImGui::GetFont();
-                    if (currentFont) {
-                        ImGui::PushFont(currentFont);
-                    }
-                    codeSegment.endX = ImGui::CalcTextSize(codeLine.c_str()).x;
-                    if (currentFont) {
-                        ImGui::PopFont();
-                    }
-
-                    styledLine.segments.push_back(codeSegment);
-                    styledLine.totalWidth = codeSegment.endX;
-
-                    // Add to lines
-                    textLines.push_back(codeLine);
-                    styledLines.push_back(styledLine);
-                }
-
-                // Add a blank line after code block
-                textLines.push_back("");
-                styledLines.push_back(StyledTextLine{});
+				// Reset the current line and styled line
                 currentLine.clear();
                 currentStyledLine = StyledTextLine{};
                 currentSegment = StyledTextSegment{};
@@ -955,10 +935,10 @@ protected:
                 currentStyledLine.heightMultiplier = 1.4f;
             }
             else if (d->level == 3) {
-                currentStyledLine.heightMultiplier = 1.4f;
+                currentStyledLine.heightMultiplier = 1;
             }
             else {
-                currentStyledLine.heightMultiplier = 1.4f;
+                currentStyledLine.heightMultiplier = 1;
             }
 
             // Update font for the heading
