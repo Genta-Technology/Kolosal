@@ -294,29 +294,46 @@ TextSelect::Selection TextSelect::getSelection() const {
 
 void TextSelect::handleMouseDown(const ImVec2& cursorPosStart) {
     std::size_t numLines = getNumLines();
-
     if (numLines == 0) {
         return;
     }
 
-    const float textHeight = ImGui::GetTextLineHeightWithSpacing();
+    // Base line height (will be multiplied per‐line when needed)
+    const float baseTextHeight = ImGui::GetTextLineHeightWithSpacing();
 
     // Get mouse position in window coordinates, then adjust by cursor position
-    // This ensures the position is relative to the text's starting position
+    // so it's relative to the top‐left of the text block.
     ImVec2 mousePos = ImGui::GetMousePos();
     mousePos.x -= cursorPosStart.x;
     mousePos.y -= cursorPosStart.y;
 
-    // Apply vertical offset
+    // Account for any vertical scrolling offset you've applied elsewhere
     mousePos.y -= verticalOffset;
 
-    // Get Y position of mouse cursor, in terms of line number (clamped to the valid range)
-    std::size_t y = static_cast<std::size_t>(std::min(std::max(std::floor(mousePos.y / textHeight), 0.0f), static_cast<float>(numLines - 1)));
+    // Determine which line we're clicking by accumulating each line's actual height
+    std::size_t y = numLines - 1; // default to last line if we fall past the end
+    float cumulativeHeight = 0.0f;
+    for (std::size_t i = 0; i < numLines; ++i) {
+        // Figure out this line's height multiplier
+        float heightMultiplier = 1.0f;
+        if (hasFontInfo && getLineWithFontInfo) {
+            TextLine tmp = getLineWithFontInfo(i);
+            heightMultiplier = tmp.heightMultiplier;
+        }
 
-    // Calculate the X character position using font information if available
+        float thisLineHeight = baseTextHeight * heightMultiplier;
+        if (mousePos.y < cumulativeHeight + thisLineHeight) {
+            y = i;
+            break;
+        }
+        cumulativeHeight += thisLineHeight;
+    }
+
+    // Compute the character index on that line
     std::size_t x;
     if (hasFontInfo && getLineWithFontInfo) {
         TextLine line = getLineWithFontInfo(y);
+        // mousePos.x is unchanged by vertical logic
         x = getCharIndexWithFontInfo(line, mousePos.x);
     }
     else {
@@ -324,75 +341,65 @@ void TextSelect::handleMouseDown(const ImVec2& cursorPosStart) {
         x = getCharIndex(currentLine, mousePos.x);
     }
 
-    // Get mouse click count and determine action
+    // Now handle clicks and drags exactly as before
     if (int mouseClicks = ImGui::GetMouseClickedCount(ImGuiMouseButton_Left); mouseClicks > 0) {
         std::string_view currentLine = getLineAtIdx(y);
 
         if (mouseClicks % 3 == 0) {
-            // Triple click - select line
-            bool atLastLine = y == (numLines - 1);
+            // Triple click -> select entire line
+            bool atLastLine = (y == numLines - 1);
             selectStart = { 0, y };
-            selectEnd = { atLastLine ? utf8Length(currentLine) : 0, atLastLine ? y : y + 1 };
+            selectEnd = { atLastLine ? utf8Length(currentLine) : 0,
+                            atLastLine ? y : (y + 1) };
         }
         else if (mouseClicks % 2 == 0) {
-            // Double click - select word
-            // Initialize start and end iterators to current cursor position
+            // Double click -> select word under cursor
             utf8::unchecked::iterator startIt{ currentLine.data() };
             utf8::unchecked::iterator endIt{ currentLine.data() };
-            for (std::size_t i = 0; i < x && i < utf8Length(currentLine); i++) {
-                startIt++;
-                endIt++;
+            for (std::size_t i = 0; i < x && i < utf8Length(currentLine); ++i) {
+                startIt++; endIt++;
             }
 
-            // Handle edge cases for double-click at end of line
-            char32_t currentChar = 0;
+            // Determine word boundaries
+            char32_t currChar = 0;
             if (x < utf8Length(currentLine)) {
-                currentChar = *startIt;
+                currChar = *startIt;
             }
             else if (!currentLine.empty()) {
-                // If at end of line, use last character
                 utf8::unchecked::iterator lastChar{ currentLine.data() };
                 utf8::unchecked::advance(lastChar, utf8Length(currentLine) - 1);
-                currentChar = *lastChar;
+                currChar = *lastChar;
             }
+            bool isCurrBoundary = isBoundary(currChar);
 
-            bool isCurrentBoundary = isBoundary(currentChar);
-
-            // Scan to left until a word boundary is reached
-            for (std::size_t startInv = 0; startInv <= x && startIt.base() > currentLine.data(); startInv++) {
-                if (isBoundary(*startIt) != isCurrentBoundary) {
-                    break;
-                }
-                selectStart = { x - startInv, y };
+            // Expand to the left
+            for (std::size_t inv = 0; inv <= x && startIt.base() > currentLine.data(); ++inv) {
+                if (isBoundary(*startIt) != isCurrBoundary) break;
+                selectStart = { x - inv, y };
                 startIt--;
             }
-
-            // Scan to right until a word boundary is reached
-            for (std::size_t end = x; end <= utf8Length(currentLine); end++) {
+            // Expand to the right
+            for (std::size_t end = x; end <= utf8Length(currentLine); ++end) {
                 selectEnd = { end, y };
-                if (end == utf8Length(currentLine) || isBoundary(*endIt) != isCurrentBoundary) {
-                    break;
-                }
+                if (end == utf8Length(currentLine) || isBoundary(*endIt) != isCurrBoundary) break;
                 endIt++;
             }
         }
         else if (ImGui::IsKeyDown(ImGuiMod_Shift)) {
-            // Single click with shift - select text from start to click
-            // The selection starts from the beginning if no start position exists
+            // Shift+click -> extend selection
             if (selectStart.isInvalid()) {
                 selectStart = { 0, 0 };
             }
-
             selectEnd = { x, y };
         }
         else {
-            // Single click - set start position, invalidate end position
+            // Single click -> reset selection start
             selectStart = { x, y };
             selectEnd = { std::string_view::npos, std::string_view::npos };
         }
     }
     else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-        // Mouse dragging - set end position
+        // Dragging -> update selection end
         selectEnd = { x, y };
     }
 }

@@ -61,16 +61,16 @@ public:
     StyledTextSegment currentSegment;
 
     // Tracking variables
-    int linePartCount = 0;
-    float lastCursorX = 0;
-    float lastCursorY = 0;
-    bool sameLineSequence = false;
-    float currentLineWidth = 0;
-    bool textWrapped = false;
-    int listNestingLevel = 0;  // Track list nesting level for indentation
-    bool inListItem = false;   // Track if we're inside a list item
-    bool lastFontWasBold = false; // Track if the last used font was bold
-    ImFont* currentFont = nullptr; // Track the current font
+    int     linePartCount       = 0;
+    float   lastCursorX         = 0;
+    float   lastCursorY         = 0;
+    bool    sameLineSequence    = false;
+    float   currentLineWidth    = 0;
+    bool    textWrapped         = false;
+    int     listNestingLevel    = 0;        // Track list nesting level for indentation
+    bool    inListItem          = false;    // Track if we're inside a list item
+    bool    lastFontWasBold     = false;    // Track if the last used font was bold
+    ImFont* currentFont         = nullptr;  // Track the current font
 
     // Initialize text selection
     void initTextSelect() {
@@ -592,10 +592,10 @@ protected:
 
                 // Add blank line with height multiplier equal to the
                 // code block headers
-                textLines.push_back("wololo");
+                textLines.push_back("");
                 StyledTextLine styledLine;
                 StyledTextSegment spaceSegment;
-                spaceSegment.text = "wololo";
+                spaceSegment.text = "";
                 spaceSegment.font = currentFont;
                 spaceSegment.isBold = false;
                 spaceSegment.startX = 0;
@@ -617,7 +617,7 @@ protected:
                 // Use stable ID for child window
                 ImGui::BeginChild(ImGui::GetID(("##code_content_" + std::to_string(block.render_id)).c_str()),
                     ImVec2(0, total_height + 36 + (!block.lang.empty() ? 4 : 0)), false,
-                    ImGuiWindowFlags_NoScrollbar);
+                    ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoMove);
 
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 4);
 
@@ -945,9 +945,7 @@ protected:
             set_font(true);
         }
         else {
-            if (d->level <= 2) {
-                ImGui::NewLine();
-            }
+            ImGui::NewLine();
 
             // Finish the heading line before exiting
             finishCurrentLine();
