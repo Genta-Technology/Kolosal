@@ -1,0 +1,28 @@
+{
+    "attention_heads": 40.0,
+    "author": "Alibaba",
+    "hidden_layers": 64.0,
+    "hidden_size": 5120.0,
+    "kv_heads": 40.0,
+    "name": "QwQ 32B",
+    "variants": {
+        "4-bit": {
+            "downloadLink": "https://huggingface.co/kolosal/qwq-32b/resolve/main/QwQ-32B-UD-Q4_K_XL.gguf",
+            "downloadProgress": 0.0,
+            "isDownloaded": false,
+            "lastSelected": 0,
+            "path": "models/QwQ 32B/4-bit/QwQ-32B-UD-Q4_K_XL.gguf",
+            "size": 18.680028915405273,
+            "type": "4-bit"
+        },
+        "8-bit": {
+            "downloadLink": "https://huggingface.co/kolosal/qwq-32b/resolve/main/QwQ-32B-UD-Q8_K_XL.gguf",
+            "downloadProgress": 0.0,
+            "isDownloaded": false,
+            "lastSelected": 0,
+            "path": "models/QwQ 32B/8-bit/QwQ-32B-UD-Q8_K_XL.gguf",
+            "size": 36.07327651977539,
+            "type": "8-bit"
+        }
+    }
+}

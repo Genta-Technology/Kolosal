@@ -1,0 +1,28 @@
+{
+    "attention_heads": 32.0,
+    "author": "Alibaba",
+    "hidden_layers": 48.0,
+    "hidden_size": 2048.0,
+    "kv_heads": 32.0,
+    "name": "Qwen 3 30B A3B",
+    "variants": {
+        "4-bit": {
+            "downloadLink": "https://huggingface.co/kolosal/qwen3-30b/resolve/main/Qwen3-30B-A3B-UD-Q4_K_XL.gguf",
+            "downloadProgress": 0.0,
+            "isDownloaded": false,
+            "lastSelected": 0,
+            "path": "models/Qwen 3 30B A3B/4-bit/Qwen3-30B-A3B-UD-Q4_K_XL.gguf",
+            "size": 16.49899673461914,
+            "type": "4-bit"
+        },
+        "8-bit": {
+            "downloadLink": "https://huggingface.co/kolosal/qwen3-30b/resolve/main/Qwen3-30B-A3B-Q8_0.gguf",
+            "downloadProgress": 0.0,
+            "isDownloaded": false,
+            "lastSelected": 0,
+            "path": "models/Qwen 3 30B A3B/8-bit/Qwen3-30B-A3B-Q8_0.gguf",
+            "size": 30.253019332885742,
+            "type": "8-bit"
+        }
+    }
+}
