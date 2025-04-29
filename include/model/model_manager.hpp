@@ -5,6 +5,7 @@
 #include "model_persistence.hpp"
 #include "model_loader_config_manager.hpp"
 #include "threadpool.hpp"
+#include "chat/tool_manager.hpp"
 
 #include <kolosal_server.hpp>
 #include <types.h>
@@ -994,7 +995,7 @@ namespace Model
         }
 
         int startCompletionJob(const CompletionParameters& params, std::function<void(const std::string&, 
-            const float, const int, const bool)> streamingCallback, const std::string modelName, const std::string variant, const bool saveChat = true)
+            const float, const int, bool&)> streamingCallback, const std::string modelName, const std::string variant, const bool saveChat = true)
         {
             std::string modelId = modelName + ":" + variant;
 
@@ -1049,7 +1050,13 @@ namespace Model
                         }
                     }
 
-                    if (isFinished) break;
+                    if (isFinished) 
+                    {
+						// if isFinished is set to true by the callback, stop the job
+						if (!this->m_inferenceEngines.at(modelId)->isJobFinished(jobId))
+							this->m_inferenceEngines.at(modelId)->stopJob(jobId);
+                        break;
+                    }
 
                     // Sleep briefly to avoid busy-waiting
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1076,7 +1083,7 @@ namespace Model
         }
 
         int startChatCompletionJob(const ChatCompletionParameters& params, std::function<void(const std::string&, 
-            const float, const int, const bool)> streamingCallback, const std::string modelName, const std::string variant, const bool saveChat = true)
+            const float, const int, bool&)> streamingCallback, const std::string modelName, const std::string variant, const bool saveChat = true)
         {
 			std::string modelId = modelName + ":" + variant;
 
@@ -1094,7 +1101,45 @@ namespace Model
                 }
             }
 
-            int jobId = m_inferenceEngines.at(modelId)->submitChatCompletionsJob(params);
+            // Create a copy of parameters that we can modify
+			ChatCompletionParameters modifiedParams = params;
+
+            // Format the system prompt with tools if ToolManager is initialized
+            auto& toolManager = Chat::ToolManager::getInstance();
+            if (toolManager.isInitialized())
+            {
+                // Get current system prompt (if any)
+                std::string systemPrompt = "";
+                for (const auto& msg : modifiedParams.messages) {
+                    if (msg.role == "system") {
+                        systemPrompt = msg.content;
+                        break;
+                    }
+                }
+
+                // Format system prompt to include tool information
+                std::string formattedSystemPrompt = toolManager.formatPromptWithTools(systemPrompt);
+
+                // Update or add the system message
+                bool systemMsgFound = false;
+                for (auto& msg : modifiedParams.messages) {
+                    if (msg.role == "system") {
+                        msg.content = formattedSystemPrompt;
+                        systemMsgFound = true;
+                        break;
+                    }
+                }
+
+                if (!systemMsgFound) {
+                    // Add system message at the beginning
+                    Message systemMsg;
+                    systemMsg.role = "system";
+                    systemMsg.content = formattedSystemPrompt;
+                    modifiedParams.messages.insert(modifiedParams.messages.begin(), systemMsg);
+                }
+            }
+
+            int jobId = m_inferenceEngines.at(modelId)->submitChatCompletionsJob(modifiedParams);
             if (jobId < 0) {
                 std::cerr << "[ModelManager] Failed to submit chat completions job.\n";
                 return -1;
@@ -1109,6 +1154,9 @@ namespace Model
 
             // Use thread pool instead of creating a detached thread
             std::thread([this, jobId, streamingCallback, saveChat, modelId]() {
+
+				bool isFinished = false;
+
                 while (true)
                 {
                     // Check if job was stopped externally
@@ -1118,10 +1166,18 @@ namespace Model
                         if (it == m_activeJobs.end() || !it->second) break;
                     }
 
+                    if (isFinished)
+                    {
+                        // if isFinished is set to true by the callback, stop the job
+                        if (!this->m_inferenceEngines.at(modelId)->isJobFinished(jobId))
+                            this->m_inferenceEngines.at(modelId)->stopJob(jobId);
+                        break;
+                    }
+
                     if (this->m_inferenceEngines.at(modelId)->hasJobError(jobId)) break;
 
                     CompletionResult partial = this->m_inferenceEngines.at(modelId)->getJobResult(jobId);
-                    bool isFinished = this->m_inferenceEngines.at(modelId)->isJobFinished(jobId);
+                    isFinished = this->m_inferenceEngines.at(modelId)->isJobFinished(jobId);
 
                     if (!partial.text.empty()) {
                         // Call the user's callback (no need to lock for the callback)
@@ -1129,8 +1185,6 @@ namespace Model
                             streamingCallback(partial.text, partial.tps, jobId, isFinished);
                         }
                     }
-
-                    if (isFinished) break;
 
                     // Sleep briefly to avoid busy-waiting
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));

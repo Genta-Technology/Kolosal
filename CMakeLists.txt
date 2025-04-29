@@ -12,6 +12,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
+if(MSVC)
+    add_compile_options(/bigobj)
+endif()
+
 ucm_print_flags()
 
 # Define source directories
@@ -103,6 +107,15 @@ set(IMGUI_SOURCES
     ${IMGUI_DIR}/backends/imgui_impl_dx10.cpp  # Changed from OpenGL3 to DirectX 10
 )
 
+set(MCP_SOURCES
+    ${EXTERNAL_DIR}/cpp-mcp/src/mcp_message.cpp
+    ${EXTERNAL_DIR}/cpp-mcp/src/mcp_resource.cpp
+    ${EXTERNAL_DIR}/cpp-mcp/src/mcp_server.cpp
+    ${EXTERNAL_DIR}/cpp-mcp/src/mcp_sse_client.cpp
+    ${EXTERNAL_DIR}/cpp-mcp/src/mcp_stdio_client.cpp
+    ${EXTERNAL_DIR}/cpp-mcp/src/mcp_tool.cpp
+)
+
 # ==== Font Definitions ====
 set(FONT_DEFINITIONS
     IMGUI_FONT_PATH_INTER_REGULAR="fonts/Inter-Regular.ttf"
@@ -119,6 +132,7 @@ add_library(kolosal_lib STATIC
     ${IMGUI_SOURCES}
     ${MARKDOWN_RENDERER}
     ${IMGUI_TEXT_SELECT}
+    ${MCP_SOURCES}
 )
 
 # Set definitions
@@ -141,6 +155,8 @@ target_include_directories(kolosal_lib PUBLIC
     ${EXTERNAL_DIR}/imgui_md
     ${EXTERNAL_DIR}/imspinner
     ${EXTERNAL_DIR}/ImGuiTextSelect
+    ${EXTERNAL_DIR}/cpp-mcp/include
+    ${EXTERNAL_DIR}/cpp-mcp/common
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/assets
     ${CMAKE_SOURCE_DIR}/kolosal-server/include

@@ -8,6 +8,7 @@
 #include "ui/tab_manager.hpp"
 #include "ui/status_bar.hpp"
 
+#include "chat/tool_manager.hpp"
 #include "chat/chat_manager.hpp"
 #include "model/preset_manager.hpp"
 #include "model/model_manager.hpp"
@@ -181,6 +182,12 @@ public:
         Model::initializePresetManager();
         Model::initializeModelManager();
         Model::initializeModelLoaderConfigManager("model_loader_config.json");
+
+        // Initialize the ToolManager with default settings (SSE client)
+        auto& toolManager = Chat::ToolManager::getInstance();
+        toolManager.setClientType(Chat::ClientType::SSE);
+        toolManager.setSseEndpoint("localhost", 8888);
+		toolManager.initializeClient();
 
         // Initialize Native File Dialog
         NFD_Init();

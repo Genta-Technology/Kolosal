@@ -298,10 +298,11 @@ private:
         ImGui::EndChild();
     }
 
-    static void chatStreamingCallback(const std::string& partialOutput, const float tps, const int jobId, const bool isFinished) {
-        auto& chatManager = Chat::ChatManager::getInstance();
-        auto& modelManager = Model::ModelManager::getInstance();
-        std::string chatName = chatManager.getChatNameByJobId(jobId);
+    static void chatStreamingCallback(const std::string& partialOutput, const float tps, const int jobId, bool& isFinished) {
+        auto& chatManager       = Chat::ChatManager::getInstance();
+        auto& modelManager      = Model::ModelManager::getInstance();
+        auto& toolManager       = Chat::ToolManager::getInstance();
+        std::string chatName    = chatManager.getChatNameByJobId(jobId);
 
         if (isFinished) modelManager.setModelGenerationInProgress(false);
 
@@ -312,6 +313,61 @@ private:
                 // Append to existing assistant message
                 chat.messages.back().content = partialOutput;
                 chat.messages.back().tps = tps;
+
+                // Check for tool calls in the partial output
+                if (Chat::ToolManager::containsToolCall(partialOutput) && toolManager.isInitialized()) {
+                    // Extract tool calls
+                    std::vector<Chat::ToolCall> toolCalls = Chat::ToolManager::extractToolCalls(partialOutput);
+
+                    // Update the message's tool calls
+                    chat.messages.back().toolCalls = toolCalls;
+
+#ifdef DEBUG
+					std::cout << "[ChatWindow] Calling tools: " << std::endl;
+					for (const auto& toolCall : toolCalls) {
+						std::cout << "[ChatWindow] Tool: " << toolCall.func_name << ", Arguments: " << std::endl;
+						for (const auto& arg : toolCall.params) {
+							std::cout << "[ChatWindow]   - " << arg.first << ": " << arg.second << std::endl;
+						}
+					}
+#endif
+
+                    // If we have tool calls, execute them
+                    if (!toolCalls.empty()) {
+						isFinished = true; // Mark the job as finished to avoid further processing
+
+                        // Consider executing tool calls asynchronously to avoid blocking the UI
+                        std::thread([&toolManager, toolCalls, chatName, &chatManager]() {
+                            // Execute tool calls
+                            std::vector<Chat::ToolResult> results = toolManager.executeTools(toolCalls);
+
+                            // Process results - you might want to update the UI or take other actions
+                            auto chatOpt = chatManager.getChat(chatName);
+                            if (chatOpt) {
+                                Chat::ChatHistory updatedChat = chatOpt.value();
+                                if (!updatedChat.messages.empty() && updatedChat.messages.back().role == "assistant") {
+                                    // Update tool calls with outputs
+                                    for (size_t i = 0; i < results.size() && i < updatedChat.messages.back().toolCalls.size(); ++i) {
+                                        if (results[i].success) {
+                                            updatedChat.messages.back().toolCalls[i].output = results[i].result;
+                                        }
+                                        else {
+                                            updatedChat.messages.back().toolCalls[i].output = "Error: " + results[i].error;
+                                        }
+                                    }
+
+                                    // Replace tool calls in content with results if desired
+                                    updatedChat.messages.back().content = toolManager.replaceToolCallsWithResults(
+                                        updatedChat.messages.back().content, updatedChat.messages.back().toolCalls);
+
+                                    // Update the chat
+                                    chatManager.updateChat(chatName, updatedChat);
+                                }
+                            }
+                            }).detach();
+                    }
+                }
+
                 chatManager.updateChat(chatName, chat);
             }
             else {
@@ -323,6 +379,12 @@ private:
                 assistantMsg.tps = tps;
                 assistantMsg.modelName = modelManager.getCurrentModelName().value_or("idk") + " | "
                     + modelManager.getCurrentVariantType();
+
+                // Check for tool calls in the new message
+                if (Chat::ToolManager::containsToolCall(partialOutput)) {
+                    assistantMsg.toolCalls = Chat::ToolManager::extractToolCalls(partialOutput);
+                }
+
                 chatManager.addMessage(chatName, assistantMsg);
             }
         }

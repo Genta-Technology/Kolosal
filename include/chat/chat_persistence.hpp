@@ -92,7 +92,7 @@ namespace Chat
                                     std::string fileChatName = baseName.substr(0, atPos);
 
                                     // Compare with the provided chatName.
-                                    if (fileChatName == chatName) {
+                                    if (fileChatName == encodeChatName(chatName)) {
                                         try {
                                             if (!std::filesystem::remove(entry.path())) {
                                                 std::cerr << "[FileChatPersistence] Failed to remove file: "
@@ -143,11 +143,11 @@ namespace Chat
                                     std::string fileChatName = baseName.substr(0, atPos);
 
                                     // If it matches the old chat name, we need to rename it.
-                                    if (fileChatName == oldChatName) {
+                                    if (fileChatName == encodeChatName(oldChatName)) {
                                         // The part starting with '@' (i.e. the model name and separator)
                                         std::string modelPart = baseName.substr(atPos);
                                         // Build the new file name: newChatName + modelPart + ".bin"
-                                        std::string newFileName = newChatName + modelPart + ".bin";
+                                        std::string newFileName = encodeChatName(newChatName) + modelPart + ".bin";
                                         std::filesystem::path newPath = std::filesystem::absolute(
                                             std::filesystem::path(m_basePath) / newFileName);
                                         try {
@@ -181,28 +181,6 @@ namespace Chat
                 });
         }
 
-        std::filesystem::path getChatPath(const std::string& chatName) const override
-        {
-			// remove characters that are not allowed in file names
-			std::string chatNameFiltered = chatName;
-			std::replace_if(chatNameFiltered.begin(), chatNameFiltered.end(),
-				[](char c) { return !std::isalnum(c); }, '_');
-
-            return std::filesystem::absolute(
-                std::filesystem::path(m_basePath) / (chatName + ".chat"));
-        }
-
-        std::filesystem::path getKvChatPath(const std::string& chatName) const override
-		{
-            // remove characters that are not allowed in file names
-            std::string chatNameFiltered = chatName;
-            std::replace_if(chatNameFiltered.begin(), chatNameFiltered.end(),
-                [](char c) { return !std::isalnum(c); }, '_');
-
-			return std::filesystem::absolute(
-				std::filesystem::path(m_basePath) / (chatName + ".bin"));
-		}
-
     private:
         const   std::filesystem::path   m_basePath;
         const   std::array<uint8_t, 32> m_key;
@@ -222,8 +200,11 @@ namespace Chat
                 // Encrypt the data
                 auto encrypted = Crypto::encrypt(plaintext, m_key);
 
+				// encode the chat name to be a valid file name
+				std::string chatNameFiltered = encodeChatName(chat.name);
+
                 // Save to file
-				std::filesystem::path chatPath = getChatPath(chat.name);
+				std::filesystem::path chatPath = getChatPath(chatNameFiltered);
                 std::ofstream file(chatPath, std::ios::binary);
                 if (!file) {
                     return false;
@@ -238,6 +219,32 @@ namespace Chat
                 // TODO: Log error details here
                 return false;
             }
+        }
+
+		std::string encodeChatName(const std::string& chatName) const
+		{
+			std::string encodedName = chatName;
+			std::replace_if(encodedName.begin(), encodedName.end(),
+				[](char c) { return !std::isalnum(c); }, '_');
+			return encodedName;
+		}
+
+        std::filesystem::path getChatPath(const std::string& chatName) const override
+        {
+            // remove characters that are not allowed in file names
+            std::string chatNameFiltered = encodeChatName(chatName);
+
+            return std::filesystem::absolute(
+                std::filesystem::path(m_basePath) / (chatName + ".chat"));
+        }
+
+        std::filesystem::path getKvChatPath(const std::string& chatName) const override
+        {
+            // remove characters that are not allowed in file names
+            std::string chatNameFiltered = encodeChatName(chatName);
+
+            return std::filesystem::absolute(
+                std::filesystem::path(m_basePath) / (chatName + ".bin"));
         }
 
         std::vector<ChatHistory> loadEncryptedChats() 

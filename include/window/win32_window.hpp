@@ -495,14 +495,14 @@ private:
     {
         static const wchar_t* window_class_name = [&] {
             WNDCLASSEXW wcx{};
-            wcx.cbSize = sizeof(wcx);
-            wcx.style = CS_HREDRAW | CS_VREDRAW;
-            wcx.hInstance = hInstance;
-            wcx.lpfnWndProc = wndproc;
-            wcx.lpszClassName = L"BorderlessWindowClass";
-            wcx.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-            wcx.hCursor = ::LoadCursorW(hInstance, IDC_ARROW);
-            const ATOM result = ::RegisterClassExW(&wcx);
+            wcx.cbSize          = sizeof(wcx);
+            wcx.style           = CS_HREDRAW | CS_VREDRAW;
+            wcx.hInstance       = hInstance;
+            wcx.lpfnWndProc     = wndproc;
+            wcx.lpszClassName   = L"BorderlessWindowClass";
+            wcx.hbrBackground   = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+            wcx.hCursor         = ::LoadCursorW(hInstance, IDC_ARROW);
+            const ATOM result   = ::RegisterClassExW(&wcx);
             if (!result) {
                 throw last_error("failed to register window class");
             }
@@ -581,38 +581,38 @@ private:
         }
 
         if ((cursor.y >= window.top && cursor.y < window.top + Config::TITLE_BAR_HEIGHT) &&
-            ((cursor.x <= window.right - 45 * 3 && cursor.x >= window.left + /* logo width */ 40 + /* gap between logo and tab buttons */ 16 + this->tabButtonWidths) ||
-                cursor.x <= window.left + /* logo width */ 40 + /* gap between logo and tab buttons */ 16)) {
+           ((cursor.x <= window.right - 45 * 3 && cursor.x >= window.left + /* logo width */ 40 + /* gap between logo and tab buttons */ 16 + this->tabButtonWidths) ||
+             cursor.x <= window.left + /* logo width */ 40 + /* gap between logo and tab buttons */ 16)) {
             return HTCAPTION;
         }
 
         const auto drag = HTCLIENT;
 
         enum region_mask {
-            client = 0b0000,
-            left = 0b0001,
-            right = 0b0010,
-            top = 0b0100,
-            bottom = 0b1000,
+            client  = 0b0000,
+            left    = 0b0001,
+            right   = 0b0010,
+            top     = 0b0100,
+            bottom  = 0b1000,
         };
 
         const auto result =
-            left * (cursor.x < (window.left + border.x)) |
-            right * (cursor.x >= (window.right - border.x)) |
-            top * (cursor.y < (window.top + border.y)) |
-            bottom * (cursor.y >= (window.bottom - border.y));
+            left    * (cursor.x <   (window.left    + border.x)) |
+            right   * (cursor.x >=  (window.right   - border.x)) |
+            top     * (cursor.y <   (window.top     + border.y)) |
+            bottom  * (cursor.y >=  (window.bottom  - border.y));
 
         switch (result) {
-        case left: return borderless_resize ? HTLEFT : HTCLIENT;
-        case right: return borderless_resize ? HTRIGHT : HTCLIENT;
-        case top: return borderless_resize ? HTTOP : HTCLIENT;
-        case bottom: return borderless_resize ? HTBOTTOM : HTCLIENT;
-        case top | left: return borderless_resize ? HTTOPLEFT : HTCLIENT;
-        case top | right: return borderless_resize ? HTTOPRIGHT : HTCLIENT;
-        case bottom | left: return borderless_resize ? HTBOTTOMLEFT : HTCLIENT;
-        case bottom | right: return borderless_resize ? HTBOTTOMRIGHT : HTCLIENT;
-        case client: return HTCLIENT;
-        default: return HTNOWHERE;
+        case left           :   return borderless_resize ? HTLEFT        : HTCLIENT;
+        case right          :   return borderless_resize ? HTRIGHT       : HTCLIENT;
+        case top            :   return borderless_resize ? HTTOP         : HTCLIENT;
+        case bottom         :   return borderless_resize ? HTBOTTOM      : HTCLIENT;
+        case top | left     :   return borderless_resize ? HTTOPLEFT     : HTCLIENT;
+        case top | right    :   return borderless_resize ? HTTOPRIGHT    : HTCLIENT;
+        case bottom | left  :   return borderless_resize ? HTBOTTOMLEFT  : HTCLIENT;
+        case bottom | right :   return borderless_resize ? HTBOTTOMRIGHT : HTCLIENT;
+        case client         :   return HTCLIENT;
+        default             :   return HTNOWHERE;
         }
     }
 };

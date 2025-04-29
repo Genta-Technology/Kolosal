@@ -5,6 +5,9 @@
 #include "ui/widgets.hpp"
 #include "ui/markdown.hpp"
 #include "chat/chat_manager.hpp"
+#include "chat/tool.hpp"
+#include "chat/tool_manager.hpp"
+#include "mcp_sse_client.h"
 
 #include <string>
 #include <vector>
@@ -201,7 +204,7 @@ private:
 		ImGui::EndChild();
     }
 
-    static void chatStreamingCallback(const std::string& partialOutput, const float tps, const int jobId, const bool isFinished) {
+    static void chatStreamingCallback(const std::string& partialOutput, const float tps, const int jobId, bool& isFinished) {
         auto& chatManager = Chat::ChatManager::getInstance();
         auto& modelManager = Model::ModelManager::getInstance();
         std::string chatName = chatManager.getChatNameByJobId(jobId);

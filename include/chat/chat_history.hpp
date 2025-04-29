@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common.hpp"
+#include "tool.hpp"
 
 #include <vector>
 #include <string>
@@ -23,6 +24,7 @@ namespace Chat
         std::string role;
         std::string content;
         std::string modelName;
+		std::vector<ToolCall> toolCalls;
         float tps;
         std::chrono::system_clock::time_point timestamp;
 

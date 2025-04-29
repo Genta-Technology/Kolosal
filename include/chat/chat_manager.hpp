@@ -760,7 +760,7 @@ namespace Chat
             m_currentChatIndex = 0;
         }
 
-        static inline const std::string DEFAULT_CHAT_NAME = "New Chat";
+        static inline const std::string DEFAULT_CHAT_NAME = "New_Chat";
 
         std::unique_ptr<IChatPersistence> m_persistence;
         std::vector<ChatHistory> m_chats;
