@@ -174,9 +174,8 @@ This commit introduces dark mode options in the settings. The UI components have
 
 Please note:
 - **Kolosal AI** is distributed under the [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0).  
-- The **Genta Inference Engine Personal** has its own licensing restrictions and is distributed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).  
 - If you plan to contribute changes that affect the inference engine or its integration, please ensure you are in compliance with the licensing terms.
-- For commercial use inquiries, reach out to [rifky@genta.tech](mailto:rifky@genta.tech) or consider contributing an alternative engine as per the project guidelines.
+- For commercial use inquiries, reach out to [rifky@genta.tech](mailto:rifky@genta.tech).
 
 ---
 
