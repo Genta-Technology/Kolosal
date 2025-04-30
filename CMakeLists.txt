@@ -49,6 +49,7 @@ set(FREETYPE_DLL_DIR "${FREETYPE_INCLUDE_DIRS}/../bin")
 message(STATUS "    - Freetype DLL Directory: ${FREETYPE_DLL_DIR}")
 
 # OpenSSL
+set(CMAKE_PREFIX_PATH "${EXTERNAL_DIR}/OpenSSL/3.4.0" ${CMAKE_PREFIX_PATH})
 find_package(OpenSSL REQUIRED)
 if(NOT OpenSSL_FOUND)
     message(FATAL_ERROR "OpenSSL not found")
