@@ -147,11 +147,17 @@ KolosalAI/
    cd KolosalAI
    ```
 
-2. **(Optional) Update submodules**:  
+2. **Update submodules**:  
    If any external libraries are handled as Git submodules, initialize them:
 
    ```bash
    git submodule update --init --recursive
+   ```
+
+3. **Pull Git LFS**:
+   ```bash
+   git lfs install
+   glt lfs pull
    ```
 
 3. **Check external dependencies**:  
