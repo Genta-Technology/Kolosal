@@ -45,6 +45,8 @@ struct ChatCompletionParameters
 	bool streaming = false;
 	std::string kvCacheFilePath = "";
 	int seqId = -1;
+	std::string tools = "";
+	std::string toolChoice = "auto";
 
 	bool isValid() const;
 };
@@ -69,7 +71,7 @@ struct LoadingParameters
 	bool warmup = false;
 	int n_parallel = 1;
 	int n_gpu_layers = 100;
-	int n_batch = 256;
+	int n_batch = 4096;
 };
 
 #endif // TYPES_H

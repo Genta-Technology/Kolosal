@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common.hpp"
-#include "tool.hpp"
+#include "agent/tool.hpp"
 
 #include <vector>
 #include <string>
@@ -24,6 +24,7 @@ namespace Chat
         std::string role;
         std::string content;
         std::string modelName;
+        std::string name;
 		std::vector<ToolCall> toolCalls;
         float tps;
         std::chrono::system_clock::time_point timestamp;
@@ -60,7 +61,8 @@ namespace Chat
             {"content", msg.content},
             {"timestamp", timePointToString(msg.timestamp)},
 			{"tps", msg.tps},
-			{"modelName", msg.modelName}
+			{"modelName", msg.modelName},
+			{"toolCalls", msg.toolCalls}
         };
     }
 
@@ -74,6 +76,7 @@ namespace Chat
         msg.timestamp   = stringToTimePoint(j.at("timestamp").get<std::string>());
         msg.tps         = j.value("tps", 0.0f);
         msg.modelName   = j.value("modelName", "");
+        msg.toolCalls   = j.value("toolCalls", std::vector<ToolCall>{});
     }
 
     struct ChatHistory

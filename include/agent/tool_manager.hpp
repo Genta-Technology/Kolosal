@@ -72,10 +72,10 @@ namespace Chat
             }
         }
 
-        std::string ToolManager::formatPromptWithTools(const std::string& originalSystemPrompt) const
+        std::string getAllTools() const
         {
             if (!m_initialized || m_availableTools.empty()) {
-                return originalSystemPrompt;
+                return "";
             }
 
             std::stringstream toolsJson;
@@ -85,14 +85,17 @@ namespace Chat
                 const auto& tool = m_availableTools[i];
 
                 toolsJson << "    {\n";
-                toolsJson << "        \"name\": \"" << tool.name << "\",\n";
-                toolsJson << "        \"description\": \"" << tool.description << "\",\n";
-                toolsJson << "        \"parameters\": ";
+                toolsJson << "        \"type\": \"function\",\n";
+                toolsJson << "        \"function\": {\n";
+                toolsJson << "            \"name\": \"" << tool.name << "\",\n";
+                toolsJson << "            \"description\": \"" << tool.description << "\",\n";
+                toolsJson << "            \"parameters\": ";
 
                 // Convert the parameters schema to JSON string
                 std::string paramsJson = tool.parameters_schema.dump(4);
 
-                // Indent each line of the parameters JSON
+                // Indent each line of the parameters JSON with additional indentation
+                // since it's now nested inside the "function" object
                 std::istringstream paramStream(paramsJson);
                 std::string line;
                 bool firstLine = true;
@@ -103,10 +106,11 @@ namespace Chat
                         firstLine = false;
                     }
                     else {
-                        toolsJson << "        " << line << "\n";
+                        toolsJson << "            " << line << "\n";
                     }
                 }
 
+                toolsJson << "        }\n";
                 toolsJson << "    }";
 
                 if (i < m_availableTools.size() - 1) {
@@ -118,25 +122,7 @@ namespace Chat
 
             toolsJson << "]";
 
-            // The tool capabilities part of system prompt
-            std::stringstream toolCapabilitiesPrompt;
-            toolCapabilitiesPrompt << "\n\nYou are an expert in composing functions. You are given a question and a set of possible functions. ";
-            toolCapabilitiesPrompt << "Based on the question, you will need to make one or more function/tool calls to achieve the purpose. ";
-            toolCapabilitiesPrompt << "If none of the function can be used, point it out. If the given question lacks the parameters required by the function, ";
-            toolCapabilitiesPrompt << "also point it out. You should only return the function call in tools call sections.\n\n";
-            toolCapabilitiesPrompt << "If you decide to invoke any of the function(s), you MUST put it in the format of [func_name1(params_name1=params_value1, params_name2=params_value2...), func_name2(params)]\n";
-            toolCapabilitiesPrompt << "You SHOULD NOT include any other text in the response.\n\n";
-            toolCapabilitiesPrompt << "Here is a list of functions in JSON format that you can invoke.\n\n";
-            toolCapabilitiesPrompt << toolsJson.str();
-
-            // Append tool capabilities to the original system prompt
-            std::string formattedSystemPrompt = originalSystemPrompt;
-            if (!formattedSystemPrompt.empty() && formattedSystemPrompt.back() != '\n') {
-                formattedSystemPrompt += "\n";
-            }
-            formattedSystemPrompt += toolCapabilitiesPrompt.str();
-
-            return formattedSystemPrompt;
+            return toolsJson.str();
         }
 
         void setClientType(ClientType type)
@@ -243,55 +229,149 @@ namespace Chat
                 });
         }
 
-        static inline const std::regex s_toolCallBlockRegex{ R"(\[(.*?)\])" };
-        static inline const std::regex s_functionCallRegex{ R"((\w+)\s*\(\s*((?:[^()]|(?:\([^()]*\)))*)\s*\))" };
-        static inline const std::regex s_paramRegex{ R"((\w+)\s*=\s*([^,]+))" };
+        static inline const std::regex s_jsonToolCallsRegex{
+            R"("tool_calls"\s*:)"
+        };
 
-        // Tool call detection and extraction
         static bool containsToolCall(const std::string& text) {
-            // Fast pre-check for essential characters before using regex
-            if (text.find('[') == std::string::npos ||
-                text.find('(') == std::string::npos ||
-                text.find(')') == std::string::npos ||
-                text.find(']') == std::string::npos) {
+            // Quick check for required keywords
+            if (text.find("tool_calls") == std::string::npos) {
                 return false;
             }
 
-            // Use precompiled regex for one-time search
-            return std::regex_search(text, s_toolCallBlockRegex) &&
-                std::regex_search(text, s_functionCallRegex);
+            if (text.find("name") == std::string::npos ||
+                text.find("arguments") == std::string::npos) {
+                return false;
+            }
+
+            // Simple check for balanced braces
+            int braceCount = 0;
+            bool inQuote = false;
+
+            for (char c : text) {
+                if (c == '"' && !inQuote) inQuote = true;
+                else if (c == '"' && inQuote) inQuote = false;
+                else if (!inQuote && c == '{') braceCount++;
+                else if (!inQuote && c == '}') braceCount--;
+            }
+
+            return braceCount == 0 && text.find('{') != std::string::npos;
         }
 
+        // Simplified tool call extraction
         static std::vector<ToolCall> extractToolCalls(const std::string& text) {
             std::vector<ToolCall> result;
 
-            std::smatch blockMatch;
-            std::string::const_iterator searchStart(text.cbegin());
+            // Find tool_calls key
+            size_t toolCallsPos = text.find("\"tool_calls\"");
+            if (toolCallsPos == std::string::npos) {
+                return result;
+            }
 
-            while (std::regex_search(searchStart, text.cend(), blockMatch, s_toolCallBlockRegex)) {
-                size_t blockStartIndex = std::distance(text.cbegin(), blockMatch[0].first);
-                size_t blockEndIndex = blockStartIndex + blockMatch[0].length() - 1;
+            // Find JSON object containing tool_calls
+            size_t jsonStart = text.rfind('{', toolCallsPos);
+            if (jsonStart == std::string::npos) {
+                return result;
+            }
 
-                std::string blockContent = blockMatch[1].str();
+            // Find the matching closing brace
+            size_t jsonEnd = jsonStart;
+            int braceCount = 1;
+            bool inQuotes = false;
 
-                // Extract function calls from block content
-                std::smatch funcMatch;
-                std::string::const_iterator funcSearchStart(blockContent.cbegin());
+            for (size_t i = jsonStart + 1; i < text.length(); i++) {
+                char c = text[i];
 
-                while (std::regex_search(funcSearchStart, blockContent.cend(), funcMatch, s_functionCallRegex)) {
-                    ToolCall toolCall;
-                    toolCall.func_name = funcMatch[1].str();
-                    toolCall.start_index = blockStartIndex;
-                    toolCall.end_index = blockEndIndex;
+                if (c == '"') {
+                    inQuotes = !inQuotes;
+                }
+                else if (!inQuotes) {
+                    if (c == '{') braceCount++;
+                    else if (c == '}') {
+                        braceCount--;
+                        if (braceCount == 0) {
+                            jsonEnd = i;
+                            break;
+                        }
+                    }
+                }
+            }
 
-                    std::string paramsStr = funcMatch[2].str();
-                    parseParameters(paramsStr, toolCall.params);
+            // Check if we have complete JSON
+            if (braceCount != 0) {
+                return result;
+            }
 
-                    result.push_back(toolCall);
-                    funcSearchStart = funcMatch.suffix().first;
+            // Check for code block markers
+            bool inCodeBlock = false;
+            size_t codeBlockStart = std::string::npos;
+            size_t codeBlockEnd = std::string::npos;
+
+            // Look for triple backticks before JSON
+            size_t backticksStart = text.rfind("```", jsonStart);
+            if (backticksStart != std::string::npos) {
+                // Look for closing triple backticks after JSON
+                size_t backticksEnd = text.find("```", jsonEnd);
+                if (backticksEnd != std::string::npos) {
+                    inCodeBlock = true;
+                    codeBlockStart = backticksStart;
+                    codeBlockEnd = backticksEnd + 3;
+                }
+            }
+
+            // Extract and parse the JSON
+            std::string jsonStr = text.substr(jsonStart, jsonEnd - jsonStart + 1);
+
+            try {
+                mcp::json toolCallsJson = mcp::json::parse(jsonStr);
+
+                if (!toolCallsJson.contains("tool_calls") || !toolCallsJson["tool_calls"].is_array()) {
+                    return result;
                 }
 
-                searchStart = blockMatch.suffix().first;
+                // Process each tool call
+                for (const auto& callJson : toolCallsJson["tool_calls"]) {
+                    if (callJson.contains("name") && callJson.contains("arguments")) {
+                        ToolCall toolCall;
+                        toolCall.func_name = callJson["name"].get<std::string>();
+
+                        // Set proper indices based on whether in code block or not
+                        if (inCodeBlock) {
+                            toolCall.start_index = codeBlockStart;
+                            toolCall.end_index = codeBlockEnd - 1;
+                        }
+                        else {
+                            toolCall.start_index = jsonStart;
+                            toolCall.end_index = jsonEnd;
+                        }
+
+                        // Extract arguments
+                        const auto& arguments = callJson["arguments"];
+                        if (arguments.is_object()) {
+                            for (auto it = arguments.begin(); it != arguments.end(); ++it) {
+                                toolCall.params[it.key()] = it.value().is_string() ?
+                                    it.value().get<std::string>() : it.value().dump();
+                            }
+                        }
+                        else if (arguments.is_string()) {
+                            try {
+                                mcp::json argsJson = mcp::json::parse(arguments.get<std::string>());
+                                for (auto it = argsJson.begin(); it != argsJson.end(); ++it) {
+                                    toolCall.params[it.key()] = it.value().is_string() ?
+                                        it.value().get<std::string>() : it.value().dump();
+                                }
+                            }
+                            catch (const std::exception&) {
+                                toolCall.params["raw_arguments"] = arguments.get<std::string>();
+                            }
+                        }
+
+                        result.push_back(toolCall);
+                    }
+                }
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Error parsing tool calls: " << e.what() << std::endl;
             }
 
             return result;
@@ -337,7 +417,7 @@ namespace Chat
                     result.replace(
                         toolCall.start_index,
                         toolCall.end_index - toolCall.start_index + 1,
-                        toolCall.output
+                        toolCall.func_name + " output: " + toolCall.output
                     );
                 }
             }

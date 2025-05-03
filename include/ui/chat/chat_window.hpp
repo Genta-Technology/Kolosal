@@ -174,6 +174,19 @@ public:
         openModelManagerConfig.alignment = Alignment::LEFT;
         openModelManagerConfig.onClick = [this]() { openModelSelectionModal = true; };
 
+		enableAgentModeConfig.id = "##enableAgentModeButton";
+		enableAgentModeConfig.label = "Agent";
+		enableAgentModeConfig.size = ImVec2(48, 0);
+		enableAgentModeConfig.alignment = Alignment::LEFT;
+		enableAgentModeConfig.onClick = [this]() { useAgentMode = !useAgentMode; };
+
+		agentModeSettingsConfig.id = "##agentModeSettingsButton";
+		agentModeSettingsConfig.icon = ICON_CI_SETTINGS;
+		agentModeSettingsConfig.size = ImVec2(24, 0);
+		agentModeSettingsConfig.alignment = Alignment::CENTER;
+		agentModeSettingsConfig.tooltip = "Agent Mode Settings";
+		//agentModeSettingsConfig.onClick = [this]() { agentModeSettingsModal.open(); };
+
         clearChatButtonConfig.id = "##clearChatButton";
         clearChatButtonConfig.icon = ICON_CI_CLEAR_ALL;
         clearChatButtonConfig.size = ImVec2(24, 0);
@@ -299,10 +312,10 @@ private:
     }
 
     static void chatStreamingCallback(const std::string& partialOutput, const float tps, const int jobId, bool& isFinished) {
-        auto& chatManager       = Chat::ChatManager::getInstance();
-        auto& modelManager      = Model::ModelManager::getInstance();
-        auto& toolManager       = Chat::ToolManager::getInstance();
-        std::string chatName    = chatManager.getChatNameByJobId(jobId);
+        auto& chatManager = Chat::ChatManager::getInstance();
+        auto& modelManager = Model::ModelManager::getInstance();
+        auto& toolManager = Chat::ToolManager::getInstance();
+        std::string chatName = chatManager.getChatNameByJobId(jobId);
 
         if (isFinished) modelManager.setModelGenerationInProgress(false);
 
@@ -315,7 +328,7 @@ private:
                 chat.messages.back().tps = tps;
 
                 // Check for tool calls in the partial output
-                if (Chat::ToolManager::containsToolCall(partialOutput) && toolManager.isInitialized()) {
+                if (Chat::ToolManager::containsToolCall(partialOutput)) {
                     // Extract tool calls
                     std::vector<Chat::ToolCall> toolCalls = Chat::ToolManager::extractToolCalls(partialOutput);
 
@@ -323,21 +336,21 @@ private:
                     chat.messages.back().toolCalls = toolCalls;
 
 #ifdef DEBUG
-					std::cout << "[ChatWindow] Calling tools: " << std::endl;
-					for (const auto& toolCall : toolCalls) {
-						std::cout << "[ChatWindow] Tool: " << toolCall.func_name << ", Arguments: " << std::endl;
-						for (const auto& arg : toolCall.params) {
-							std::cout << "[ChatWindow]   - " << arg.first << ": " << arg.second << std::endl;
-						}
-					}
+                    std::cout << "[ChatWindow] Calling tools: " << std::endl;
+                    for (const auto& toolCall : toolCalls) {
+                        std::cout << "[ChatWindow] Tool: " << toolCall.func_name << ", Arguments: " << std::endl;
+                        for (const auto& arg : toolCall.params) {
+                            std::cout << "[ChatWindow]   - " << arg.first << ": " << arg.second << std::endl;
+                        }
+                    }
 #endif
 
                     // If we have tool calls, execute them
                     if (!toolCalls.empty()) {
-						isFinished = true; // Mark the job as finished to avoid further processing
+                        isFinished = true; // Mark the job as finished to avoid further processing
 
                         // Consider executing tool calls asynchronously to avoid blocking the UI
-                        std::thread([&toolManager, toolCalls, chatName, &chatManager]() {
+                        std::thread([&toolManager, toolCalls, chatName, &chatManager, &modelManager]() {
                             // Execute tool calls
                             std::vector<Chat::ToolResult> results = toolManager.executeTools(toolCalls);
 
@@ -346,22 +359,81 @@ private:
                             if (chatOpt) {
                                 Chat::ChatHistory updatedChat = chatOpt.value();
                                 if (!updatedChat.messages.empty() && updatedChat.messages.back().role == "assistant") {
-                                    // Update tool calls with outputs
-                                    for (size_t i = 0; i < results.size() && i < updatedChat.messages.back().toolCalls.size(); ++i) {
+                                    // Store tool calls with outputs for reference (no content replacement)
+                                    std::vector<Chat::ToolCall> updatedToolCalls = updatedChat.messages.back().toolCalls;
+
+                                    for (size_t i = 0; i < results.size() && i < updatedToolCalls.size(); ++i) {
                                         if (results[i].success) {
-                                            updatedChat.messages.back().toolCalls[i].output = results[i].result;
+                                            updatedToolCalls[i].output = results[i].result;
                                         }
                                         else {
-                                            updatedChat.messages.back().toolCalls[i].output = "Error: " + results[i].error;
+                                            updatedToolCalls[i].output = "Error: " + results[i].error;
                                         }
                                     }
 
-                                    // Replace tool calls in content with results if desired
-                                    updatedChat.messages.back().content = toolManager.replaceToolCallsWithResults(
-                                        updatedChat.messages.back().content, updatedChat.messages.back().toolCalls);
+                                    // Add a new "tool" message containing the tool results
+                                    Chat::Message toolMsg;
+                                    toolMsg.id = static_cast<int>(updatedChat.messages.size()) + 1;
+                                    toolMsg.role = "tool";
 
-                                    // Update the chat
-                                    chatManager.updateChat(chatName, updatedChat);
+                                    // Create tool message content as JSON
+                                    std::stringstream toolContent;
+                                    toolContent << "{\n  \"tool_results\": [\n";
+
+                                    for (size_t i = 0; i < updatedToolCalls.size(); ++i) {
+                                        toolContent << "    {\n";
+                                        toolContent << "      \"tool_name\": \"" << updatedToolCalls[i].func_name << "\",\n";
+                                        toolContent << "      \"output\": \"" <<
+                                            // Escape quotes and backslashes in the output
+                                            std::regex_replace(
+                                                std::regex_replace(
+                                                    updatedToolCalls[i].output,
+                                                    std::regex("\\\\"), "\\\\\\\\"),
+                                                std::regex("\""), "\\\\\"")
+                                            << "\"\n";
+                                        toolContent << "    }";
+                                        if (i < updatedToolCalls.size() - 1) {
+                                            toolContent << ",";
+                                        }
+                                        toolContent << "\n";
+                                    }
+
+                                    toolContent << "  ]\n}";
+                                    toolMsg.content = toolContent.str();
+
+                                    // Add the tool message to chat
+                                    chatManager.addMessage(chatName, toolMsg);
+
+                                    // Get the updated chat with the tool message
+                                    auto updatedChatWithToolMsg = chatManager.getChat(chatName);
+                                    if (updatedChatWithToolMsg) {
+                                        // Get the current model name and variant
+                                        auto modelName = modelManager.getCurrentModelName().value_or("");
+                                        auto variantType = modelManager.getCurrentVariantType();
+
+                                        // Only proceed if we have a valid model
+                                        if (!modelName.empty()) {
+                                            // Build chat completion parameters with the updated chat
+                                            // This gets the full chat history with tool results included
+                                            ChatCompletionParameters completionParams = modelManager.buildChatCompletionParameters(
+                                                updatedChatWithToolMsg.value());
+
+                                            // Start a new chat completion job with the same callback
+                                            int newJobId = modelManager.startChatCompletionJob(
+                                                completionParams,
+                                                chatStreamingCallback,
+                                                modelName,
+                                                variantType);
+
+                                            // Update the job ID in the chat manager
+                                            if (!chatManager.setCurrentJobId(newJobId)) {
+                                                std::cerr << "[ChatWindow] Failed to set new job ID after tool execution.\n";
+                                            }
+
+                                            // Set model generation flag to true for the new job
+                                            modelManager.setModelGenerationInProgress(true);
+                                        }
+                                    }
                                 }
                             }
                             }).detach();
@@ -400,7 +472,7 @@ private:
         // Add a system prompt instructing the model to generate a short, descriptive title
         const std::string titlePrompt = firstUserMessage +
             "\n-----\n"
-            "Ignore all previous instructions. The preceding text is a conversation thread that needs a concise but descriptive 3 to 5 word title in natural English so that readers will be able to easily find it again. Do not add any quotation marks, formatting, or any symbol to the title. Respond only with the title text.";
+            "Ignore all previous instructions. The preceding text is a conversation thread that needs a concise but descriptive 3 to 5 word title in natural English so that readers will be able to easily find it again. Do not add any quotation marks, formatting, or any symbol to the title. Respond only with the title text. \\no_think";
 
         // Add the title prompt as a user message
         titleParams.messages.push_back({ "user", titlePrompt });
@@ -416,7 +488,8 @@ private:
             auto& chatManager = Chat::ChatManager::getInstance();
 
             // Generate the title (synchronous call)
-            CompletionResult titleResult = modelManager.chatCompleteSync(titleParams, modelManager.getCurrentModelName().value(), modelManager.getCurrentVariantType(), false);
+            CompletionResult titleResult = modelManager.chatCompleteSync(
+                titleParams, modelManager.getCurrentModelName().value(), modelManager.getCurrentVariantType(), false);
 
             if (!titleResult.text.empty()) {
                 // Clean up the generated title
@@ -673,8 +746,27 @@ private:
         ImGui::SetCursorPosX(
             ImGui::GetContentRegionAvail().x +
             openModelManagerConfig.size.x +
-            clearChatButtonConfig.size.x
+            clearChatButtonConfig.size.x -
+			90.0F
         );
+
+        if (useAgentMode) {
+			enableAgentModeConfig.backgroundColor = RGBAToImVec4(26, 26, 26, 128);
+            enableAgentModeConfig.textColor       = ImVec4(1.0f, 1.0f, 0.5f, 1.0f);
+        }
+        else
+        {
+			enableAgentModeConfig.backgroundColor = RGBAToImVec4(0, 0, 0, 0);
+            enableAgentModeConfig.textColor       = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
+
+		Button::renderGroup({ enableAgentModeConfig, agentModeSettingsConfig }, ImGui::GetCursorPosX(), ImGui::GetCursorPosY(), 2);
+
+		ImGui::SameLine();
+
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 8);
+		ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
+
         Button::render(sendButtonConfig);
         ImGui::EndGroup();
 
@@ -690,11 +782,15 @@ private:
     ButtonConfig clearChatButtonConfig;
     ButtonConfig addFilesButtonConfig;
     ButtonConfig sendButtonConfig;
+    ButtonConfig enableAgentModeConfig;
+	ButtonConfig agentModeSettingsConfig;
     std::string inputPlaceholderText;
 
     // State variables.
     bool showRenameChatDialog = false;
     bool openModelSelectionModal = false;
+	bool useAgentMode = false;
+	bool showAgentModeSettings = false;
     std::string inputTextBuffer;
     bool focusInputField = true;
     float m_inputHeight = Config::INPUT_HEIGHT;
@@ -709,4 +805,5 @@ private:
     RenameChatModalComponent renameChatModal;
     ClearChatModalComponent clearChatModal;
     ChatHistoryRenderer chatHistoryRenderer;
+	//AgentModeSettingsModal agentModeSettingsModal;
 };

@@ -5,7 +5,7 @@
 #include "model_persistence.hpp"
 #include "model_loader_config_manager.hpp"
 #include "threadpool.hpp"
-#include "chat/tool_manager.hpp"
+#include "agent/tool_manager.hpp"
 
 #include <kolosal_server.hpp>
 #include <types.h>
@@ -658,6 +658,13 @@ namespace Model
             completionParams.topP = currentPreset.top_p;
             completionParams.streaming = true;
 
+            Chat::ToolManager& toolManager = Chat::ToolManager::getInstance();
+            if (toolManager.isInitialized())
+            {
+                completionParams.tools = Chat::ToolManager::getInstance().getAllTools();
+                completionParams.toolChoice = "auto";
+            }
+
             // Set the kvCacheFilePath using the current model and variant.
             auto kvCachePathOpt = chatManager.getCurrentKvChatPath(
                 modelManager.getCurrentModelName().value(),
@@ -1101,45 +1108,7 @@ namespace Model
                 }
             }
 
-            // Create a copy of parameters that we can modify
-			ChatCompletionParameters modifiedParams = params;
-
-            // Format the system prompt with tools if ToolManager is initialized
-            auto& toolManager = Chat::ToolManager::getInstance();
-            if (toolManager.isInitialized())
-            {
-                // Get current system prompt (if any)
-                std::string systemPrompt = "";
-                for (const auto& msg : modifiedParams.messages) {
-                    if (msg.role == "system") {
-                        systemPrompt = msg.content;
-                        break;
-                    }
-                }
-
-                // Format system prompt to include tool information
-                std::string formattedSystemPrompt = toolManager.formatPromptWithTools(systemPrompt);
-
-                // Update or add the system message
-                bool systemMsgFound = false;
-                for (auto& msg : modifiedParams.messages) {
-                    if (msg.role == "system") {
-                        msg.content = formattedSystemPrompt;
-                        systemMsgFound = true;
-                        break;
-                    }
-                }
-
-                if (!systemMsgFound) {
-                    // Add system message at the beginning
-                    Message systemMsg;
-                    systemMsg.role = "system";
-                    systemMsg.content = formattedSystemPrompt;
-                    modifiedParams.messages.insert(modifiedParams.messages.begin(), systemMsg);
-                }
-            }
-
-            int jobId = m_inferenceEngines.at(modelId)->submitChatCompletionsJob(modifiedParams);
+            int jobId = m_inferenceEngines.at(modelId)->submitChatCompletionsJob(params);
             if (jobId < 0) {
                 std::cerr << "[ModelManager] Failed to submit chat completions job.\n";
                 return -1;

@@ -24,6 +24,7 @@ struct Job {
     bool hasError = false;
     std::string errorMessage;
     float tps = 0;
+	float tts = 0;
     std::atomic<bool> cancelRequested{ false };
     CompletionParameters params;
 

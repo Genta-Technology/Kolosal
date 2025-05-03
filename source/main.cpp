@@ -8,7 +8,7 @@
 #include "ui/tab_manager.hpp"
 #include "ui/status_bar.hpp"
 
-#include "chat/tool_manager.hpp"
+#include "agent/tool_manager.hpp"
 #include "chat/chat_manager.hpp"
 #include "model/preset_manager.hpp"
 #include "model/model_manager.hpp"
