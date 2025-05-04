@@ -474,6 +474,7 @@ private:
 
         // Ensure auto-scroll is enabled when starting a new generation
         m_shouldAutoScroll = true;
+		focusInputField = true;
 
         // If this is the first message, generate a title for the chat
         if (isFirstMessage) {
@@ -615,10 +616,6 @@ private:
         );
         Button::render(sendButtonConfig);
         ImGui::EndGroup();
-
-        // Reset the focus after the first render
-        if (focusInputField)
-            focusInputField = false;
     }
 
 private:

@@ -45,6 +45,7 @@ set(FREETYPE_DLL_DIR "${FREETYPE_INCLUDE_DIRS}/../bin")
 message(STATUS "    - Freetype DLL Directory: ${FREETYPE_DLL_DIR}")
 
 # OpenSSL
+set(CMAKE_PREFIX_PATH "${EXTERNAL_DIR}/OpenSSL/3.4.0" ${CMAKE_PREFIX_PATH})
 find_package(OpenSSL REQUIRED)
 if(NOT OpenSSL_FOUND)
     message(FATAL_ERROR "OpenSSL not found")
@@ -141,6 +142,7 @@ target_include_directories(kolosal_lib PUBLIC
     ${EXTERNAL_DIR}/imgui_md
     ${EXTERNAL_DIR}/imspinner
     ${EXTERNAL_DIR}/ImGuiTextSelect
+    ${EXTERNAL_DIR}/ImGuiNotify
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/assets
     ${CMAKE_SOURCE_DIR}/kolosal-server/include
