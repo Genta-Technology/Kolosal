@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <regex>
 #include <curl/curl.h>
+#include "logger.hpp"
 
 namespace ModelManagerConstants {
     constexpr float cardWidth = 200.0f;
@@ -1102,7 +1103,7 @@ public:
                 deleteButton.icon = ICON_CI_ARROW_UP;
 				deleteButton.tooltip = "Click to unload model";
 				deleteButton.onClick = [this, &manager]() {
-					std::cout << "[ModelManagerModal] Unloading model from delete button: " << m_model.name << "\n";
+					LOG_INFO("[ModelCardRenderer::render] Unloading model from delete button: " + m_model.name);
 					manager.unloadModel(m_model.name, manager.getCurrentVariantForModel(m_model.name));
 					};
 			}

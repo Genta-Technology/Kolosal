@@ -1,8 +1,7 @@
-// TODO: Implement the Observer pattern in the ChatManager class
-
 #pragma once
 
 #include "chat_persistence.hpp"
+#include "logger.hpp"
 
 #include <vector>
 #include <string>
@@ -94,7 +93,7 @@ namespace Chat
             return std::async(std::launch::async, [this, newName]() {
                 if (!validateChatName(newName))
                 {
-                    std::cerr << "[ChatManager] [ERROR] " << newName << " is not valid" << std::endl;
+                    LOG_ERROR("[ChatManager::renameCurrentChat] " + newName + " is not valid");
                     return false;
                 }
 
@@ -102,7 +101,7 @@ namespace Chat
 
                 if (!m_currentChatName)
                 {
-                    std::cerr << "[ChatManager] No current chat selected.\n";
+                    LOG_ERROR("[ChatManager::renameCurrentChat] No current chat selected.");
                     return false;
                 }
 
@@ -119,7 +118,7 @@ namespace Chat
                 size_t currentIdx = m_currentChatIndex;
                 if (currentIdx >= m_chats.size())
                 {
-                    std::cerr << "[ChatManager] Invalid chat index: " << currentIdx << std::endl;
+                    LOG_ERROR("[ChatManager::renameCurrentChat] Invalid chat index: " + std::to_string(currentIdx));
                     return false;
                 }
 
@@ -178,7 +177,7 @@ namespace Chat
             std::unique_lock<std::shared_mutex> lock(m_mutex);
             if (!m_currentChatName || m_currentChatIndex >= m_chats.size()) 
             {
-				std::cerr << "[ChatManager] No current chat selected.\n";
+                LOG_ERROR("[ChatManager::addMessageToCurrentChat] No current chat selected.");
                 return;
             }
 
@@ -199,7 +198,7 @@ namespace Chat
 			std::unique_lock<std::shared_mutex> lock(m_mutex);
 			if (!m_currentChatName || m_currentChatIndex >= m_chats.size())
 			{
-				std::cerr << "[ChatManager] No current chat selected.\n";
+				LOG_ERROR("[ChatManager::updateCurrentChat] No current chat selected.");
 				return;
 			}
 			m_chats[m_currentChatIndex] = chat;
@@ -215,7 +214,7 @@ namespace Chat
 			auto it = m_chatNameToIndex.find(chatName);
 			if (it == m_chatNameToIndex.end())
 			{
-				std::cerr << "[ChatManager] Chat not found: " << chatName << std::endl;
+				LOG_ERROR("[ChatManager::updateChat] Chat not found: " + chatName);
 				return false;
 			}
 			m_chats[it->second] = chat;
@@ -228,7 +227,7 @@ namespace Chat
             auto it = m_chatNameToIndex.find(chatName);
             if (it == m_chatNameToIndex.end())
             {
-                std::cerr << "[ChatManager] Chat not found: " << chatName << std::endl;
+                LOG_ERROR("[ChatManager::saveChat] Chat not found: " + chatName);
                 return false;
             }
             auto chat = m_chats[it->second];
@@ -248,7 +247,7 @@ namespace Chat
 
             if (!validateChatName(newName))
             {
-                std::cerr << "[ChatManager] [ERROR] " << newName << " is not valid" << std::endl;
+                LOG_ERROR("[ChatManager::createNewChat] " + newName + " is not valid");
                 return std::nullopt;
             }
 
@@ -272,7 +271,7 @@ namespace Chat
 
             if (m_persistence->saveChat(newChat).get())
             {
-                std::cout << "[ChatManager] Created new chat: " << newName << std::endl;
+                LOG_INFO("[ChatManager::createNewChat] Created new chat: " + newName);
             }
 
             return newName;
@@ -285,7 +284,7 @@ namespace Chat
             auto it = m_chatNameToIndex.find(name);
             if (it == m_chatNameToIndex.end())
             {
-                std::cerr << "[ChatManager] Chat not found: " << name << std::endl;
+                LOG_ERROR("[ChatManager::deleteChat] Chat not found: " + name);
                 return false;
             }
 
@@ -319,19 +318,19 @@ namespace Chat
 
             if (!m_persistence->deleteChat(name).get())
             {
-				std::cerr << "[ChatManager] Failed to delete chat: " << name << std::endl;
-				return false;
+                LOG_ERROR("[ChatManager::deleteChat] Failed to delete chat: " + name);
+                return false;
             }
 
             lock.unlock();
 
             if (!m_persistence->deleteKvChat(name).get())
             {
-				std::cerr << "[ChatManager] Failed to delete kv chat: " << name << std::endl;
-				return false;
+                LOG_ERROR("[ChatManager::deleteChat] Failed to delete kv chat: " + name);
+                return false;
             }
 
-            std::cout << "[ChatManager] Deleted chat: " << name << std::endl;
+            LOG_INFO("[ChatManager::deleteChat] Deleted chat: " + name);
 
             return true;
         }
@@ -375,11 +374,11 @@ namespace Chat
                     chatIt->lastModified = static_cast<int>(std::time(nullptr));
                 }
                 else {
-                    std::cerr << "[ChatManager] Invalid message index (" << index << ") for chat: " << chatName << "\n";
+                    LOG_ERROR("[ChatManager::deleteMessage] Invalid message index (" + std::to_string(index) + ") for chat: " + chatName);
                 }
             }
             else {
-                std::cerr << "[ChatManager] Chat not found: " << chatName << "\n";
+                LOG_ERROR("[ChatManager::deleteMessage] Chat not found: " + chatName);
             }
         }
 
@@ -418,12 +417,12 @@ namespace Chat
                 }
                 else
                 {
-                    std::cerr << "[ChatManager] Invalid message index (" << index << ") for chat: " << chatName << "\n";
+                    LOG_ERROR("[ChatManager::setMessageModelName] Invalid message index (" + std::to_string(index) + ") for chat: " + chatName);
                 }
             }
             else
             {
-                std::cerr << "[ChatManager] Chat not found: " << chatName << "\n";
+                LOG_ERROR("[ChatManager::setMessageModelName] Chat not found: " + chatName);
             }
         }
 
@@ -607,7 +606,7 @@ namespace Chat
             );
 
             if (result != ERROR_SUCCESS) {
-				std::cerr << "[ChatManager] Failed to open registry key\n";
+                LOG_ERROR("[ChatManager::getChatPath] Failed to open registry key");
                 return std::nullopt;
             }
 
@@ -624,7 +623,7 @@ namespace Chat
 
             if (result != ERROR_SUCCESS) {
                 RegCloseKey(hKey);
-				std::cerr << "[ChatManager] Failed to query registry value\n";
+                LOG_ERROR("[ChatManager::getChatPath] Failed to query registry value");
                 return std::nullopt;
             }
 
@@ -643,7 +642,7 @@ namespace Chat
             RegCloseKey(hKey);
 
             if (result != ERROR_SUCCESS) {
-				std::cerr << "[ChatManager] Failed to read registry value\n";
+                LOG_ERROR("[ChatManager::getChatPath] Failed to read registry value");
                 return std::nullopt;
             }
 

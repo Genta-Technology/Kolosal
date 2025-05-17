@@ -9,6 +9,7 @@
 #include "chat/chat_manager.hpp"
 #include "model/preset_manager.hpp"
 #include "model/model_manager.hpp"
+#include "logger.hpp"
 
 #include <iostream>
 #include <inference.h>
@@ -400,7 +401,7 @@ private:
                 if (!newTitle.empty()) {
                     if (!chatManager.renameCurrentChat(newTitle).get())
                     {
-                        std::cerr << "[ChatSection] Failed to rename chat to: " << newTitle << "\n";
+                        LOG_ERROR("[ChatWindow::generateChatTitle] Failed to rename chat to: " + newTitle);
                     }
                 }
             }
@@ -438,12 +439,12 @@ private:
         auto& chatManager = Chat::ChatManager::getInstance();
         auto currentChatOpt = chatManager.getCurrentChat();
         if (!currentChatOpt.has_value()) {
-            std::cerr << "[ChatSection] No chat selected. Cannot send message.\n";
+            LOG_ERROR("[ChatWindow::handleUserMessage] No chat selected. Cannot send message.");
             return;
         }
 
         if (!Model::ModelManager::getInstance().getCurrentModelName().has_value()) {
-            std::cerr << "[ChatSection] No model selected. Cannot send message.\n";
+            LOG_ERROR("[ChatWindow::handleUserMessage] No model selected. Cannot send message.");
             return;
         }
 
@@ -467,7 +468,7 @@ private:
         int jobId = modelManager.startChatCompletionJob(completionParams, chatStreamingCallback,
             modelManager.getCurrentModelName().value(), modelManager.getCurrentVariantType());
         if (!chatManager.setCurrentJobId(jobId)) {
-            std::cerr << "[ChatSection] Failed to set the current job ID.\n";
+            LOG_ERROR("[ChatWindow::handleUserMessage] Failed to set the current job ID.");
         }
 
         modelManager.setModelGenerationInProgress(true);

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include "logger.hpp"
 
 namespace Chat
 {
@@ -62,7 +63,7 @@ namespace Chat
                 }
                 catch (const std::exception& e)
                 {
-                    std::cerr << "[FileChatPersistence] Failed to delete chat: " << chatName << "\n";
+                    LOG_ERROR("[FileChatPersistence::deleteChat] Failed to delete chat: " + chatName + " (" + e.what() + ")");
                     return false;
                 }
                 });
@@ -95,14 +96,12 @@ namespace Chat
                                     if (fileChatName == chatName) {
                                         try {
                                             if (!std::filesystem::remove(entry.path())) {
-                                                std::cerr << "[FileChatPersistence] Failed to remove file: "
-                                                    << entry.path() << "\n";
+                                                LOG_ERROR("[FileChatPersistence::deleteKvChat] Failed to remove file: " + entry.path().string());
                                                 allDeleted = false;
                                             }
                                         }
                                         catch (const std::exception& e) {
-                                            std::cerr << "[FileChatPersistence] Exception deleting file "
-                                                << entry.path() << ": " << e.what() << "\n";
+                                            LOG_ERROR("[FileChatPersistence::deleteKvChat] Exception deleting file " + entry.path().string() + ": " + e.what());
                                             allDeleted = false;
                                         }
                                     }
@@ -112,8 +111,7 @@ namespace Chat
                     }
                 }
                 catch (const std::exception& e) {
-                    std::cerr << "[FileChatPersistence] Exception iterating directory: "
-                        << e.what() << "\n";
+                    LOG_ERROR("[FileChatPersistence::deleteKvChat] Exception iterating directory: " + std::string(e.what()));
                     return false;
                 }
 
@@ -154,8 +152,7 @@ namespace Chat
                                             std::filesystem::rename(entry.path(), newPath);
                                         }
                                         catch (const std::exception& e) {
-                                            std::cerr << "[FileChatPersistence] Exception renaming file "
-                                                << entry.path() << " to " << newPath << ": " << e.what() << "\n";
+                                            LOG_ERROR("[FileChatPersistence::renameKvChat] Exception renaming file " + entry.path().string() + " to " + newPath.string() + ": " + e.what());
                                             allRenamed = false;
                                         }
                                     }
@@ -165,8 +162,7 @@ namespace Chat
                     }
                 }
                 catch (const std::exception& e) {
-                    std::cerr << "[FileChatPersistence] Exception iterating directory for renaming: "
-                        << e.what() << "\n";
+                    LOG_ERROR("[FileChatPersistence::renameKvChat] Exception iterating directory for renaming: " + std::string(e.what()));
                     return false;
                 }
                 return allRenamed;
@@ -226,6 +222,7 @@ namespace Chat
 				std::filesystem::path chatPath = getChatPath(chat.name);
                 std::ofstream file(chatPath, std::ios::binary);
                 if (!file) {
+                    LOG_ERROR("[FileChatPersistence::saveEncryptedChat] Failed to open file for writing: " + chatPath.string());
                     return false;
                 }
 
@@ -235,7 +232,7 @@ namespace Chat
                 return true;
             }
             catch (const std::exception& e) {
-                // TODO: Log error details here
+                LOG_ERROR("[FileChatPersistence::saveEncryptedChat] Exception: " + std::string(e.what()));
                 return false;
             }
         }
@@ -270,7 +267,7 @@ namespace Chat
                 }
             }
             catch (const std::exception& e) {
-                // TODO: Log error details here
+                LOG_ERROR("[FileChatPersistence::loadEncryptedChats] Exception: " + std::string(e.what()));
             }
 
             return chats;

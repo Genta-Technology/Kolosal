@@ -1,8 +1,7 @@
-// TODO: implement the observer pattern in the PresetManager class
-
 #pragma once
 
 #include "preset_persistence.hpp"
+#include "logger.hpp"
 
 #include <vector>
 #include <string>
@@ -54,30 +53,35 @@ namespace Model
             m_persistence = std::move(persistence);
             m_currentPresetName = std::nullopt;
             m_currentPresetIndex = 0;
+            LOG_DEBUG("[PresetManager::initialize] Initializing with custom persistence");
             loadPresetsAsync();
         }
 
         // Preset management methods
         std::future<bool> savePreset(const ModelPreset& preset)
         {
+            LOG_DEBUG("[PresetManager::savePreset] Saving preset: " + preset.name);
             return std::async(std::launch::async, [this, preset]()
                 { return savePresetInternal(preset); });
         }
 
         std::future<bool> saveCurrentPreset()
         {
+            LOG_DEBUG("[PresetManager::saveCurrentPreset] Saving current preset");
             return std::async(std::launch::async, [this]()
                 { return saveCurrentPresetInternal(); });
         }
 
         std::future<bool> saveCurrentPresetToPath(const std::filesystem::path& filePath)
         {
+            LOG_DEBUG("[PresetManager::saveCurrentPresetToPath] Saving current preset to path: " + filePath.string());
             return std::async(std::launch::async, [this, filePath]()
                 { return saveCurrentPresetToPathInternal(filePath); });
         }
 
         std::future<bool> deletePreset(const std::string& presetName)
         {
+            LOG_DEBUG("[PresetManager::deletePreset] Deleting preset: " + presetName);
             return std::async(std::launch::async, [this, presetName]()
                 { return deletePresetInternal(presetName); });
         }
@@ -85,6 +89,7 @@ namespace Model
         // New method: Copy current preset as a new preset with a new name
         std::future<bool> copyCurrentPresetAs(const std::string& newName)
         {
+            LOG_DEBUG("[PresetManager::copyCurrentPresetAs] Copying current preset as: " + newName);
             return std::async(std::launch::async, [this, newName]()
                 { return copyCurrentPresetAsInternal(newName); });
         }
@@ -119,11 +124,14 @@ namespace Model
             auto it = m_presetNameToIndex.find(presetName);
             if (it == m_presetNameToIndex.end())
             {
+                LOG_WARNING("[PresetManager::switchPreset] Preset not found: " + presetName);
                 return false;
             }
 
             m_currentPresetName = presetName;
             m_currentPresetIndex = it->second;
+
+            LOG_DEBUG("[PresetManager::switchPreset] Switched to preset: " + presetName);
 
 			// Set the last modified time to the current time
             {
@@ -161,6 +169,7 @@ namespace Model
             if (index >= m_originalPresets.size())
                 return;
 
+            LOG_DEBUG("[PresetManager::resetCurrentPreset] Resetting current preset: " + m_presets[index].name);
             m_presets[index] = m_originalPresets[index];
         }
 
@@ -199,11 +208,13 @@ namespace Model
             m_currentPresetName(std::nullopt),
             m_currentPresetIndex(0)
         {
+            LOG_DEBUG("[PresetManager::PresetManager] Constructing PresetManager");
             loadPresetsAsync();
         }
 
         void loadPresetsAsync()
         {
+            LOG_DEBUG("[PresetManager::loadPresetsAsync] Loading presets asynchronously");
             std::async(std::launch::async, [this]()
                 {
                     auto presets = m_persistence->loadAllPresets().get();
@@ -226,16 +237,18 @@ namespace Model
                         auto mostRecent = m_sortedIndices.begin();
                         m_currentPresetIndex = mostRecent->index;
                         m_currentPresetName = mostRecent->name;
+                        LOG_INFO("[PresetManager::loadPresetsAsync] Loaded " + std::to_string(m_presets.size()) + " presets, most recent: " + mostRecent->name);
                     }
                     else
                     {
-                        // No presets found, create default
+                        LOG_WARNING("[PresetManager::loadPresetsAsync] No presets found, creating default");
                         createDefaultPreset();
                     } });
         }
 
         void createDefaultPreset()
         {
+            LOG_DEBUG("[PresetManager::createDefaultPreset] Creating default preset");
             const int currentTime = static_cast<int>(std::time(nullptr));
             ModelPreset defaultPreset{
                 0,
@@ -267,6 +280,7 @@ namespace Model
             // Validate preset name
             if (!isValidPresetName(preset.name))
             {
+                LOG_ERROR("[PresetManager::savePresetInternal] Invalid preset name: " + preset.name);
                 return false;
             }
 
@@ -302,6 +316,12 @@ namespace Model
             // Save to persistence
             bool result = m_persistence->savePreset(m_presets[index]).get();
 
+            if (result) {
+                LOG_INFO("[PresetManager::savePresetInternal] Preset saved: " + preset.name);
+            } else {
+                LOG_ERROR("[PresetManager::savePresetInternal] Failed to save preset: " + preset.name);
+            }
+
             return result;
         }
 
@@ -309,6 +329,7 @@ namespace Model
         {
             if (!m_currentPresetName || m_currentPresetIndex >= m_presets.size())
             {
+                LOG_WARNING("[PresetManager::saveCurrentPresetInternal] No current preset to save");
                 return false;
             }
             ModelPreset& currentPreset = m_presets[m_currentPresetIndex];
@@ -321,6 +342,7 @@ namespace Model
             if (!m_currentPresetName || m_currentPresetIndex >= m_presets.size())
             {
                 // No current preset to save
+                LOG_WARNING("[PresetManager::saveCurrentPresetToPathInternal] No current preset to save to path");
                 return false;
             }
 
@@ -328,6 +350,12 @@ namespace Model
 
             // Use the persistence strategy to save the preset to the given path
             bool result = m_persistence->savePresetToPath(currentPreset, filePath).get();
+
+            if (result) {
+                LOG_INFO("[PresetManager::saveCurrentPresetToPathInternal] Preset saved to path: " + filePath.string());
+            } else {
+                LOG_ERROR("[PresetManager::saveCurrentPresetToPathInternal] Failed to save preset to path: " + filePath.string());
+            }
 
             // We might not need to update internal structures since we're just saving a copy
 
@@ -367,9 +395,16 @@ namespace Model
                 // Delete from persistence
                 bool result = m_persistence->deletePreset(presetName).get();
 
+                if (result) {
+                    LOG_INFO("[PresetManager::deletePresetInternal] Preset deleted: " + presetName);
+                } else {
+                    LOG_ERROR("[PresetManager::deletePresetInternal] Failed to delete preset: " + presetName);
+                }
+
                 return result;
             }
 
+            LOG_WARNING("[PresetManager::deletePresetInternal] Preset not found: " + presetName);
             return false;
         }
 
@@ -380,6 +415,7 @@ namespace Model
             // Validate new name
             if (!isValidPresetName(newName))
             {
+                LOG_ERROR("[PresetManager::copyCurrentPresetAsInternal] Invalid new preset name: " + newName);
                 return false;
             }
 
@@ -387,12 +423,14 @@ namespace Model
             if (m_presetNameToIndex.find(newName) != m_presetNameToIndex.end())
             {
                 // Name already exists
+                LOG_WARNING("[PresetManager::copyCurrentPresetAsInternal] Preset name already exists: " + newName);
                 return false;
             }
 
             // Check if there's a current preset to copy
             if (!m_currentPresetName || m_currentPresetIndex >= m_presets.size())
             {
+                LOG_WARNING("[PresetManager::copyCurrentPresetAsInternal] No current preset to copy");
                 return false;
             }
 
@@ -418,6 +456,9 @@ namespace Model
                 m_originalPresets.pop_back();
                 m_presetNameToIndex.erase(newName);
                 m_sortedIndices.erase({ newPreset.lastModified, newIndex, newName });
+                LOG_ERROR("[PresetManager::copyCurrentPresetAsInternal] Failed to save copied preset: " + newName);
+            } else {
+                LOG_INFO("[PresetManager::copyCurrentPresetAsInternal] Copied current preset as: " + newName);
             }
 
             return result;
@@ -472,11 +513,13 @@ namespace Model
 
 	inline void initializePresetManager()
 	{
+        LOG_DEBUG("[PresetManager::initializePresetManager] Initializing PresetManager singleton");
 		PresetManager::getInstance();
 	}
 
 	inline void initializePresetManagerWithCustomPersistence(std::unique_ptr<IPresetPersistence> persistence)
 	{
+        LOG_DEBUG("[PresetManager::initializePresetManagerWithCustomPersistence] Initializing PresetManager with custom persistence");
 		PresetManager::getInstance().initialize(std::move(persistence));
 	}
 

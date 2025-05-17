@@ -1,6 +1,7 @@
 #pragma once
 
 #include "preset.hpp"
+#include "logger.hpp"
 
 #include <vector>
 #include <future>
@@ -30,6 +31,7 @@ namespace Model
             if (!std::filesystem::exists(m_basePath))
             {
                 std::filesystem::create_directories(m_basePath);
+                LOG_DEBUG("[FilePresetPersistence::FilePresetPersistence] Created base directory: " + m_basePath);
             }
         }
 
@@ -72,7 +74,7 @@ namespace Model
                 std::ofstream file(filePath);
                 if (!file.is_open())
                 {
-					std::cerr << "[PRESET PERSISTENCE] [ERROR] Failed to open file for writing: " << filePath.string() << std::endl;
+                    LOG_ERROR("[FilePresetPersistence::savePresetInternal] Failed to open file for writing: " + filePath.string());
                     return false;
                 }
 
@@ -82,7 +84,7 @@ namespace Model
                     j = preset;
                 }
                 catch (const std::exception& e) {
-					std::cerr << "[PRESET PERSISTENCE] [ERROR] JSON serialization failed: " << e.what() << std::endl;
+                    LOG_ERROR(std::string("[FilePresetPersistence::savePresetInternal] JSON serialization failed: ") + e.what());
                     return false;
                 }
 
@@ -91,14 +93,15 @@ namespace Model
                     file << j.dump(4);
                 }
                 catch (const std::exception& e) {
-					std::cerr << "[PRESET PERSISTENCE] [ERROR] Failed to write JSON to file: " << e.what() << std::endl;
+                    LOG_ERROR(std::string("[FilePresetPersistence::savePresetInternal] Failed to write JSON to file: ") + e.what());
                     return false;
                 }
+                LOG_INFO("[FilePresetPersistence::savePresetInternal] Preset saved: " + preset.name);
                 return true;
             }
             catch (const std::exception& e)
             {
-				std::cerr << "[PRESET PERSISTENCE] [ERROR] Failed to save preset: " << e.what() << std::endl;
+                LOG_ERROR(std::string("[FilePresetPersistence::savePresetInternal] Failed to save preset: ") + e.what());
                 return false;
             }
         }
@@ -112,14 +115,16 @@ namespace Model
                 std::ofstream file(filePath);
                 if (!file.is_open())
                 {
+                    LOG_ERROR("[FilePresetPersistence::savePresetToPathInternal] Failed to open file for writing: " + filePath.string());
                     return false;
                 }
                 file << j.dump(4);
+                LOG_INFO("[FilePresetPersistence::savePresetToPathInternal] Preset saved to path: " + filePath.string());
                 return true;
             }
-            catch (const std::exception&)
+            catch (const std::exception& e)
             {
-                // Log error
+                LOG_ERROR(std::string("[FilePresetPersistence::savePresetToPathInternal] Exception: ") + e.what());
                 return false;
             }
         }
@@ -133,12 +138,17 @@ namespace Model
                 if (std::filesystem::exists(filePath))
                 {
                     std::filesystem::remove(filePath);
+                    LOG_INFO("[FilePresetPersistence::deletePresetInternal] Deleted preset file: " + filePath.string());
+                }
+                else
+                {
+                    LOG_WARNING("[FilePresetPersistence::deletePresetInternal] Preset file does not exist: " + filePath.string());
                 }
                 return true;
             }
-            catch (const std::exception&)
+            catch (const std::exception& e)
             {
-                // Log error
+                LOG_ERROR(std::string("[FilePresetPersistence::deletePresetInternal] Exception: ") + e.what());
                 return false;
             }
         }
@@ -161,12 +171,17 @@ namespace Model
                             ModelPreset preset = j.get<ModelPreset>();
                             presets.push_back(preset);
                         }
+                        else
+                        {
+                            LOG_WARNING("[FilePresetPersistence::loadAllPresetsInternal] Failed to open preset file: " + entry.path().string());
+                        }
                     }
                 }
+                LOG_DEBUG("[FilePresetPersistence::loadAllPresetsInternal] Loaded " + std::to_string(presets.size()) + " presets from disk.");
             }
-            catch (const std::exception&)
+            catch (const std::exception& e)
             {
-                // Log error
+                LOG_ERROR(std::string("[FilePresetPersistence::loadAllPresetsInternal] Exception: ") + e.what());
             }
             return presets;
         }

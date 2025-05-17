@@ -5,6 +5,7 @@
 #include "ui/widgets.hpp"
 #include "ui/markdown.hpp"
 #include "chat/chat_manager.hpp"
+#include "logger.hpp"
 
 #include <string>
 #include <vector>
@@ -237,7 +238,7 @@ private:
 
         if (!modelManager.isModelLoaded())
 		{
-			std::cerr << "[ChatSection] No model loaded. Cannot regenerate response.\n";
+			LOG_ERROR("[ChatHistoryRenderer::regenerateResponse] No model loaded. Cannot regenerate response.");
 			return;
 		}
 
@@ -254,12 +255,12 @@ private:
 
         auto currentChatOpt = chatManager.getCurrentChat();
         if (!currentChatOpt.has_value()) {
-            std::cerr << "[ChatSection] No chat selected. Cannot regenerate response.\n";
+            LOG_ERROR("[ChatHistoryRenderer::regenerateResponse] No chat selected. Cannot regenerate response.");
             return;
         }
 
         if (!modelManager.getCurrentModelName().has_value()) {
-            std::cerr << "[ChatSection] No model selected. Cannot regenerate response.\n";
+            LOG_ERROR("[ChatHistoryRenderer::regenerateResponse] No model selected. Cannot regenerate response.");
             return;
         }
 
@@ -267,7 +268,7 @@ private:
 
         // Validate the provided index.
         if (index < 0 || index >= static_cast<int>(currentChat.messages.size())) {
-            std::cerr << "[ChatSection] Invalid chat index (" << index << "). Cannot regenerate response.\n";
+            LOG_ERROR("[ChatHistoryRenderer::regenerateResponse] Invalid chat index (" + std::to_string(index) + "). Cannot regenerate response.");
             return;
         }
 
@@ -284,7 +285,7 @@ private:
                 }
             }
             if (targetAssistantIndex == -1) {
-                std::cerr << "[ChatSection] No assistant response found after user message at index " << index << ".\n";
+                LOG_ERROR("[ChatHistoryRenderer::regenerateResponse] No assistant response found after user message at index " + std::to_string(index) + ".");
                 return;
             }
 
@@ -296,7 +297,7 @@ private:
         }
         else if (currentChat.messages[index].role == "assistant") {
             if (index - 1 < 0 || currentChat.messages[index - 1].role != "user") {
-                std::cerr << "[ChatSection] Could not find an associated user message for assistant at index " << index << ".\n";
+                LOG_ERROR("[ChatHistoryRenderer::regenerateResponse] Could not find an associated user message for assistant at index " + std::to_string(index) + ".");
                 return;
             }
             userMessageIndex = index - 1;
@@ -307,7 +308,7 @@ private:
             }
         }
         else {
-            std::cerr << "[ChatSection] Message at index " << index << " is neither a user nor an assistant message. Cannot regenerate response.\n";
+            LOG_ERROR("[ChatHistoryRenderer::regenerateResponse] Message at index " + std::to_string(index) + " is neither a user nor an assistant message. Cannot regenerate response.");
             return;
         }
 
@@ -318,7 +319,7 @@ private:
         int jobId = modelManager.startChatCompletionJob(completionParams, chatStreamingCallback, 
             modelManager.getCurrentModelName().value(), modelManager.getCurrentVariantType());
         if (!chatManager.setCurrentJobId(jobId)) {
-            std::cerr << "[ChatSection] Failed to set the current job ID.\n";
+            LOG_ERROR("[ChatHistoryRenderer::regenerateResponse] Failed to set the current job ID.");
         }
 
         modelManager.setModelGenerationInProgress(true);

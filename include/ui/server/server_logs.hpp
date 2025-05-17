@@ -560,7 +560,7 @@ private:
         m_lastLogUpdate = now;
 
         // Get logs from the kolosal::Logger
-        const auto& logs = Logger::instance().getLogs();
+        const auto& logs = ServerLogger::instance().getLogs();
 
         // If there are new logs, add them to our buffer
         if (logs.size() > m_lastLogIndex) {

@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include "logger.hpp"
 
 class PresetSelectionComponent {
 public:
@@ -113,6 +114,8 @@ private:
 
                 // Delete the current preset.
                 if (manager.deletePreset(currentPresetName).get()) {
+                    // Crucial event: log as info
+                    LOG_INFO("[PresetSelectionComponent] Deleted preset: %s", currentPresetName.c_str());
                     // Get the updated preset list.
                     const auto& updatedPresets = manager.getPresets();
                     if (!updatedPresets.empty()) {
@@ -138,12 +141,15 @@ private:
             if (Model::PresetManager::getInstance().hasUnsavedChanges()) {
                 try {
                     bool success = Model::PresetManager::getInstance().saveCurrentPreset().get();
-                    if (!success) {
-						std::cerr << "[PresetSelectionComponent] [ERROR] Failed to save preset.\n";
+                    if (success) {
+                        // Crucial event: log as info
+                        LOG_INFO("[PresetSelectionComponent] Successfully saved preset.");
+                    } else {
+                        LOG_ERROR("[PresetSelectionComponent::renderSaveButtons] Failed to save preset.");
                     }
                 }
                 catch (const std::exception& e) {
-					std::cerr << "[PresetSelectionComponent] [ERROR] " << e.what() << "\n";
+                    LOG_ERROR(std::string("[PresetSelectionComponent::renderSaveButtons] Exception: ") + e.what());
                 }
             }
             };
@@ -162,7 +168,7 @@ private:
         saveConfig.activeColor = RGBAToImVec4(26, 95, 180, 255);
         Button::renderGroup({ saveConfig, saveAsConfig }, 9, ImGui::GetCursorPosY(), 10);
 
-		ImGui::Spacing(); ImGui::Spacing();
+        ImGui::Spacing(); ImGui::Spacing();
     }
 };
 
@@ -201,9 +207,9 @@ public:
 
         ImGui::SameLine();
 
-		// Position the edit button to edge of the sidebar
-		ImGui::SetCursorPosX(m_sidebarWidth - 38);
-		ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
+        // Position the edit button to edge of the sidebar
+        ImGui::SetCursorPosX(m_sidebarWidth - 38);
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 4);
 
         // Create edit button
         ButtonConfig editButtonConfig;
@@ -331,7 +337,7 @@ public:
                         Model::PresetManager::getInstance().switchPreset(input);
                         showDialog = false;
                         newPresetName.clear();
-						ImGui::CloseCurrentPopup();
+                        ImGui::CloseCurrentPopup();
                     }
                 };
 

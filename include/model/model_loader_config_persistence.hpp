@@ -21,7 +21,7 @@ namespace Model
 
                 std::ofstream file(filePath);
                 if (!file.is_open()) {
-                    std::cerr << "Error: Could not open file for writing: " << filePath << std::endl;
+					LOG_ERROR("Error: Could not open file for writing: " + filePath);
                     return false;
                 }
 
@@ -31,7 +31,7 @@ namespace Model
                 return true;
             }
             catch (const std::exception& e) {
-                std::cerr << "Error saving configuration: " << e.what() << std::endl;
+				LOG_ERROR("Error saving configuration: " + std::string(e.what()));
                 return false;
             }
         }
@@ -46,7 +46,7 @@ namespace Model
             try {
                 std::ifstream file(filePath);
                 if (!file.is_open()) {
-                    std::cerr << "Error: Could not open file for reading: " << filePath << std::endl;
+					LOG_ERROR("Error: Could not open file for reading: " + filePath);
                     return false;
                 }
 
@@ -58,7 +58,7 @@ namespace Model
                 return true;
             }
             catch (const std::exception& e) {
-                std::cerr << "Error loading configuration: " << e.what() << std::endl;
+				LOG_ERROR("Error loading configuration: " + std::string(e.what()));
                 return false;
             }
         }

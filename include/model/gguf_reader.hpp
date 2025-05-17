@@ -1,6 +1,8 @@
 #ifndef GGUF_READER_H
 #define GGUF_READER_H
 
+#include "logger.hpp"
+
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -242,12 +244,12 @@ public:
         try {
             if (isUrl(path)) {
                 if (verbose)
-                    std::cout << "Reading from URL: " << path << std::endl;
+                    LOG_DEBUG("Reading from URL: " + path);
                 source = std::make_unique<UrlDataSource>(path);
             }
             else {
                 if (verbose)
-                    std::cout << "Reading from file: " << path << std::endl;
+                    LOG_DEBUG("Reading from file: " + path);
                 source = std::make_unique<FileDataSource>(path);
             }
 
@@ -255,34 +257,31 @@ public:
             if (!source->read(reinterpret_cast<char*>(&magic), sizeof(magic)))
                 throw std::runtime_error("Failed to read magic number");
             if (magic != 0x46554747) {
-                std::cerr << "Invalid GGUF file format. Magic number: "
-                    << std::hex << magic << std::dec << std::endl;
-                return std::nullopt;
+                throw std::runtime_error("Invalid GGUF file format. Magic number: " + std::to_string(magic));
             }
 
             uint32_t version;
             if (!source->read(reinterpret_cast<char*>(&version), sizeof(version)))
                 throw std::runtime_error("Failed to read version");
             if (version > 3) {
-                std::cerr << "Unsupported GGUF version: " << version << std::endl;
-                return std::nullopt;
+                throw std::runtime_error("Unsupported GGUF version: " + std::to_string(version));
             }
             if (verbose)
-                std::cout << "GGUF version: " << version << std::endl;
+                LOG_DEBUG("GGUF version: " + std::to_string(version));
 
             uint64_t tensorCount = 0;
             if (version >= 1) {
                 if (!source->read(reinterpret_cast<char*>(&tensorCount), sizeof(tensorCount)))
                     throw std::runtime_error("Failed to read tensor count");
                 if (verbose)
-                    std::cout << "Tensor count: " << tensorCount << std::endl;
+                    LOG_DEBUG("Tensor count: " + std::to_string(tensorCount));
             }
 
             uint64_t metadataCount;
             if (!source->read(reinterpret_cast<char*>(&metadataCount), sizeof(metadataCount)))
                 throw std::runtime_error("Failed to read metadata count");
             if (verbose)
-                std::cout << "Metadata count: " << metadataCount << std::endl;
+                LOG_DEBUG("Metadata count: " + std::to_string(metadataCount));
 
             const std::vector<std::string> suffixes = {
                 ".attention.head_count",
@@ -313,7 +312,7 @@ public:
                 GGUFType type = static_cast<GGUFType>(typeVal);
 
                 if (verbose)
-                    std::cout << "Key: " << key << ", Type: " << static_cast<int>(type) << std::endl;
+                    LOG_DEBUG("Key: " + key + ", Type: " + std::to_string(static_cast<int>(type)));
 
                 bool keyMatched = false;
                 std::string matchedSuffix;
@@ -333,7 +332,7 @@ public:
                         params.attention_heads = value;
                         foundParams["attention_heads"] = true;
                         if (verbose)
-                            std::cout << "  Found attention_heads: " << value << " (from key: " << key << ")" << std::endl;
+                            LOG_DEBUG("  Found attention_heads: " + std::to_string(value) + " (from key: " + key + ")");
                     }
                     else if (matchedSuffix == ".attention.head_count_kv" && (type == GGUFType::UINT32 || type == GGUFType::INT32)) {
                         uint32_t value;
@@ -342,7 +341,7 @@ public:
                         params.kv_heads = value;
                         foundParams["kv_heads"] = true;
                         if (verbose)
-                            std::cout << "  Found kv_heads: " << value << " (from key: " << key << ")" << std::endl;
+                            LOG_DEBUG("  Found kv_heads: " + std::to_string(value) + " (from key: " + key + ")");
                     }
                     else if (matchedSuffix == ".block_count" && (type == GGUFType::UINT32 || type == GGUFType::INT32)) {
                         uint32_t value;
@@ -351,7 +350,7 @@ public:
                         params.hidden_layers = value;
                         foundParams["hidden_layers"] = true;
                         if (verbose)
-                            std::cout << "  Found hidden_layers: " << value << " (from key: " << key << ")" << std::endl;
+                            LOG_DEBUG("  Found hidden_layers: " + std::to_string(value) + " (from key: " + key + ")");
                     }
                     else if (matchedSuffix == ".embedding_length") {
                         if (type == GGUFType::UINT64 || type == GGUFType::INT64) {
@@ -361,7 +360,7 @@ public:
                             params.hidden_size = value;
                             foundParams["hidden_size"] = true;
                             if (verbose)
-                                std::cout << "  Found hidden_size: " << value << " (from key: " << key << ")" << std::endl;
+                                LOG_DEBUG("  Found hidden_size: " + std::to_string(value) + " (from key: " + key + ")");
                         }
                         else if (type == GGUFType::UINT32 || type == GGUFType::INT32) {
                             uint32_t value;
@@ -370,7 +369,7 @@ public:
                             params.hidden_size = value;
                             foundParams["hidden_size"] = true;
                             if (verbose)
-                                std::cout << "  Found hidden_size: " << value << " (from key: " << key << ")" << std::endl;
+                                LOG_DEBUG("  Found hidden_size: " + std::to_string(value) + " (from key: " + key + ")");
                         }
                         else {
                             skipValue(source.get(), type);
@@ -393,7 +392,7 @@ public:
                         if (urlSource) {
                             urlSource->setAbortFlag();
                             if (verbose)
-                                std::cout << "All required metadata found, aborting download" << std::endl;
+                                LOG_DEBUG("  All required metadata found, aborting download");
                         }
                     }
                     break;
@@ -404,7 +403,7 @@ public:
                 params.kv_heads = params.attention_heads;
                 foundParams["kv_heads"] = true;
                 if (verbose)
-                    std::cout << "  Using attention_heads as kv_heads: " << params.kv_heads << std::endl;
+                    LOG_DEBUG("  Using attention_heads as kv_heads: " + std::to_string(params.kv_heads));
             }
 
             bool allFound = foundParams["attention_heads"] &&
@@ -416,18 +415,15 @@ public:
                 if (!foundParams["attention_heads"]) std::cerr << "  Missing: attention_heads (suffix: .attention.head_count)" << std::endl;
                 if (!foundParams["hidden_layers"]) std::cerr << "  Missing: hidden_layers (suffix: .block_count)" << std::endl;
                 if (!foundParams["hidden_size"]) std::cerr << "  Missing: hidden_size (suffix: .embedding_length)" << std::endl;
-                if (verbose) {
-                    std::cerr << "All keys found:" << std::endl;
-                    for (const auto& key : allKeys)
-                        std::cerr << "  " << key << std::endl;
-                }
+                if (verbose)
+                    LOG_ERROR("Failed to find all required model parameters");
                 return std::nullopt;
             }
 
             return params;
         }
         catch (const std::exception& e) {
-            std::cerr << "Error reading GGUF file/URL: " << e.what() << std::endl;
+            LOG_ERROR("Error reading GGUF file/URL: " + std::string(e.what()));
             return std::nullopt;
         }
     }

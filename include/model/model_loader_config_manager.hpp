@@ -2,6 +2,7 @@
 #define MODEL_LOADER_CONFIG_MANAGER_HPP
 
 #include "model_loader_config_persistence.hpp"
+#include "logger.hpp"
 
 #include <string>
 #include <json.hpp>
@@ -26,9 +27,9 @@ namespace Model
 
             if (!configFilePath.empty() && configFilePath != instance.configFilePath_) {
                 // Log a warning that the config file path is being ignored after initialization
-                std::cerr << "Warning: Config file path '" << configFilePath
-                    << "' is ignored as the instance is already initialized with '"
-                    << instance.configFilePath_ << "'" << std::endl;
+				LOG_ERROR("Config file path '" + configFilePath +
+					"' is ignored as the instance is already initialized with '" +
+					instance.configFilePath_ + "'");
             }
 
             return instance;
@@ -97,7 +98,8 @@ namespace Model
             : configFilePath_(configFilePath) {
             // Try loading from file, if it fails, use default values
             if (!loadConfig()) {
-                std::cout << "Using default configuration values" << std::endl;
+				LOG_WARNING("Failed to load configuration from file: " + configFilePath_ +
+					". Using default configuration values.");
             }
         }
 

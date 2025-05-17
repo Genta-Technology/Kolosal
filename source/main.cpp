@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "logger.hpp"
 
 #include "window/window_factory.hpp"
 #include "window/graphics_context_factory.hpp"
@@ -191,6 +192,8 @@ public:
 
         // Create the window state transition manager
         transitionManager = std::make_unique<WindowStateTransitionManager>(*window);
+
+        LOG_INFO("Application started");
     }
 
     int run()
@@ -317,6 +320,13 @@ void SetupDpiAwareness()
 #ifdef DEBUG
 int main()
 {
+    INIT_LOGGER_CONSOLE();
+    INIT_LOGGER_FILE("application.log");
+    INIT_LOGGER_TOAST("Kolosal AI", "Genta Technology");
+
+    Logging::Logger::Instance().SetLevel(Logging::LogLevel::APP_DEBUG);
+    Logging::Logger::Instance().SetFormat("[%T] [%L] (%F:%l) %M");
+
     // Set up DPI awareness before creating any window
     SetupDpiAwareness();
 
@@ -334,6 +344,13 @@ int main()
 #else
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
+    INIT_LOGGER_CONSOLE();
+    INIT_LOGGER_FILE("application.log");
+    INIT_LOGGER_TOAST("Kolosal AI", "Genta Technology");
+
+    Logging::Logger::Instance().SetLevel(Logging::LogLevel::APP_DEBUG);
+    Logging::Logger::Instance().SetFormat("[%T] [%L] (%F:%l) %M");
+
     // Set up DPI awareness before creating any window
     SetupDpiAwareness();
 

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <memory>
 #include <unordered_map>
+#include "logger.hpp"
 
 class FontsManager
 {
@@ -315,7 +316,7 @@ private:
 
             // If loading failed, log an error
             if (!fonts[fontType]) {
-                std::cerr << "Failed to load font: " << mdFontPaths[fontType] << std::endl;
+                LOG_ERROR("[FontsManager::LoadFonts] Failed to load font: " + std::string(mdFontPaths[fontType]));
                 continue;
             }
 
@@ -357,7 +358,7 @@ private:
         );
 
         if (!iconFonts[CODICON]) {
-            std::cerr << "Failed to load icon font: " << iconFontPath << std::endl;
+            LOG_ERROR("[FontsManager::LoadFonts] Failed to load icon font: " + std::string(iconFontPath));
         }
 
         // Set the default font to regular

@@ -13,7 +13,6 @@
 #include "config.hpp"
 #include "common.hpp"
 #include "ui/fonts.hpp"
-#include <imgui_internal.h>
 
 enum ButtonState
 {
@@ -264,7 +263,7 @@ namespace Label
 
         // Calculate total content width and height
         float contentWidth = iconPlusGapWidth + labelSize.x;
-        float contentHeight = std::max(labelSize.y, iconSize.y);
+        float contentHeight = std::max<float>(labelSize.y, iconSize.y);
 
         // Calculate vertical offset to center content
         float verticalOffset = rectMin.y + (rectSize.y - contentHeight) / 2.0f;

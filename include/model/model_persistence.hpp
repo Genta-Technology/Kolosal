@@ -1,6 +1,7 @@
 #pragma once
 
 #include "model.hpp"
+#include "logger.hpp"
 
 #include <string>
 #include <fstream>
@@ -9,7 +10,6 @@
 #include <future>
 #include <algorithm>
 #include <curl/curl.h>
-#include <iostream>
 
 namespace Model
 {
@@ -68,7 +68,7 @@ namespace Model
                 // Check if variant exists
                 auto variantIter = modelData.variants.find(variantType);
                 if (variantIter == modelData.variants.end()) {
-                    std::cerr << "[FileModelPersistence] Error: Variant '" << variantType << "' not found in model '" << modelData.name << "'\n";
+                    LOG_ERROR("[FileModelPersistence::downloadModelVariant] Variant '{}' not found in model '{}'", variantType, modelData.name);
                     return;
                 }
 
@@ -85,6 +85,7 @@ namespace Model
                     std::ofstream file(variant.path, std::ios::binary);
                     if (!file.is_open())
                     {
+                        LOG_ERROR("[FileModelPersistence::downloadModelVariant] Failed to open file for writing: {}", variant.path);
                         curl_easy_cleanup(curl);
                         return;
                     }
@@ -106,8 +107,10 @@ namespace Model
                             std::filesystem::remove(variant.path);  // Remove incomplete file
                             variant.downloadProgress = 0.0;
                             variant.isDownloaded = false;
+                            LOG_WARNING("[FileModelPersistence::downloadModelVariant] Download of '{}' for model '{}' was canceled and incomplete file removed.", variantType, modelData.name);
                         }
                         else {
+                            LOG_ERROR("[FileModelPersistence::downloadModelVariant] CURL error while downloading '{}': {}", variantType, curl_easy_strerror(res));
                             // Handle other error cases as needed.
                         }
                     }
@@ -115,6 +118,7 @@ namespace Model
                     {
                         variant.isDownloaded = true;
                         variant.downloadProgress = 100.0;
+                        LOG_INFO("[FileModelPersistence::downloadModelVariant] Successfully downloaded '{}' for model '{}'.", variantType, modelData.name);
                         // Save the updated model data.
                         saveModelData(modelData).get();
                     }
@@ -146,7 +150,7 @@ namespace Model
                 // Check if variant exists
                 auto variantIter = modelData.variants.find(variantType);
                 if (variantIter == modelData.variants.end()) {
-                    std::cerr << "[FileModelPersistence] Error: Variant '" << variantType << "' not found in model '" << modelData.name << "'\n";
+                    LOG_ERROR("[FileModelPersistence::deleteModelVariant] Variant '{}' not found in model '{}'", variantType, modelData.name);
                     return;
                 }
 
@@ -157,10 +161,10 @@ namespace Model
                 {
                     try {
                         std::filesystem::remove(variant.path);
+                        LOG_INFO("[FileModelPersistence::deleteModelVariant] Deleted file '{}'", variant.path);
                     }
                     catch (const std::filesystem::filesystem_error& e) {
-                        std::cerr << "[FileModelPersistence] Error deleting file " << variant.path
-                            << ": " << e.what() << "\n";
+                        LOG_ERROR("[FileModelPersistence::deleteModelVariant] Error deleting file '{}': {}", variant.path, e.what());
                     }
                 }
                 // Reset the variant's state so that it can be redownloaded.
@@ -194,7 +198,10 @@ namespace Model
             }
             // If cancel flag is set, abort the transfer.
             if (variant->cancelDownload)
+            {
+                LOG_WARNING("[FileModelPersistence::progress_callback] Download canceled for variant '{}'", variant->path);
                 return 1; // non-zero return value signals curl to abort
+            }
             return 0;
         }
 
