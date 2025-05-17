@@ -1249,9 +1249,9 @@ namespace Model
             kolosal::ServerAPI::instance().shutdown();
 
             // Initialize logger
-            Logger::instance().setLogFile("model_server.log");
-            Logger::instance().setLevel(LogLevel::SERVER_INFO);
-            Logger::logInfo("Starting model server on port %s", port.c_str());
+            ServerLogger::instance().setLogFile("model_server.log");
+            ServerLogger::instance().setLevel(LogLevel::SERVER_INFO);
+            ServerLogger::logInfo("Starting model server on port %s", port.c_str());
 
             // Set chat completion callbacks
             kolosal::ServerAPI::instance().setChatCompletionCallback(
@@ -1294,16 +1294,16 @@ namespace Model
 
             // Initialize and start the server
             if (!kolosal::ServerAPI::instance().init(port)) {
-                Logger::logError("Failed to start model server");
+                ServerLogger::logError("Failed to start model server");
                 return false;
             }
 
-            Logger::logInfo("Model server started successfully");
+            ServerLogger::logInfo("Model server started successfully");
             return true;
         }
 
         void stopServer() {
-            Logger::logInfo("Stopping model server");
+            ServerLogger::logInfo("Stopping model server");
             kolosal::ServerAPI::instance().shutdown();
         }
 
@@ -1319,7 +1319,7 @@ namespace Model
 
         ChatCompletionResponse handleChatCompletionRequest(const ChatCompletionRequest& request) {
 			if (m_inferenceEngines.find(request.model) == m_inferenceEngines.end()) {
-                Logger::logError("[ModelManager] Model %s not loaded",
+                ServerLogger::logError("[ModelManager] Model %s not loaded",
                     request.model.c_str());
 				return {};
 			}
@@ -1329,7 +1329,7 @@ namespace Model
             // (The parameters will include the messages and other fields.)
             params.streaming = false;
 
-			Logger::logInfo("[ModelManager] Handling chat completion request for model %s", request.model.c_str());
+			ServerLogger::logInfo("[ModelManager] Handling chat completion request for model %s", request.model.c_str());
 
             // Invoke the synchronous chat completion method.
             CompletionResult result = chatCompleteSync(params, request.model, false);
@@ -1341,7 +1341,7 @@ namespace Model
 
         CompletionResponse handleCompletionRequest(const CompletionRequest& request) {
 			if (m_inferenceEngines.find(request.model) == m_inferenceEngines.end()) {
-                Logger::logError("[ModelManager] Model %s not loaded",
+                ServerLogger::logError("[ModelManager] Model %s not loaded",
                     request.model.c_str());
 				return {};
 			}
@@ -1350,7 +1350,7 @@ namespace Model
             CompletionParameters params = buildCompletionParameters(request);
             params.streaming = false;
 
-			Logger::logInfo("[ModelManager] Handling completion request for model %s", request.model.c_str());
+			ServerLogger::logInfo("[ModelManager] Handling completion request for model %s", request.model.c_str());
 
             // Invoke the synchronous completion method
             CompletionResult result = completeSync(params, request.model);
@@ -1368,7 +1368,7 @@ namespace Model
 
             // Check if the model name is loaded
             if (m_inferenceEngines.find(request.model) == m_inferenceEngines.end()) {
-				Logger::logError("[ModelManager] Model %s not loaded for streaming requestId: %s",
+				ServerLogger::logError("[ModelManager] Model %s not loaded for streaming requestId: %s",
 					request.model.c_str(), requestId.c_str());
                 return false;
             }
@@ -1386,7 +1386,7 @@ namespace Model
                     }
                     else {
                         // If no context and chunk index is not zero, something is wrong.
-                        Logger::logError("[ModelManager] Streaming context not found for requestId: %s",
+                        ServerLogger::logError("[ModelManager] Streaming context not found for requestId: %s",
                             requestId.c_str());
                         return false;
                     }
@@ -1405,7 +1405,7 @@ namespace Model
                 // Track the job ID and model name for this request
                 int jobId = -1;
 
-				Logger::logInfo("[ModelManager] Starting streaming job for requestId: %s, model: %s",
+				ServerLogger::logInfo("[ModelManager] Starting streaming job for requestId: %s, model: %s",
 					requestId.c_str(), request.model.c_str());
 
                 {
@@ -1416,7 +1416,7 @@ namespace Model
                 }
 
                 if (jobId < 0) {
-                    Logger::logError("[ModelManager] Failed to submit chat completions job for requestId: %s",
+                    ServerLogger::logError("[ModelManager] Failed to submit chat completions job for requestId: %s",
                         requestId.c_str());
                     {
                         std::lock_guard<std::mutex> lock(ctx->mtx);
@@ -1459,7 +1459,7 @@ namespace Model
                             // Check if the job has an error
                             if (this->m_inferenceEngines.at(request.model)->hasJobError(jobId)) {
                                 std::string errorMsg = this->m_inferenceEngines.at(request.model)->getJobError(jobId);
-                                Logger::logError("[ModelManager] Streaming job error for jobId: %d - %s",
+                                ServerLogger::logError("[ModelManager] Streaming job error for jobId: %d - %s",
                                     jobId, errorMsg.c_str());
                                 {
                                     std::lock_guard<std::mutex> lock(ctx->mtx);
@@ -1497,7 +1497,7 @@ namespace Model
                                 auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                                     endTime - startTime).count();
 
-                                Logger::logInfo("[ModelManager] Streaming job %d completed in %lld ms",
+                                ServerLogger::logInfo("[ModelManager] Streaming job %d completed in %lld ms",
                                     jobId, durationMs);
 
                                 {
@@ -1513,7 +1513,7 @@ namespace Model
                         }
                     }
                     catch (const std::exception& e) {
-                        Logger::logError("[ModelManager] Exception in streaming thread: %s", e.what());
+                        ServerLogger::logError("[ModelManager] Exception in streaming thread: %s", e.what());
                         {
                             std::lock_guard<std::mutex> lock(ctx->mtx);
                             ctx->error = true;
@@ -1563,7 +1563,7 @@ namespace Model
 
                 if (!result) {
                     // If we timed out
-                    Logger::logError("[ModelManager] Timeout waiting for chunk %d for requestId %s",
+                    ServerLogger::logError("[ModelManager] Timeout waiting for chunk %d for requestId %s",
                         chunkIndex, requestId.c_str());
 
                     // Clean up and return error
@@ -1574,7 +1574,7 @@ namespace Model
 
                 // If an error occurred, clean up the context and signal termination
                 if (ctx->error) {
-                    Logger::logError("[ModelManager] Error in streaming job for requestId %s: %s",
+                    ServerLogger::logError("[ModelManager] Error in streaming job for requestId %s: %s",
                         requestId.c_str(), ctx->errorMessage.c_str());
 
                     std::unique_lock<std::mutex> glock(m_streamContextsMutex);
@@ -1646,7 +1646,7 @@ namespace Model
             CompletionChunk& outputChunk) {
 
 			if (m_inferenceEngines.find(request.model) == m_inferenceEngines.end()) {
-                Logger::logError("[ModelManager] Model %s not loaded for streaming requestId: %s",
+                ServerLogger::logError("[ModelManager] Model %s not loaded for streaming requestId: %s",
                     request.model.c_str(), requestId.c_str());
 				return false;
 			}
@@ -1663,7 +1663,7 @@ namespace Model
                         m_completionStreamingContexts[requestId] = ctx;
                     }
                     else {
-                        Logger::logError("[ModelManager] Completion streaming context not found for requestId: %s",
+                        ServerLogger::logError("[ModelManager] Completion streaming context not found for requestId: %s",
                             requestId.c_str());
                         return false;
                     }
@@ -1682,7 +1682,7 @@ namespace Model
                 // Track job ID and model for this request
                 int jobId = -1;
 
-                Logger::logInfo("[ModelManager] Starting streaming job for requestId: %s, model: %s",
+                ServerLogger::logInfo("[ModelManager] Starting streaming job for requestId: %s, model: %s",
                     requestId.c_str(), request.model.c_str());
 
                 {
@@ -1695,7 +1695,7 @@ namespace Model
                 }
 
                 if (jobId < 0) {
-                    Logger::logError("[ModelManager] Failed to submit completion job for requestId: %s",
+                    ServerLogger::logError("[ModelManager] Failed to submit completion job for requestId: %s",
                         requestId.c_str());
                     {
                         std::lock_guard<std::mutex> lock(ctx->mtx);
@@ -1738,7 +1738,7 @@ namespace Model
                             // Check if the job has an error
                             if (this->m_inferenceEngines.at(request.model)->hasJobError(jobId)) {
                                 std::string errorMsg = this->m_inferenceEngines.at(request.model)->getJobError(jobId);
-                                Logger::logError("[ModelManager] Streaming completion job error for jobId: %d - %s",
+                                ServerLogger::logError("[ModelManager] Streaming completion job error for jobId: %d - %s",
                                     jobId, errorMsg.c_str());
                                 {
                                     std::lock_guard<std::mutex> lock(ctx->mtx);
@@ -1777,7 +1777,7 @@ namespace Model
                                 auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                                     endTime - startTime).count();
 
-                                Logger::logInfo("[ModelManager] Streaming completion job %d completed in %lld ms",
+                                ServerLogger::logInfo("[ModelManager] Streaming completion job %d completed in %lld ms",
                                     jobId, durationMs);
 
                                 {
@@ -1793,7 +1793,7 @@ namespace Model
                         }
                     }
                     catch (const std::exception& e) {
-                        Logger::logError("[ModelManager] Exception in completion streaming thread: %s", e.what());
+                        ServerLogger::logError("[ModelManager] Exception in completion streaming thread: %s", e.what());
                         {
                             std::lock_guard<std::mutex> lock(ctx->mtx);
                             ctx->error = true;
@@ -1841,7 +1841,7 @@ namespace Model
 
                 if (!result) {
                     // Timeout occurred
-                    Logger::logError("[ModelManager] Timeout waiting for completion chunk %d for requestId %s",
+                    ServerLogger::logError("[ModelManager] Timeout waiting for completion chunk %d for requestId %s",
                         chunkIndex, requestId.c_str());
 
                     // Keep the lock when we check if this is the last message
@@ -1852,7 +1852,7 @@ namespace Model
 
                 // Handle errors - still holding the lock
                 if (ctx->error) {
-                    Logger::logError("[ModelManager] Error in streaming completion for requestId %s: %s",
+                    ServerLogger::logError("[ModelManager] Error in streaming completion for requestId %s: %s",
                         requestId.c_str(), ctx->errorMessage.c_str());
 
                     // Keep the lock when we check if this is the last message

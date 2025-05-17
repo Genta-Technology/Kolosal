@@ -555,7 +555,7 @@ protected:
         }
     }
 
-    void BLOCK_CODE(const MD_BLOCK_CODE_DETAIL* d, bool e) override
+        void BLOCK_CODE(const MD_BLOCK_CODE_DETAIL* d, bool e) override
     {
         if (e) {
             // Push new code block with stable ID
@@ -636,6 +636,7 @@ protected:
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2);
 
                 // Input field
+                std::string block_content = block.content;
                 bool focusInput = false;
                 InputFieldConfig input_cfg(
                     ("##code_input_" + std::to_string(block.render_id)).c_str(),
@@ -653,10 +654,24 @@ protected:
 
                 m_code_stack.pop_back();
 
+				textLines.push_back("");
+				StyledTextLine blankLine;
+				blankLine.heightMultiplier = 36 / line_height;
+				styledLines.push_back(blankLine);
+
                 // Add code text to text selection - preserve lines
-                std::istringstream codeStream(block.content);
+                std::istringstream codeStream(block_content);
                 std::string codeLine;
                 while (std::getline(codeStream, codeLine)) {
+					// if empty or only whitespace, add a blank line
+					if (codeLine.empty() || std::all_of(codeLine.begin(), codeLine.end(), ::isspace)) {
+						textLines.push_back("");
+						StyledTextLine blankLine;
+						blankLine.heightMultiplier = 0.8f;
+						styledLines.push_back(blankLine);
+						continue;
+					}
+
                     if (inListItem) {
                         applyListIndent(codeLine);
                     }
@@ -667,19 +682,20 @@ protected:
                     codeSegment.text = codeLine;
                     codeSegment.font = currentFont;
                     codeSegment.isBold = false;
-                    codeSegment.startX = 0;
+                    codeSegment.startX = 10;
 
                     // Calculate width
                     ImFont* oldFont = ImGui::GetFont();
                     if (currentFont) {
                         ImGui::PushFont(currentFont);
                     }
-                    codeSegment.endX = ImGui::CalcTextSize(codeLine.c_str()).x;
+                    codeSegment.endX = ImGui::CalcTextSize(codeLine.c_str()).x + codeSegment.startX;
                     if (currentFont) {
                         ImGui::PopFont();
                     }
 
                     styledLine.segments.push_back(codeSegment);
+                    styledLine.heightMultiplier = 0.8f;
                     styledLine.totalWidth = codeSegment.endX;
 
                     // Add to lines
@@ -687,9 +703,10 @@ protected:
                     styledLines.push_back(styledLine);
                 }
 
-                // Add a blank line after code block
                 textLines.push_back("");
-                styledLines.push_back(StyledTextLine{});
+                blankLine.heightMultiplier = 31 / line_height;
+                styledLines.push_back(blankLine);
+
                 currentLine.clear();
                 currentStyledLine = StyledTextLine{};
                 currentSegment = StyledTextSegment{};
