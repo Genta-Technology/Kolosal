@@ -7,6 +7,8 @@
 #include "model/model_manager.hpp"
 #include "model/server_state_manager.hpp"
 
+#include "kolosal/logger.hpp"
+
 #include <IconsCodicons.h>
 #include <vector>
 #include <string>
@@ -560,7 +562,7 @@ private:
         m_lastLogUpdate = now;
 
         // Get logs from the kolosal::Logger
-        const auto& logs = Logger::instance().getLogs();
+        const auto& logs = ServerLogger::instance().getLogs();
 
         // If there are new logs, add them to our buffer
         if (logs.size() > m_lastLogIndex) {

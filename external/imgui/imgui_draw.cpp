@@ -5174,6 +5174,9 @@ bool ImFont::IsGlyphInFont(ImWchar c)
 IM_MSVC_RUNTIME_CHECKS_OFF
 float ImFontBaked::GetCharAdvance(ImWchar c)
 {
+    if (IndexAdvanceX.Data == nullptr)
+        return FallbackAdvanceX;
+
     if ((int)c < IndexAdvanceX.Size)
     {
         // Missing glyphs fitting inside index will have stored FallbackAdvanceX already.

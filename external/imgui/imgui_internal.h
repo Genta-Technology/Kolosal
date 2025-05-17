@@ -1214,6 +1214,7 @@ struct IMGUI_API ImGuiInputTextState
     ImGuiContext*           Ctx;                    // parent UI context (needs to be set explicitly by parent).
     ImStbTexteditState*     Stb;                    // State for stb_textedit.h
     ImGuiInputTextFlags     Flags;                  // copy of InputText() flags. may be used to check if e.g. ImGuiInputTextFlags_Password is set.
+    float                   WordWrapWidth;          // Word wrapping width, 0.0f = disabled, < 0.0f = auto wrap at right edge of window
     ImGuiID                 ID;                     // widget id owning the text state
     int                     TextLen;                // UTF-8 length of the string in TextA (in bytes)
     const char*             TextSrc;                // == TextA.Data unless read-only, in which case == buf passed to InputText(). Field only set and valid _inside_ the call InputText() call.
@@ -1235,6 +1236,7 @@ struct IMGUI_API ImGuiInputTextState
     void        ClearText()                 { TextLen = 0; TextA[0] = 0; CursorClamp(); }
     void        ClearFreeMemory()           { TextA.clear(); TextToRevertTo.clear(); }
     void        OnKeyPressed(int key);      // Cannot be inline because we call in code in stb_textedit.h implementation
+    bool        HasWordWrap() const         { return WordWrapWidth > 0.0; }
     void        OnCharPressed(unsigned int c);
 
     // Cursor & Selection

@@ -612,7 +612,7 @@ namespace InputField
         ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + config.size.x - 15);
 
         // Draw the input field
-        if (ImGui::InputTextMultiline(config.id.c_str(), config.inputTextBuffer.data(), Config::InputField::TEXT_SIZE, config.size, config.flags) && config.processInput)
+        if (ImGui::InputTextMultiline(config.id.c_str(), config.inputTextBuffer.data(), Config::InputField::TEXT_SIZE, config.size, config.flags | ImGuiInputTextFlags_WordWrapping) && config.processInput)
         {
             InputField::handleSubmission(config.inputTextBuffer.data(), config.focusInputField, config.processInput,
                                         (config.flags & ImGuiInputTextFlags_CtrlEnterForNewLine) ||

@@ -628,7 +628,7 @@ private:
         );
         config.placeholderText = inputPlaceholderText;
         // Default flags (may be adjusted later based on generation state).
-        config.flags = ImGuiInputTextFlags_CtrlEnterForNewLine | ImGuiInputTextFlags_ShiftEnterForNewLine;
+        config.flags = ImGuiInputTextFlags_CtrlEnterForNewLine | ImGuiInputTextFlags_ShiftEnterForNewLine | ImGuiInputTextFlags_WordWrapping;
         config.processInput = processInput;
         return config;
     }
