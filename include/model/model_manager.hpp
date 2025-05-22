@@ -723,7 +723,7 @@ namespace Model
 
         bool stopJob(int jobId, const std::string modelName, const std::string variant)
         {
-            std::shared_lock<std::shared_mutex> lock(m_mutex);
+            std::unique_lock<std::shared_mutex> lock(m_mutex);
 			std::string modelId = modelName + ":" + variant;
             if (!m_inferenceEngines.at(modelId))
             {
@@ -737,6 +737,8 @@ namespace Model
                 if (it != m_activeJobs.end()) {
                     it->second = false;
                 }
+
+				std::cout << m_activeJobs.find(jobId)->first << std::endl;
             }
 
             m_inferenceEngines.at(modelId)->stopJob(jobId);
@@ -1074,6 +1076,9 @@ namespace Model
                     std::unique_lock<std::shared_mutex> lock(m_mutex);
                     m_jobIds.erase(std::remove(m_jobIds.begin(), m_jobIds.end(), jobId), m_jobIds.end());
                     m_activeJobs.erase(jobId);
+
+                    // if no jobs are active, set m_modelGenerationInProgress to false
+                    if (m_activeJobs.empty()) m_modelGenerationInProgress = false;
                 }
 
                 // Reset jobid tracking on chat manager
@@ -1164,6 +1169,9 @@ namespace Model
                     std::unique_lock<std::shared_mutex> lock(m_mutex);
                     m_jobIds.erase(std::remove(m_jobIds.begin(), m_jobIds.end(), jobId), m_jobIds.end());
                     m_activeJobs.erase(jobId);
+
+					// if no jobs are active, set m_modelGenerationInProgress to false
+					if (m_activeJobs.empty()) m_modelGenerationInProgress = false;
                 }
 
                 if (saveChat)
