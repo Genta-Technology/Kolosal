@@ -58,6 +58,7 @@ namespace Chat
                 try 
                 {
                     std::filesystem::remove(getChatPath(chatName));
+					std::cout << "[FileChatPersistence] Deleted chat: " << getChatPath(chatName) << "\n";
                     return true;
                 }
                 catch (const std::exception& e)
@@ -235,14 +236,11 @@ namespace Chat
             std::string chatNameFiltered = encodeChatName(chatName);
 
             return std::filesystem::absolute(
-                std::filesystem::path(m_basePath) / (chatName + ".chat"));
+                std::filesystem::path(m_basePath) / (chatNameFiltered + ".chat"));
         }
 
         std::filesystem::path getKvChatPath(const std::string& chatName) const override
         {
-            // remove characters that are not allowed in file names
-            std::string chatNameFiltered = encodeChatName(chatName);
-
             return std::filesystem::absolute(
                 std::filesystem::path(m_basePath) / (chatName + ".bin"));
         }
