@@ -24,7 +24,7 @@ namespace Chat
 		virtual std::future<bool> renameKvChat(const std::string& oldChatName, const std::string& newChatName) = 0;
         virtual std::future<std::vector<ChatHistory>> loadAllChats() = 0;
 		virtual std::filesystem::path getChatPath(const std::string& chatName) const = 0;
-		virtual std::filesystem::path getKvChatPath(const std::string& chatName) const = 0;
+		virtual std::filesystem::path getKvChatPath(const std::string& chatName, const std::string& modelName, const std::string& modelVariant) const = 0;
     };
 
     /**
@@ -239,10 +239,12 @@ namespace Chat
                 std::filesystem::path(m_basePath) / (chatNameFiltered + ".chat"));
         }
 
-        std::filesystem::path getKvChatPath(const std::string& chatName) const override
+        std::filesystem::path getKvChatPath(const std::string& chatName, const std::string& modelName, const std::string& modelVariant) const override
         {
+            std::string chatNameFiltered = encodeChatName(chatName);
+
             return std::filesystem::absolute(
-                std::filesystem::path(m_basePath) / (chatName + ".bin"));
+                std::filesystem::path(m_basePath) / (chatNameFiltered + "@" + modelName + modelVariant + ".bin"));
         }
 
         std::vector<ChatHistory> loadEncryptedChats() 
