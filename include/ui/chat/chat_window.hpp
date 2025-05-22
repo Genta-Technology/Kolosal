@@ -769,10 +769,6 @@ private:
 
         Button::render(sendButtonConfig);
         ImGui::EndGroup();
-
-        // Reset the focus after the first render
-        if (focusInputField)
-            focusInputField = false;
     }
 
 private:

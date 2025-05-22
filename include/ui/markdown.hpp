@@ -555,7 +555,7 @@ protected:
         }
     }
 
-        void BLOCK_CODE(const MD_BLOCK_CODE_DETAIL* d, bool e) override
+    void BLOCK_CODE(const MD_BLOCK_CODE_DETAIL* d, bool e) override
     {
         if (e) {
             // Push new code block with stable ID
@@ -640,7 +640,7 @@ protected:
                 bool focusInput = false;
                 InputFieldConfig input_cfg(
                     ("##code_input_" + std::to_string(block.render_id)).c_str(),
-                    ImVec2(-FLT_MIN, total_height + 4),
+                    ImVec2(-FLT_MIN, total_height + 8),
                     block.content,
                     focusInput
                 );

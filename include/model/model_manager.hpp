@@ -1076,9 +1076,7 @@ namespace Model
                     std::unique_lock<std::shared_mutex> lock(m_mutex);
                     m_jobIds.erase(std::remove(m_jobIds.begin(), m_jobIds.end(), jobId), m_jobIds.end());
                     m_activeJobs.erase(jobId);
-
-                    // if no jobs are active, set m_modelGenerationInProgress to false
-                    if (m_activeJobs.empty()) m_modelGenerationInProgress = false;
+                    m_modelGenerationInProgress = false;
                 }
 
                 // Reset jobid tracking on chat manager
@@ -1171,7 +1169,7 @@ namespace Model
                     m_activeJobs.erase(jobId);
 
 					// if no jobs are active, set m_modelGenerationInProgress to false
-					if (m_activeJobs.empty()) m_modelGenerationInProgress = false;
+					m_modelGenerationInProgress = false;
                 }
 
                 if (saveChat)
